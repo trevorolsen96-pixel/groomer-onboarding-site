@@ -1,0 +1,147 @@
+@import "tailwindcss";
+
+:root {
+  --rose-primary: #c58fa1;
+  --rose-primary-dark: #a96f84;
+  --mauve-secondary: #b9a6c8;
+  --sage-accent: #afc7b4;
+
+  --cream-background: #fbf7f8;
+  --warm-surface: #ffffff;
+  --soft-surface: #f6eef1;
+  --divider-soft: #e9dce2;
+
+  --text-primary: #2e2430;
+  --text-secondary: #7a6b74;
+  --text-on-brand: #ffffff;
+
+  --error-rose: #b85c72;
+  --rose-soft: rgba(197, 143, 161, 0.16);
+}
+
+html {
+  min-height: 100%;
+  background: var(--cream-background);
+}
+
+body {
+  min-height: 100%;
+  margin: 0;
+  background: var(--cream-background);
+  color: var(--text-primary);
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.site-shell {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top, rgba(185, 166, 200, 0.18), transparent 28%),
+    linear-gradient(to bottom, #fffdfd 0%, var(--cream-background) 35%);
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid var(--divider-soft);
+  background: var(--warm-surface);
+  color: var(--text-primary);
+  padding: 0.9rem 1rem;
+  outline: none;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    background-color 0.18s ease;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-secondary);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--rose-primary);
+  box-shadow: 0 0 0 4px rgba(197, 143, 161, 0.12);
+}
+
+button,
+a {
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+
+.primary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: var(--rose-primary);
+  color: var(--text-on-brand);
+  padding: 0.9rem 1.25rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.primary-button:hover {
+  background: var(--rose-primary-dark);
+}
+
+.primary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  border: 1px solid var(--divider-soft);
+  background: var(--warm-surface);
+  color: var(--text-primary);
+  padding: 0.9rem 1.1rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.secondary-button:hover {
+  background: var(--soft-surface);
+}
+
+.soft-card {
+  border: 1px solid var(--divider-soft);
+  border-radius: 22px;
+  background: var(--warm-surface);
+  box-shadow: 0 8px 24px rgba(46, 36, 48, 0.05);
+}
+
+.soft-section {
+  border: 1px solid var(--divider-soft);
+  border-radius: 22px;
+  background: var(--soft-surface);
+}
+
+.error-banner {
+  border: 1px solid rgba(184, 92, 114, 0.2);
+  border-radius: 14px;
+  background: rgba(184, 92, 114, 0.08);
+  color: var(--error-rose);
+}
