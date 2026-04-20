@@ -17,6 +17,7 @@ type Agreement = {
   title: string | null;
   agreement_text: string;
   is_required: boolean;
+  sort_order: number;
 };
 
 type AgreementAcceptance = {
@@ -28,6 +29,7 @@ type BrandingResponse = {
   request_id: string;
   business_name: string;
   logo_url: string | null;
+  status: string;
   agreements: Agreement[];
   error?: string;
 };
@@ -74,68 +76,113 @@ export default function OnboardingTokenPage() {
   const [pets, setPets] = useState<PetForm[]>([emptyPet()]);
 
   useEffect(() => {
-    async function loadData() {
+    async function loadBranding() {
       try {
         setLoading(true);
-        const res = await fetch(`/api/onboarding/${token}`);
-        const data: BrandingResponse = await res.json();
+        setLoadError("");
 
-        if (!res.ok) throw new Error(data.error);
+        const response = await fetch(`/api/onboarding/${token}`);
+        const result: BrandingResponse = await response.json();
 
-        setBusinessName(data.business_name);
-        setLogoUrl(data.logo_url);
-        setAgreements(data.agreements || []);
+        if (!response.ok) {
+          throw new Error(result.error || "Failed to load onboarding page.");
+        }
+
+        setBusinessName(result.business_name);
+        setLogoUrl(result.logo_url);
+        setAgreements(result.agreements ?? []);
         setAgreementAcceptances(
-          (data.agreements || []).map((a) => ({
-            agreement_id: a.id,
+          (result.agreements ?? []).map((agreement) => ({
+            agreement_id: agreement.id,
             accepted: false,
-          }))
+          })),
         );
-      } catch (err: any) {
-        setLoadError(err.message || "Failed to load");
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Failed to load onboarding page.";
+        setLoadError(message);
       } finally {
         setLoading(false);
       }
     }
 
-    if (token) loadData();
+    if (token) {
+      loadBranding();
+    }
   }, [token]);
 
-  function updateOwnerField(key: string, value: any) {
-    setForm((prev) => ({ ...prev, [key]: value }));
+  function updateOwnerField(key: string, value: string | boolean) {
+    setForm((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
   }
 
-  function updatePet(index: number, key: keyof PetForm, value: string) {
-    const updated = [...pets];
-    updated[index][key] = value;
-    setPets(updated);
+  function updatePetField(index: number, key: keyof PetForm, value: string) {
+    setPets((prev) => {
+      const next = [...prev];
+      next[index] = {
+        ...next[index],
+        [key]: value,
+      };
+      return next;
+    });
   }
 
-  function updateAgreement(id: string, accepted: boolean) {
+  function updateAgreement(agreementId: string, accepted: boolean) {
     setAgreementAcceptances((prev) =>
-      prev.map((a) =>
-        a.agreement_id === id ? { ...a, accepted } : a
-      )
+      prev.map((item) =>
+        item.agreement_id === agreementId ? { ...item, accepted } : item,
+      ),
     );
   }
 
   function addPet() {
-    setPets([...pets, emptyPet()]);
+    setPets((prev) => [...prev, emptyPet()]);
   }
 
   function removePet(index: number) {
-    if (pets.length === 1) return;
-    setPets(pets.filter((_, i) => i !== index));
+    setPets((prev) => {
+      if (prev.length === 1) return prev;
+      return prev.filter((_, i) => i !== index);
+    });
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSubmitting(true);
     setSubmitError("");
 
+    if (!form.sms_opt_in) {
+      setSubmitError("SMS consent is required to complete onboarding.");
+      setSubmitting(false);
+      return;
+    }
+
+    const missingRequiredAgreement = agreements.some((agreement) => {
+      if (!agreement.is_required) return false;
+
+      const accepted = agreementAcceptances.find(
+        (item) => item.agreement_id === agreement.id,
+      );
+
+      return !accepted?.accepted;
+    });
+
+    if (missingRequiredAgreement) {
+      setSubmitError("Please accept all required client agreements.");
+      setSubmitting(false);
+      return;
+    }
+
     try {
-      const res = await fetch(`/api/onboarding/${token}`, {
+      const response = await fetch(`/api/onboarding/${token}`, {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           ...form,
           pets,
@@ -143,148 +190,326 @@ export default function OnboardingTokenPage() {
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to submit onboarding form.");
+      }
 
       router.push("/thank-you");
-    } catch (err: any) {
-      setSubmitError(err.message);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to submit onboarding form.";
+      setSubmitError(message);
     } finally {
       setSubmitting(false);
     }
   }
 
-  if (loading) return <div className="p-10 text-center">Loading...</div>;
-  if (loadError) return <div className="p-10 text-center">{loadError}</div>;
+  if (loading) {
+    return (
+      <main className="site-shell flex min-h-screen items-center justify-center px-4">
+        <div className="soft-card w-full max-w-xl p-8 text-center">
+          <p className="text-[var(--text-secondary)]">
+            Loading onboarding form...
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <main className="site-shell flex min-h-screen items-center justify-center px-4">
+        <div className="soft-card w-full max-w-xl p-8 text-center">
+          <h1 className="text-2xl font-bold text-[var(--text-primary)]">
+            Unable to load form
+          </h1>
+          <p className="mt-3 text-[var(--text-secondary)]">{loadError}</p>
+        </div>
+      </main>
+    );
+  }
 
   return (
-    <main className="site-shell min-h-screen px-4 py-10">
-      <div className="mx-auto max-w-4xl space-y-6">
+    <main className="site-shell min-h-screen px-4 py-10 text-[var(--text-primary)]">
+      <div className="mx-auto max-w-4xl">
+        <div className="soft-card mb-8 p-6">
+          <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:text-left">
+            {logoUrl ? (
+              <img
+                src={logoUrl}
+                alt={`${businessName} logo`}
+                className="h-20 w-20 rounded-xl object-cover ring-1 ring-[var(--divider-soft)]"
+              />
+            ) : (
+              <div className="flex h-20 w-20 items-center justify-center rounded-xl bg-[var(--soft-surface)] text-2xl font-bold text-[var(--text-secondary)] ring-1 ring-[var(--divider-soft)]">
+                {businessName ? businessName.charAt(0).toUpperCase() : "G"}
+              </div>
+            )}
 
-        {/* HEADER */}
-        <div className="soft-card p-6 text-center">
-          {logoUrl && (
-            <img src={logoUrl} className="mx-auto mb-4 h-16 rounded-xl" />
-          )}
-          <h1 className="text-2xl font-bold">{businessName}</h1>
-          <p className="text-sm text-[var(--text-secondary)]">
-            Please complete your onboarding before your appointment.
-          </p>
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--rose-primary)]">
+                Customer onboarding
+              </p>
+              <h1 className="text-3xl font-bold">{businessName}</h1>
+              <p className="mt-2 text-[var(--text-secondary)]">
+                Please complete your information before your appointment.
+              </p>
+            </div>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="soft-card space-y-8 p-6">
-
-          {/* OWNER */}
           <section>
-            <h2 className="text-lg font-semibold">Owner Information</h2>
+            <h2 className="text-xl font-semibold">Owner information</h2>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <input placeholder="First name" required
+              <input
+                placeholder="First name"
                 value={form.owner_first_name}
-                onChange={(e) => updateOwnerField("owner_first_name", e.target.value)}
+                onChange={(e) =>
+                  updateOwnerField("owner_first_name", e.target.value)
+                }
+                required
               />
-              <input placeholder="Last name" required
+              <input
+                placeholder="Last name"
                 value={form.owner_last_name}
-                onChange={(e) => updateOwnerField("owner_last_name", e.target.value)}
+                onChange={(e) =>
+                  updateOwnerField("owner_last_name", e.target.value)
+                }
+                required
               />
-              <input placeholder="Phone" required
+              <input
+                placeholder="Phone"
                 value={form.phone}
                 onChange={(e) => updateOwnerField("phone", e.target.value)}
+                required
               />
-              <input placeholder="Email" required
+              <input
+                placeholder="Email"
+                type="email"
                 value={form.email}
                 onChange={(e) => updateOwnerField("email", e.target.value)}
+                required
+              />
+              <input
+                className="sm:col-span-2"
+                placeholder="Address line 1"
+                value={form.address_line_1}
+                onChange={(e) =>
+                  updateOwnerField("address_line_1", e.target.value)
+                }
+                required
+              />
+              <input
+                className="sm:col-span-2"
+                placeholder="Address line 2 (optional)"
+                value={form.address_line_2}
+                onChange={(e) =>
+                  updateOwnerField("address_line_2", e.target.value)
+                }
+              />
+              <input
+                placeholder="City"
+                value={form.city}
+                onChange={(e) => updateOwnerField("city", e.target.value)}
+                required
+              />
+              <input
+                placeholder="State"
+                value={form.state}
+                onChange={(e) => updateOwnerField("state", e.target.value)}
+                required
+              />
+              <input
+                placeholder="ZIP code"
+                value={form.postal_code}
+                onChange={(e) => updateOwnerField("postal_code", e.target.value)}
+                required
               />
             </div>
           </section>
 
-          {/* PETS */}
           <section>
-            <div className="flex justify-between">
-              <h2 className="text-lg font-semibold">Pets</h2>
-              <button type="button" onClick={addPet} className="secondary-button">
-                Add Pet
+            <div className="flex items-center justify-between gap-4">
+              <h2 className="text-xl font-semibold">Pet information</h2>
+              <button
+                type="button"
+                onClick={addPet}
+                className="secondary-button px-4 py-2 text-sm"
+              >
+                Add another pet
               </button>
             </div>
 
-            {pets.map((pet, i) => (
-              <div key={i} className="soft-section mt-4 p-4">
-                <div className="flex justify-between mb-3">
-                  <strong>Pet {i + 1}</strong>
-                  {pets.length > 1 && (
-                    <button onClick={() => removePet(i)}>Remove</button>
-                  )}
-                </div>
+            <div className="mt-4 space-y-6">
+              {pets.map((pet, index) => (
+                <div
+                  key={index}
+                  className="rounded-[22px] border border-[var(--divider-soft)] bg-[var(--soft-surface)] p-4"
+                >
+                  <div className="mb-4 flex items-center justify-between gap-4">
+                    <h3 className="text-lg font-semibold">Pet {index + 1}</h3>
+                    {pets.length > 1 ? (
+                      <button
+                        type="button"
+                        onClick={() => removePet(index)}
+                        className="rounded-lg border border-[rgba(184,92,114,0.2)] px-3 py-2 text-sm font-medium text-[var(--error-rose)] transition hover:bg-[rgba(184,92,114,0.08)]"
+                      >
+                        Remove
+                      </button>
+                    ) : null}
+                  </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <input placeholder="Name"
-                    value={pet.pet_name}
-                    onChange={(e) => updatePet(i, "pet_name", e.target.value)}
-                  />
-                  <input placeholder="Breed"
-                    value={pet.breed}
-                    onChange={(e) => updatePet(i, "breed", e.target.value)}
-                  />
-                </div>
-              </div>
-            ))}
-          </section>
-
-          {/* AGREEMENTS */}
-          <section>
-            <h2 className="text-lg font-semibold">Client Agreements</h2>
-
-            {agreements.map((a) => {
-              const accepted =
-                agreementAcceptances.find(x => x.agreement_id === a.id)?.accepted || false;
-
-              return (
-                <div key={a.id} className="soft-section mt-4 p-4">
-                  <h3 className="font-semibold">{a.title}</h3>
-                  <p className="text-sm text-[var(--text-secondary)] mt-2">
-                    {a.agreement_text}
-                  </p>
-
-                  <label className="mt-4 flex items-center rounded-xl border bg-white px-4 py-3">
+                  <div className="grid gap-4 sm:grid-cols-2">
                     <input
-                      type="checkbox"
-                      className="mr-3 h-4 w-4 accent-[var(--rose-primary)]"
-                      checked={accepted}
-                      onChange={(e) => updateAgreement(a.id, e.target.checked)}
+                      placeholder="Pet name"
+                      value={pet.pet_name}
+                      onChange={(e) =>
+                        updatePetField(index, "pet_name", e.target.value)
+                      }
+                      required
                     />
-                    <span className="text-sm text-[var(--text-secondary)]">
-                      I understand {a.is_required && "(required)"}
-                    </span>
-                  </label>
+                    <input
+                      placeholder="Breed"
+                      value={pet.breed}
+                      onChange={(e) =>
+                        updatePetField(index, "breed", e.target.value)
+                      }
+                      required
+                    />
+                    <input
+                      placeholder="Age"
+                      value={pet.age}
+                      onChange={(e) =>
+                        updatePetField(index, "age", e.target.value)
+                      }
+                      required
+                    />
+                    <input
+                      placeholder="Weight (lbs)"
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      value={pet.weight_lbs}
+                      onChange={(e) =>
+                        updatePetField(index, "weight_lbs", e.target.value)
+                      }
+                      required
+                    />
+                    <select
+                      value={pet.sex}
+                      onChange={(e) =>
+                        updatePetField(index, "sex", e.target.value)
+                      }
+                      required
+                    >
+                      <option value="">Select sex</option>
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                    </select>
+                    <input
+                      placeholder="Temperament"
+                      value={pet.temperament}
+                      onChange={(e) =>
+                        updatePetField(index, "temperament", e.target.value)
+                      }
+                      required
+                    />
+                  </div>
                 </div>
-              );
-            })}
+              ))}
+            </div>
           </section>
 
-          {/* SMS */}
-          <section>
-            <h2 className="text-lg font-semibold">SMS Reminders</h2>
+          {agreements.length > 0 ? (
+            <section>
+              <h2 className="text-xl font-semibold">Client agreements</h2>
+              <div className="mt-4 space-y-4">
+                {agreements.map((agreement) => {
+                  const accepted =
+                    agreementAcceptances.find(
+                      (item) => item.agreement_id === agreement.id,
+                    )?.accepted ?? false;
 
-            <label className="mt-4 flex items-center rounded-xl border bg-[var(--soft-surface)] px-4 py-3">
+                  return (
+                    <div
+                      key={agreement.id}
+                      className="rounded-[22px] border border-[var(--divider-soft)] bg-[var(--soft-surface)] p-4"
+                    >
+                      {agreement.title ? (
+                        <h3 className="text-base font-semibold text-[var(--text-primary)]">
+                          {agreement.title}
+                        </h3>
+                      ) : null}
+
+                      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[var(--text-secondary)]">
+                        {agreement.agreement_text}
+                      </p>
+
+                      <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-lg border border-[var(--divider-soft)] bg-[var(--cream-background)] px-3 py-2">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 h-4 w-4 shrink-0"
+                          checked={accepted}
+                          onChange={(e) =>
+                            updateAgreement(agreement.id, e.target.checked)
+                          }
+                          required={agreement.is_required}
+                        />
+                        <span className="text-sm leading-5 text-[var(--text-secondary)]">
+                          I understand
+                          {agreement.is_required ? " (required)" : ""}
+                        </span>
+                      </label>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
+
+          <section>
+            <h2 className="text-xl font-semibold">SMS reminders</h2>
+            <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-lg border border-[var(--divider-soft)] bg-[var(--cream-background)] px-3 py-2">
               <input
                 type="checkbox"
-                className="mr-3 h-4 w-4 accent-[var(--rose-primary)]"
+                className="mt-0.5 h-4 w-4 shrink-0"
                 checked={form.sms_opt_in}
-                onChange={(e) => updateOwnerField("sms_opt_in", e.target.checked)}
+                onChange={(e) =>
+                  updateOwnerField("sms_opt_in", e.target.checked)
+                }
+                required
               />
-              <span className="text-sm text-[var(--text-secondary)]">
-                I agree to receive SMS reminders (required)
+              <span className="text-sm leading-5 text-[var(--text-secondary)]">
+                I agree to receive SMS appointment reminders and updates.
+                <span className="font-medium text-[var(--text-primary)]">
+                  {" "}
+                  This is required to complete onboarding.
+                </span>
               </span>
             </label>
           </section>
 
-          {submitError && (
-            <div className="error-banner">{submitError}</div>
-          )}
+          {submitError ? (
+            <div className="error-banner px-4 py-3 text-sm">{submitError}</div>
+          ) : null}
 
-          <button type="submit" className="primary-button w-full">
-            {submitting ? "Submitting..." : "Submit"}
-          </button>
-
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-[var(--text-secondary)]">
+              Your information will be used for appointment onboarding.
+            </p>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="primary-button px-5 py-3"
+            >
+              {submitting ? "Submitting..." : "Submit onboarding"}
+            </button>
+          </div>
         </form>
       </div>
     </main>
