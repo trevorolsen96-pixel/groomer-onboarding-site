@@ -450,10 +450,10 @@ export default function OnboardingTokenPage() {
                         {agreement.agreement_text}
                       </p>
 
-                      <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-lg border border-[var(--divider-soft)] bg-[var(--cream-background)] px-3 py-2">
+                      <label className="mt-4 inline-flex max-w-full cursor-pointer items-center gap-2 rounded-lg border border-[var(--divider-soft)] bg-[var(--cream-background)] px-4 py-3">
                         <input
                           type="checkbox"
-                          className="mt-0.5 h-4 w-4 shrink-0"
+                          className="h-4 w-4 shrink-0"
                           checked={accepted}
                           onChange={(e) =>
                             updateAgreement(agreement.id, e.target.checked)
@@ -474,7 +474,7 @@ export default function OnboardingTokenPage() {
 
           <section>
             <h2 className="text-xl font-semibold">SMS reminders</h2>
-            <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-lg border border-[var(--divider-soft)] bg-[var(--cream-background)] px-3 py-2">
+            <label className="mt-4 inline-flex max-w-full cursor-pointer items-start gap-2 rounded-lg border border-[var(--divider-soft)] bg-[var(--cream-background)] px-4 py-3">
               <input
                 type="checkbox"
                 className="mt-0.5 h-4 w-4 shrink-0"
