@@ -1,0 +1,318 @@
+@import "tailwindcss";
+
+:root {
+  --rose-primary: #c58fa1;
+  --rose-primary-dark: #a96f84;
+  --mauve-secondary: #b9a6c8;
+  --sage-accent: #afc7b4;
+
+  --cream-background: #fbf7f8;
+  --warm-surface: #ffffff;
+  --soft-surface: #f6eef1;
+  --divider-soft: #e9dce2;
+
+  --text-primary: #2e2430;
+  --text-secondary: #7a6b74;
+  --text-on-brand: #ffffff;
+
+  --error-rose: #b85c72;
+  --rose-soft: rgba(197, 143, 161, 0.16);
+}
+
+html {
+  min-height: 100%;
+  background: var(--cream-background);
+}
+
+body {
+  min-height: 100%;
+  margin: 0;
+  background: var(--cream-background);
+  color: var(--text-primary);
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.site-shell {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top, rgba(185, 166, 200, 0.18), transparent 28%),
+    linear-gradient(to bottom, #fffdfd 0%, var(--cream-background) 35%);
+}
+
+/* Inputs */
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid var(--divider-soft);
+  background: var(--warm-surface);
+  color: var(--text-primary);
+  padding: 0.9rem 1rem;
+  outline: none;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    background-color 0.18s ease;
+}
+
+input:not([type="checkbox"]):not([type="radio"])::placeholder,
+textarea::placeholder {
+  color: var(--text-secondary);
+}
+
+input:not([type="checkbox"]):not([type="radio"]):focus,
+select:focus,
+textarea:focus {
+  border-color: var(--rose-primary);
+  box-shadow: 0 0 0 4px rgba(197, 143, 161, 0.12);
+}
+
+/* Checkbox */
+input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  border: 1.5px solid #c9b4be;
+  border-radius: 6px;
+  background: #fff;
+  display: inline-grid;
+  place-content: center;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+input[type="checkbox"]::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  transform: scale(0);
+  transition: transform 0.16s ease;
+  clip-path: polygon(14% 44%, 0 65%, 42% 100%, 100% 19%, 80% 0%, 43% 62%);
+  background: white;
+}
+
+input[type="checkbox"]:checked {
+  background: var(--rose-primary);
+  border-color: var(--rose-primary);
+  box-shadow: 0 0 0 3px rgba(197, 143, 161, 0.14);
+}
+
+input[type="checkbox"]:checked::before {
+  transform: scale(1);
+}
+
+input[type="checkbox"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(197, 143, 161, 0.18);
+}
+
+/* Buttons and links */
+button,
+a {
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+
+.primary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: var(--rose-primary);
+  color: var(--text-on-brand);
+  padding: 0.95rem 1.3rem;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 0 10px 24px rgba(197, 143, 161, 0.22);
+}
+
+.primary-button:hover {
+  background: var(--rose-primary-dark);
+  transform: translateY(-1px);
+}
+
+.primary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  border: 1px solid var(--divider-soft);
+  background: var(--warm-surface);
+  color: var(--text-primary);
+  padding: 0.95rem 1.15rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.secondary-button:hover {
+  background: var(--soft-surface);
+  transform: translateY(-1px);
+}
+
+.nav-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  padding: 0.7rem 0.9rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.nav-link:hover {
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--text-primary);
+}
+
+.footer-link {
+  font-weight: 600;
+}
+
+.footer-link:hover {
+  color: var(--text-primary);
+}
+
+/* Cards */
+.soft-card {
+  border: 1px solid var(--divider-soft);
+  border-radius: 22px;
+  background: var(--warm-surface);
+  box-shadow: 0 8px 24px rgba(46, 36, 48, 0.05);
+}
+
+.soft-section {
+  border: 1px solid var(--divider-soft);
+  border-radius: 22px;
+  background: var(--soft-surface);
+}
+
+.error-banner {
+  border: 1px solid rgba(184, 92, 114, 0.2);
+  border-radius: 14px;
+  background: rgba(184, 92, 114, 0.08);
+  color: var(--error-rose);
+}
+
+/* Homepage pieces */
+.feature-card {
+  border: 1px solid var(--divider-soft);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.86);
+  padding: 1.1rem;
+  box-shadow: 0 8px 22px rgba(46, 36, 48, 0.04);
+}
+
+.feature-card h3 {
+  margin: 0.85rem 0 0.35rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.feature-card p {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.65;
+  color: var(--text-secondary);
+}
+
+.feature-icon {
+  display: inline-flex;
+  height: 2.2rem;
+  width: 2.2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--rose-soft);
+  color: var(--rose-primary-dark);
+  font-weight: 700;
+}
+
+.preview-row {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  border-radius: 18px;
+  border: 1px solid var(--divider-soft);
+  background: rgba(255, 255, 255, 0.92);
+  padding: 0.9rem 1rem;
+}
+
+.preview-label {
+  display: inline-flex;
+  min-width: 64px;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--soft-surface);
+  padding: 0.4rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--rose-primary-dark);
+}
+
+.preview-value {
+  font-size: 0.98rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Legal pages */
+.legal-copy h2 {
+  margin: 0 0 0.8rem;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.legal-copy p {
+  margin: 0;
+  line-height: 1.85;
+  color: var(--text-secondary);
+}
+
+.legal-copy ul {
+  margin: 0.9rem 0 0 1.2rem;
+  padding: 0;
+  color: var(--text-secondary);
+}
+
+.legal-copy li {
+  margin: 0.45rem 0;
+  line-height: 1.8;
+}
