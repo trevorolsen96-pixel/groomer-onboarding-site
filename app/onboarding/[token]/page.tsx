@@ -25,12 +25,28 @@ type AgreementAcceptance = {
   accepted: boolean;
 };
 
+type OnboardingQuestion = {
+  id: string;
+  question_text: string;
+  response_type: "text" | "yes_no" | "dropdown_single" | "dropdown_multi";
+  options: string[];
+  is_required: boolean;
+  sort_order: number;
+};
+
+type QuestionAnswer = {
+  question_id: string;
+  response_type: string;
+  answer: string | string[];
+};
+
 type BrandingResponse = {
   request_id: string;
   business_name: string;
   logo_url: string | null;
   status: string;
   agreements: Agreement[];
+  questions: OnboardingQuestion[];
   error?: string;
 };
 
@@ -52,10 +68,14 @@ export default function OnboardingTokenPage() {
   const [loadError, setLoadError] = useState("");
   const [businessName, setBusinessName] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
   const [agreements, setAgreements] = useState<Agreement[]>([]);
   const [agreementAcceptances, setAgreementAcceptances] = useState<
     AgreementAcceptance[]
   >([]);
+
+  const [questions, setQuestions] = useState<OnboardingQuestion[]>([]);
+  const [questionAnswers, setQuestionAnswers] = useState<QuestionAnswer[]>([]);
 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -91,10 +111,20 @@ export default function OnboardingTokenPage() {
         setBusinessName(result.business_name);
         setLogoUrl(result.logo_url);
         setAgreements(result.agreements ?? []);
+        setQuestions(result.questions ?? []);
+
         setAgreementAcceptances(
           (result.agreements ?? []).map((agreement) => ({
             agreement_id: agreement.id,
             accepted: false,
+          })),
+        );
+
+        setQuestionAnswers(
+          (result.questions ?? []).map((question) => ({
+            question_id: question.id,
+            response_type: question.response_type,
+            answer: question.response_type === "dropdown_multi" ? [] : "",
           })),
         );
       } catch (error) {
@@ -139,6 +169,32 @@ export default function OnboardingTokenPage() {
     );
   }
 
+  function updateQuestionAnswer(questionId: string, answer: string | string[]) {
+    setQuestionAnswers((prev) =>
+      prev.map((item) =>
+        item.question_id === questionId ? { ...item, answer } : item,
+      ),
+    );
+  }
+
+  function toggleMultiSelectAnswer(questionId: string, option: string) {
+    setQuestionAnswers((prev) =>
+      prev.map((item) => {
+        if (item.question_id !== questionId) return item;
+
+        const current = Array.isArray(item.answer) ? item.answer : [];
+        const exists = current.includes(option);
+
+        return {
+          ...item,
+          answer: exists
+            ? current.filter((value) => value !== option)
+            : [...current, option],
+        };
+      }),
+    );
+  }
+
   function addPet() {
     setPets((prev) => [...prev, emptyPet()]);
   }
@@ -148,6 +204,96 @@ export default function OnboardingTokenPage() {
       if (prev.length === 1) return prev;
       return prev.filter((_, i) => i !== index);
     });
+  }
+
+  function validateRequiredQuestions() {
+    return questions.every((question) => {
+      if (!question.is_required) return true;
+
+      const answer = questionAnswers.find(
+        (item) => item.question_id === question.id,
+      )?.answer;
+
+      if (Array.isArray(answer)) {
+        return answer.length > 0;
+      }
+
+      return String(answer ?? "").trim().length > 0;
+    });
+  }
+
+  function renderQuestionInput(question: OnboardingQuestion) {
+    const answerItem = questionAnswers.find(
+      (item) => item.question_id === question.id,
+    );
+
+    const answer = answerItem?.answer ?? "";
+
+    if (question.response_type === "yes_no") {
+      return (
+        <select
+          value={typeof answer === "string" ? answer : ""}
+          onChange={(e) => updateQuestionAnswer(question.id, e.target.value)}
+          required={question.is_required}
+        >
+          <option value="">Select an answer</option>
+          <option value="Yes">Yes</option>
+          <option value="No">No</option>
+        </select>
+      );
+    }
+
+    if (question.response_type === "dropdown_single") {
+      return (
+        <select
+          value={typeof answer === "string" ? answer : ""}
+          onChange={(e) => updateQuestionAnswer(question.id, e.target.value)}
+          required={question.is_required}
+        >
+          <option value="">Select an answer</option>
+          {question.options.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      );
+    }
+
+    if (question.response_type === "dropdown_multi") {
+      const selected = Array.isArray(answer) ? answer : [];
+
+      return (
+        <div className="space-y-2">
+          {question.options.map((option) => (
+            <label
+              key={option}
+              className="flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--divider-soft)] bg-[var(--cream-background)] px-4 py-3"
+            >
+              <input
+                type="checkbox"
+                className="h-4 w-4 shrink-0"
+                checked={selected.includes(option)}
+                onChange={() => toggleMultiSelectAnswer(question.id, option)}
+              />
+              <span className="text-sm text-[var(--text-secondary)]">
+                {option}
+              </span>
+            </label>
+          ))}
+        </div>
+      );
+    }
+
+    return (
+      <textarea
+        placeholder="Type your answer"
+        value={typeof answer === "string" ? answer : ""}
+        onChange={(e) => updateQuestionAnswer(question.id, e.target.value)}
+        required={question.is_required}
+        className="min-h-28"
+      />
+    );
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -177,6 +323,12 @@ export default function OnboardingTokenPage() {
       return;
     }
 
+    if (!validateRequiredQuestions()) {
+      setSubmitError("Please answer all required questionnaire items.");
+      setSubmitting(false);
+      return;
+    }
+
     try {
       const response = await fetch(`/api/onboarding/${token}`, {
         method: "POST",
@@ -187,6 +339,7 @@ export default function OnboardingTokenPage() {
           ...form,
           pets,
           agreements: agreementAcceptances,
+          questionnaire: questionAnswers,
         }),
       });
 
@@ -327,7 +480,9 @@ export default function OnboardingTokenPage() {
               <input
                 placeholder="ZIP code"
                 value={form.postal_code}
-                onChange={(e) => updateOwnerField("postal_code", e.target.value)}
+                onChange={(e) =>
+                  updateOwnerField("postal_code", e.target.value)
+                }
                 required
               />
             </div>
@@ -424,6 +579,35 @@ export default function OnboardingTokenPage() {
               ))}
             </div>
           </section>
+
+          {questions.length > 0 ? (
+            <section>
+              <h2 className="text-xl font-semibold">Questionnaire</h2>
+              <p className="mt-2 text-sm text-[var(--text-secondary)]">
+                Please answer the following questions before submitting.
+              </p>
+
+              <div className="mt-4 space-y-4">
+                {questions.map((question) => (
+                  <div
+                    key={question.id}
+                    className="rounded-[22px] border border-[var(--divider-soft)] bg-[var(--soft-surface)] p-4"
+                  >
+                    <label className="block">
+                      <span className="text-base font-semibold text-[var(--text-primary)]">
+                        {question.question_text}
+                        {question.is_required ? (
+                          <span className="text-[var(--rose-primary)]"> *</span>
+                        ) : null}
+                      </span>
+
+                      <div className="mt-3">{renderQuestionInput(question)}</div>
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           {agreements.length > 0 ? (
             <section>
