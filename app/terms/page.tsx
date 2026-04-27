@@ -12,7 +12,7 @@ export default function TermsPage() {
           </h1>
 
           <p className="mt-4 text-sm text-[var(--text-secondary)]">
-            Effective date: [Insert Date]
+            Effective date: 4/27/26
           </p>
 
           <div className="legal-copy mt-8 space-y-8">
@@ -150,7 +150,7 @@ export default function TermsPage() {
               <h2>14. Contact</h2>
               <p>
                 For questions about these Terms of Service, contact us at:
-                [Insert Contact Email]
+                support@wagzly.app
               </p>
             </section>
           </div>

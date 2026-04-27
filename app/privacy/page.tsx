@@ -12,7 +12,7 @@ export default function PrivacyPage() {
           </h1>
 
           <p className="mt-4 text-sm text-[var(--text-secondary)]">
-            Effective date: [Insert Date]
+            Effective date: 4/27/2026
           </p>
 
           <div className="legal-copy mt-8 space-y-8">
@@ -130,7 +130,7 @@ export default function PrivacyPage() {
               <h2>12. Contact</h2>
               <p>
                 For questions about this Privacy Policy, contact us at:
-                [Insert Contact Email]
+                support@wagzly.app
               </p>
             </section>
           </div>
