@@ -1,5 +1,6 @@
-import Link from "next/link";
 import Image from "next/image";
+
+const demoBookingUrl = "https://wagzly.zohobookings.com/#/4937476000000034049";
 
 export default function HomePage() {
   return (
@@ -32,8 +33,18 @@ export default function HomePage() {
             </p>
 
             <div className="mt-8 flex flex-wrap gap-4">
-              <button className="primary-button">Book a demo</button>
-              <button className="secondary-button">View pricing</button>
+              <a
+                href={demoBookingUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="primary-button"
+              >
+                Book a demo
+              </a>
+
+              <a href="#pricing" className="secondary-button">
+                View pricing
+              </a>
             </div>
           </div>
 
@@ -66,7 +77,7 @@ export default function HomePage() {
             ["Client Management", "Keep pet details, customer notes, and service history organized."],
             ["Automated Reminders", "Reduce no-shows with reminders and confirmations."],
             ["Payment Tracking", "Track collected payments, tips, and outstanding balances."],
-            ["Designed for Groomers", "Built specifically for mobile grooming businesses."]
+            ["Designed for Groomers", "Built specifically for mobile grooming businesses."],
           ].map(([title, desc], i) => (
             <div key={i} className="soft-card p-5">
               <h3 className="text-lg font-semibold">{title}</h3>
@@ -78,7 +89,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-6 py-16">
+      <section id="pricing" className="mx-auto max-w-6xl px-6 py-16">
         <h2 className="text-center text-3xl font-bold text-[var(--text-primary)]">
           Simple pricing
         </h2>
@@ -118,7 +129,7 @@ export default function HomePage() {
             "Wagzly helped me clean up my entire scheduling process.",
             "I finally have one place for appointments, notes, and payments.",
             "The reminders alone save me a ton of time every week.",
-            "This feels like it was made specifically for how mobile groomers work."
+            "This feels like it was made specifically for how mobile groomers work.",
           ].map((text, i) => (
             <div key={i} className="soft-card p-5">
               <p className="text-[var(--text-secondary)]">“{text}”</p>
@@ -140,7 +151,14 @@ export default function HomePage() {
             organized, and grow.
           </p>
 
-          <button className="primary-button mt-6">Book a demo</button>
+          <a
+            href={demoBookingUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="primary-button mt-6 inline-block"
+          >
+            Book a demo
+          </a>
         </div>
       </section>
 
@@ -165,10 +183,7 @@ export default function HomePage() {
           </p>
 
           <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <input
-              placeholder="Enter your email"
-              className="w-full max-w-xs"
-            />
+            <input placeholder="Enter your email" className="w-full max-w-xs" />
             <button className="primary-button">Subscribe</button>
           </div>
         </div>
