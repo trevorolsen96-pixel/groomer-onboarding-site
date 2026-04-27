@@ -40,6 +40,11 @@ type QuestionAnswer = {
   answer: string | string[];
 };
 
+type PetQuestionnaire = {
+  pet_index: number;
+  answers: QuestionAnswer[];
+};
+
 type BrandingResponse = {
   request_id: string;
   business_name: string;
@@ -59,6 +64,14 @@ const emptyPet = (): PetForm => ({
   temperament: "",
 });
 
+function buildEmptyAnswers(questions: OnboardingQuestion[]): QuestionAnswer[] {
+  return questions.map((question) => ({
+    question_id: question.id,
+    response_type: question.response_type,
+    answer: question.response_type === "dropdown_multi" ? [] : "",
+  }));
+}
+
 export default function OnboardingTokenPage() {
   const params = useParams<{ token: string }>();
   const router = useRouter();
@@ -75,7 +88,9 @@ export default function OnboardingTokenPage() {
   >([]);
 
   const [questions, setQuestions] = useState<OnboardingQuestion[]>([]);
-  const [questionAnswers, setQuestionAnswers] = useState<QuestionAnswer[]>([]);
+  const [petQuestionnaires, setPetQuestionnaires] = useState<
+    PetQuestionnaire[]
+  >([]);
 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -108,10 +123,12 @@ export default function OnboardingTokenPage() {
           throw new Error(result.error || "Failed to load onboarding page.");
         }
 
+        const loadedQuestions = result.questions ?? [];
+
         setBusinessName(result.business_name);
         setLogoUrl(result.logo_url);
         setAgreements(result.agreements ?? []);
-        setQuestions(result.questions ?? []);
+        setQuestions(loadedQuestions);
 
         setAgreementAcceptances(
           (result.agreements ?? []).map((agreement) => ({
@@ -120,13 +137,12 @@ export default function OnboardingTokenPage() {
           })),
         );
 
-        setQuestionAnswers(
-          (result.questions ?? []).map((question) => ({
-            question_id: question.id,
-            response_type: question.response_type,
-            answer: question.response_type === "dropdown_multi" ? [] : "",
-          })),
-        );
+        setPetQuestionnaires([
+          {
+            pet_index: 0,
+            answers: buildEmptyAnswers(loadedQuestions),
+          },
+        ]);
       } catch (error) {
         const message =
           error instanceof Error
@@ -169,27 +185,53 @@ export default function OnboardingTokenPage() {
     );
   }
 
-  function updateQuestionAnswer(questionId: string, answer: string | string[]) {
-    setQuestionAnswers((prev) =>
-      prev.map((item) =>
-        item.question_id === questionId ? { ...item, answer } : item,
-      ),
+  function updatePetQuestionAnswer(
+    petIndex: number,
+    questionId: string,
+    answer: string | string[],
+  ) {
+    setPetQuestionnaires((prev) =>
+      prev.map((petQuestionnaire) => {
+        if (petQuestionnaire.pet_index !== petIndex) {
+          return petQuestionnaire;
+        }
+
+        return {
+          ...petQuestionnaire,
+          answers: petQuestionnaire.answers.map((item) =>
+            item.question_id === questionId ? { ...item, answer } : item,
+          ),
+        };
+      }),
     );
   }
 
-  function toggleMultiSelectAnswer(questionId: string, option: string) {
-    setQuestionAnswers((prev) =>
-      prev.map((item) => {
-        if (item.question_id !== questionId) return item;
-
-        const current = Array.isArray(item.answer) ? item.answer : [];
-        const exists = current.includes(option);
+  function togglePetMultiSelectAnswer(
+    petIndex: number,
+    questionId: string,
+    option: string,
+  ) {
+    setPetQuestionnaires((prev) =>
+      prev.map((petQuestionnaire) => {
+        if (petQuestionnaire.pet_index !== petIndex) {
+          return petQuestionnaire;
+        }
 
         return {
-          ...item,
-          answer: exists
-            ? current.filter((value) => value !== option)
-            : [...current, option],
+          ...petQuestionnaire,
+          answers: petQuestionnaire.answers.map((item) => {
+            if (item.question_id !== questionId) return item;
+
+            const current = Array.isArray(item.answer) ? item.answer : [];
+            const exists = current.includes(option);
+
+            return {
+              ...item,
+              answer: exists
+                ? current.filter((value) => value !== option)
+                : [...current, option],
+            };
+          }),
         };
       }),
     );
@@ -197,6 +239,13 @@ export default function OnboardingTokenPage() {
 
   function addPet() {
     setPets((prev) => [...prev, emptyPet()]);
+    setPetQuestionnaires((prev) => [
+      ...prev,
+      {
+        pet_index: prev.length,
+        answers: buildEmptyAnswers(questions),
+      },
+    ]);
   }
 
   function removePet(index: number) {
@@ -204,36 +253,59 @@ export default function OnboardingTokenPage() {
       if (prev.length === 1) return prev;
       return prev.filter((_, i) => i !== index);
     });
-  }
 
-  function validateRequiredQuestions() {
-    return questions.every((question) => {
-      if (!question.is_required) return true;
+    setPetQuestionnaires((prev) => {
+      if (prev.length === 1) return prev;
 
-      const answer = questionAnswers.find(
-        (item) => item.question_id === question.id,
-      )?.answer;
-
-      if (Array.isArray(answer)) {
-        return answer.length > 0;
-      }
-
-      return String(answer ?? "").trim().length > 0;
+      return prev
+        .filter((item) => item.pet_index !== index)
+        .map((item, newIndex) => ({
+          ...item,
+          pet_index: newIndex,
+        }));
     });
   }
 
-  function renderQuestionInput(question: OnboardingQuestion) {
-    const answerItem = questionAnswers.find(
-      (item) => item.question_id === question.id,
-    );
+  function validateRequiredQuestions() {
+    return pets.every((_, petIndex) => {
+      const petQuestionnaire = petQuestionnaires.find(
+        (item) => item.pet_index === petIndex,
+      );
 
-    const answer = answerItem?.answer ?? "";
+      return questions.every((question) => {
+        if (!question.is_required) return true;
+
+        const answer = petQuestionnaire?.answers.find(
+          (item) => item.question_id === question.id,
+        )?.answer;
+
+        if (Array.isArray(answer)) {
+          return answer.length > 0;
+        }
+
+        return String(answer ?? "").trim().length > 0;
+      });
+    });
+  }
+
+  function getPetAnswer(petIndex: number, questionId: string) {
+    return (
+      petQuestionnaires
+        .find((item) => item.pet_index === petIndex)
+        ?.answers.find((item) => item.question_id === questionId)?.answer ?? ""
+    );
+  }
+
+  function renderQuestionInput(petIndex: number, question: OnboardingQuestion) {
+    const answer = getPetAnswer(petIndex, question.id);
 
     if (question.response_type === "yes_no") {
       return (
         <select
           value={typeof answer === "string" ? answer : ""}
-          onChange={(e) => updateQuestionAnswer(question.id, e.target.value)}
+          onChange={(e) =>
+            updatePetQuestionAnswer(petIndex, question.id, e.target.value)
+          }
           required={question.is_required}
         >
           <option value="">Select an answer</option>
@@ -247,7 +319,9 @@ export default function OnboardingTokenPage() {
       return (
         <select
           value={typeof answer === "string" ? answer : ""}
-          onChange={(e) => updateQuestionAnswer(question.id, e.target.value)}
+          onChange={(e) =>
+            updatePetQuestionAnswer(petIndex, question.id, e.target.value)
+          }
           required={question.is_required}
         >
           <option value="">Select an answer</option>
@@ -274,7 +348,9 @@ export default function OnboardingTokenPage() {
                 type="checkbox"
                 className="h-4 w-4 shrink-0"
                 checked={selected.includes(option)}
-                onChange={() => toggleMultiSelectAnswer(question.id, option)}
+                onChange={() =>
+                  togglePetMultiSelectAnswer(petIndex, question.id, option)
+                }
               />
               <span className="text-sm text-[var(--text-secondary)]">
                 {option}
@@ -289,7 +365,9 @@ export default function OnboardingTokenPage() {
       <textarea
         placeholder="Type your answer"
         value={typeof answer === "string" ? answer : ""}
-        onChange={(e) => updateQuestionAnswer(question.id, e.target.value)}
+        onChange={(e) =>
+          updatePetQuestionAnswer(petIndex, question.id, e.target.value)
+        }
         required={question.is_required}
         className="min-h-28"
       />
@@ -324,7 +402,7 @@ export default function OnboardingTokenPage() {
     }
 
     if (!validateRequiredQuestions()) {
-      setSubmitError("Please answer all required questionnaire items.");
+      setSubmitError("Please answer all required questionnaire items for each pet.");
       setSubmitting(false);
       return;
     }
@@ -339,7 +417,7 @@ export default function OnboardingTokenPage() {
           ...form,
           pets,
           agreements: agreementAcceptances,
-          questionnaire: questionAnswers,
+          pet_questionnaire: petQuestionnaires,
         }),
       });
 
@@ -419,234 +497,97 @@ export default function OnboardingTokenPage() {
           <section>
             <h2 className="text-xl font-semibold">Owner information</h2>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <input
-                placeholder="First name"
-                value={form.owner_first_name}
-                onChange={(e) =>
-                  updateOwnerField("owner_first_name", e.target.value)
-                }
-                required
-              />
-              <input
-                placeholder="Last name"
-                value={form.owner_last_name}
-                onChange={(e) =>
-                  updateOwnerField("owner_last_name", e.target.value)
-                }
-                required
-              />
-              <input
-                placeholder="Phone"
-                value={form.phone}
-                onChange={(e) => updateOwnerField("phone", e.target.value)}
-                required
-              />
-              <input
-                placeholder="Email"
-                type="email"
-                value={form.email}
-                onChange={(e) => updateOwnerField("email", e.target.value)}
-                required
-              />
-              <input
-                className="sm:col-span-2"
-                placeholder="Address line 1"
-                value={form.address_line_1}
-                onChange={(e) =>
-                  updateOwnerField("address_line_1", e.target.value)
-                }
-                required
-              />
-              <input
-                className="sm:col-span-2"
-                placeholder="Address line 2 (optional)"
-                value={form.address_line_2}
-                onChange={(e) =>
-                  updateOwnerField("address_line_2", e.target.value)
-                }
-              />
-              <input
-                placeholder="City"
-                value={form.city}
-                onChange={(e) => updateOwnerField("city", e.target.value)}
-                required
-              />
-              <input
-                placeholder="State"
-                value={form.state}
-                onChange={(e) => updateOwnerField("state", e.target.value)}
-                required
-              />
-              <input
-                placeholder="ZIP code"
-                value={form.postal_code}
-                onChange={(e) =>
-                  updateOwnerField("postal_code", e.target.value)
-                }
-                required
-              />
+              <input placeholder="First name" value={form.owner_first_name} onChange={(e) => updateOwnerField("owner_first_name", e.target.value)} required />
+              <input placeholder="Last name" value={form.owner_last_name} onChange={(e) => updateOwnerField("owner_last_name", e.target.value)} required />
+              <input placeholder="Phone" value={form.phone} onChange={(e) => updateOwnerField("phone", e.target.value)} required />
+              <input placeholder="Email" type="email" value={form.email} onChange={(e) => updateOwnerField("email", e.target.value)} required />
+              <input className="sm:col-span-2" placeholder="Address line 1" value={form.address_line_1} onChange={(e) => updateOwnerField("address_line_1", e.target.value)} required />
+              <input className="sm:col-span-2" placeholder="Address line 2 (optional)" value={form.address_line_2} onChange={(e) => updateOwnerField("address_line_2", e.target.value)} />
+              <input placeholder="City" value={form.city} onChange={(e) => updateOwnerField("city", e.target.value)} required />
+              <input placeholder="State" value={form.state} onChange={(e) => updateOwnerField("state", e.target.value)} required />
+              <input placeholder="ZIP code" value={form.postal_code} onChange={(e) => updateOwnerField("postal_code", e.target.value)} required />
             </div>
           </section>
 
           <section>
             <div className="flex items-center justify-between gap-4">
               <h2 className="text-xl font-semibold">Pet information</h2>
-              <button
-                type="button"
-                onClick={addPet}
-                className="secondary-button px-4 py-2 text-sm"
-              >
+              <button type="button" onClick={addPet} className="secondary-button px-4 py-2 text-sm">
                 Add another pet
               </button>
             </div>
 
             <div className="mt-4 space-y-6">
               {pets.map((pet, index) => (
-                <div
-                  key={index}
-                  className="rounded-[22px] border border-[var(--divider-soft)] bg-[var(--soft-surface)] p-4"
-                >
+                <div key={index} className="rounded-[22px] border border-[var(--divider-soft)] bg-[var(--soft-surface)] p-4">
                   <div className="mb-4 flex items-center justify-between gap-4">
                     <h3 className="text-lg font-semibold">Pet {index + 1}</h3>
                     {pets.length > 1 ? (
-                      <button
-                        type="button"
-                        onClick={() => removePet(index)}
-                        className="rounded-lg border border-[rgba(184,92,114,0.2)] px-3 py-2 text-sm font-medium text-[var(--error-rose)] transition hover:bg-[rgba(184,92,114,0.08)]"
-                      >
+                      <button type="button" onClick={() => removePet(index)} className="rounded-lg border border-[rgba(184,92,114,0.2)] px-3 py-2 text-sm font-medium text-[var(--error-rose)] transition hover:bg-[rgba(184,92,114,0.08)]">
                         Remove
                       </button>
                     ) : null}
                   </div>
 
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <input
-                      placeholder="Pet name"
-                      value={pet.pet_name}
-                      onChange={(e) =>
-                        updatePetField(index, "pet_name", e.target.value)
-                      }
-                      required
-                    />
-                    <input
-                      placeholder="Breed"
-                      value={pet.breed}
-                      onChange={(e) =>
-                        updatePetField(index, "breed", e.target.value)
-                      }
-                      required
-                    />
-                    <input
-                      placeholder="Age"
-                      value={pet.age}
-                      onChange={(e) =>
-                        updatePetField(index, "age", e.target.value)
-                      }
-                      required
-                    />
-                    <input
-                      placeholder="Weight (lbs)"
-                      type="number"
-                      min="0"
-                      step="0.1"
-                      value={pet.weight_lbs}
-                      onChange={(e) =>
-                        updatePetField(index, "weight_lbs", e.target.value)
-                      }
-                      required
-                    />
-                    <select
-                      value={pet.sex}
-                      onChange={(e) =>
-                        updatePetField(index, "sex", e.target.value)
-                      }
-                      required
-                    >
+                    <input placeholder="Pet name" value={pet.pet_name} onChange={(e) => updatePetField(index, "pet_name", e.target.value)} required />
+                    <input placeholder="Breed" value={pet.breed} onChange={(e) => updatePetField(index, "breed", e.target.value)} required />
+                    <input placeholder="Age" value={pet.age} onChange={(e) => updatePetField(index, "age", e.target.value)} required />
+                    <input placeholder="Weight (lbs)" type="number" min="0" step="0.1" value={pet.weight_lbs} onChange={(e) => updatePetField(index, "weight_lbs", e.target.value)} required />
+                    <select value={pet.sex} onChange={(e) => updatePetField(index, "sex", e.target.value)} required>
                       <option value="">Select sex</option>
                       <option value="male">Male</option>
                       <option value="female">Female</option>
                     </select>
-                    <input
-                      placeholder="Temperament"
-                      value={pet.temperament}
-                      onChange={(e) =>
-                        updatePetField(index, "temperament", e.target.value)
-                      }
-                      required
-                    />
+                    <input placeholder="Temperament" value={pet.temperament} onChange={(e) => updatePetField(index, "temperament", e.target.value)} required />
                   </div>
+
+                  {questions.length > 0 ? (
+                    <div className="mt-6 border-t border-[var(--divider-soft)] pt-5">
+                      <h4 className="text-base font-semibold">Pet questionnaire</h4>
+                      <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                        These answers will be saved to this pet profile.
+                      </p>
+
+                      <div className="mt-4 space-y-4">
+                        {questions.map((question) => (
+                          <div key={question.id} className="rounded-[18px] border border-[var(--divider-soft)] bg-[var(--cream-background)] p-4">
+                            <label className="block">
+                              <span className="text-base font-semibold text-[var(--text-primary)]">
+                                {question.question_text}
+                                {question.is_required ? <span className="text-[var(--rose-primary)]"> *</span> : null}
+                              </span>
+                              <div className="mt-3">{renderQuestionInput(index, question)}</div>
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>
           </section>
-
-          {questions.length > 0 ? (
-            <section>
-              <h2 className="text-xl font-semibold">Questionnaire</h2>
-              <p className="mt-2 text-sm text-[var(--text-secondary)]">
-                Please answer the following questions before submitting.
-              </p>
-
-              <div className="mt-4 space-y-4">
-                {questions.map((question) => (
-                  <div
-                    key={question.id}
-                    className="rounded-[22px] border border-[var(--divider-soft)] bg-[var(--soft-surface)] p-4"
-                  >
-                    <label className="block">
-                      <span className="text-base font-semibold text-[var(--text-primary)]">
-                        {question.question_text}
-                        {question.is_required ? (
-                          <span className="text-[var(--rose-primary)]"> *</span>
-                        ) : null}
-                      </span>
-
-                      <div className="mt-3">{renderQuestionInput(question)}</div>
-                    </label>
-                  </div>
-                ))}
-              </div>
-            </section>
-          ) : null}
 
           {agreements.length > 0 ? (
             <section>
               <h2 className="text-xl font-semibold">Client agreements</h2>
               <div className="mt-4 space-y-4">
                 {agreements.map((agreement) => {
-                  const accepted =
-                    agreementAcceptances.find(
-                      (item) => item.agreement_id === agreement.id,
-                    )?.accepted ?? false;
+                  const accepted = agreementAcceptances.find((item) => item.agreement_id === agreement.id)?.accepted ?? false;
 
                   return (
-                    <div
-                      key={agreement.id}
-                      className="rounded-[22px] border border-[var(--divider-soft)] bg-[var(--soft-surface)] p-4"
-                    >
-                      {agreement.title ? (
-                        <h3 className="text-base font-semibold text-[var(--text-primary)]">
-                          {agreement.title}
-                        </h3>
-                      ) : null}
+                    <div key={agreement.id} className="rounded-[22px] border border-[var(--divider-soft)] bg-[var(--soft-surface)] p-4">
+                      {agreement.title ? <h3 className="text-base font-semibold text-[var(--text-primary)]">{agreement.title}</h3> : null}
 
                       <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[var(--text-secondary)]">
                         {agreement.agreement_text}
                       </p>
 
                       <label className="mt-4 inline-flex max-w-full cursor-pointer items-center gap-2 rounded-lg border border-[var(--divider-soft)] bg-[var(--cream-background)] px-4 py-3">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 shrink-0"
-                          checked={accepted}
-                          onChange={(e) =>
-                            updateAgreement(agreement.id, e.target.checked)
-                          }
-                          required={agreement.is_required}
-                        />
+                        <input type="checkbox" className="h-4 w-4 shrink-0" checked={accepted} onChange={(e) => updateAgreement(agreement.id, e.target.checked)} required={agreement.is_required} />
                         <span className="text-sm leading-5 text-[var(--text-secondary)]">
-                          I understand
-                          {agreement.is_required ? " (required)" : ""}
+                          I understand{agreement.is_required ? " (required)" : ""}
                         </span>
                       </label>
                     </div>
@@ -659,38 +600,21 @@ export default function OnboardingTokenPage() {
           <section>
             <h2 className="text-xl font-semibold">SMS reminders</h2>
             <label className="mt-4 inline-flex max-w-full cursor-pointer items-start gap-2 rounded-lg border border-[var(--divider-soft)] bg-[var(--cream-background)] px-4 py-3">
-              <input
-                type="checkbox"
-                className="mt-0.5 h-4 w-4 shrink-0"
-                checked={form.sms_opt_in}
-                onChange={(e) =>
-                  updateOwnerField("sms_opt_in", e.target.checked)
-                }
-                required
-              />
+              <input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0" checked={form.sms_opt_in} onChange={(e) => updateOwnerField("sms_opt_in", e.target.checked)} required />
               <span className="text-sm leading-5 text-[var(--text-secondary)]">
                 I agree to receive SMS appointment reminders and updates.
-                <span className="font-medium text-[var(--text-primary)]">
-                  {" "}
-                  This is required to complete onboarding.
-                </span>
+                <span className="font-medium text-[var(--text-primary)]"> This is required to complete onboarding.</span>
               </span>
             </label>
           </section>
 
-          {submitError ? (
-            <div className="error-banner px-4 py-3 text-sm">{submitError}</div>
-          ) : null}
+          {submitError ? <div className="error-banner px-4 py-3 text-sm">{submitError}</div> : null}
 
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-[var(--text-secondary)]">
               Your information will be used for appointment onboarding.
             </p>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="primary-button px-5 py-3"
-            >
+            <button type="submit" disabled={submitting} className="primary-button px-5 py-3">
               {submitting ? "Submitting..." : "Submit onboarding"}
             </button>
           </div>
