@@ -107,7 +107,7 @@ export default function StaffInvitePage() {
         throw new Error(result.error || "Failed to create account.");
       }
 
-      router.push("/thank-you");
+      router.push("/staff-invite/thank-you");
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to create account.";
