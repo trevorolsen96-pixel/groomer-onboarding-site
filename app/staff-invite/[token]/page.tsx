@@ -27,6 +27,7 @@ export default function StaffInvitePage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -62,10 +63,31 @@ export default function StaffInvitePage() {
     }
   }, [token]);
 
+  function validatePassword(value: string) {
+    if (value.length < 8) return "Password must be at least 8 characters.";
+    if (!/[A-Za-z]/.test(value)) return "Password must include at least one letter.";
+    if (!/[0-9]/.test(value)) return "Password must include at least one number.";
+    return "";
+  }
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSubmitting(true);
     setSubmitError("");
+
+    const passwordError = validatePassword(password);
+
+    if (passwordError) {
+      setSubmitError(passwordError);
+      setSubmitting(false);
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setSubmitError("Passwords do not match.");
+      setSubmitting(false);
+      return;
+    }
 
     try {
       const response = await fetch(`/api/staff-invite/${token}`, {
@@ -173,6 +195,20 @@ export default function StaffInvitePage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
+
+              <input
+                placeholder="Confirm password"
+                type="password"
+                minLength={8}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+              />
+
+              <p className="text-xs text-[var(--text-secondary)]">
+                Password must be at least 8 characters and include at least one
+                letter and one number.
+              </p>
             </div>
           </section>
 

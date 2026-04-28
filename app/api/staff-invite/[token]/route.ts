@@ -44,7 +44,10 @@ export async function GET(
 
     if (inviteRow.expires_at && new Date(inviteRow.expires_at) < new Date()) {
       return NextResponse.json(
-        { error: "This staff invite has expired. Please ask the business owner to resend it." },
+        {
+          error:
+            "This staff invite has expired. Please ask the business owner to resend it.",
+        },
         { status: 410 },
       );
     }
@@ -107,8 +110,17 @@ export async function POST(
     const password = body.password;
 
     if (!email) return badRequest("Email is required.");
+
     if (!password || password.length < 8) {
       return badRequest("Password must be at least 8 characters.");
+    }
+
+    if (!/[A-Za-z]/.test(password)) {
+      return badRequest("Password must include at least one letter.");
+    }
+
+    if (!/[0-9]/.test(password)) {
+      return badRequest("Password must include at least one number.");
     }
 
     const { data: inviteRow, error: inviteError } = await supabaseAdmin
@@ -133,7 +145,10 @@ export async function POST(
 
     if (inviteRow.expires_at && new Date(inviteRow.expires_at) < new Date()) {
       return NextResponse.json(
-        { error: "This staff invite has expired. Please ask the business owner to resend it." },
+        {
+          error:
+            "This staff invite has expired. Please ask the business owner to resend it.",
+        },
         { status: 410 },
       );
     }
@@ -180,14 +195,12 @@ export async function POST(
 
     const authUserId = authResult.user.id;
 
-    const { error: profileError } = await supabaseAdmin
-      .from("profiles")
-      .insert({
-        id: authUserId,
-        business_id: inviteRow.business_id,
-        full_name: workerRow.display_name,
-        role: workerRow.is_admin ? "admin" : "worker",
-      });
+    const { error: profileError } = await supabaseAdmin.from("profiles").insert({
+      id: authUserId,
+      business_id: inviteRow.business_id,
+      full_name: workerRow.display_name,
+      role: workerRow.is_admin ? "admin" : "worker",
+    });
 
     if (profileError) {
       console.error("Staff profile insert error:", profileError);
@@ -236,9 +249,6 @@ export async function POST(
     });
   } catch (error) {
     console.error("POST staff invite error:", error);
-    return NextResponse.json(
-      { error: "Invalid request." },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 }
