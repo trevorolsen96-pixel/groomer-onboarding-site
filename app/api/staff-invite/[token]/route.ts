@@ -195,12 +195,17 @@ export async function POST(
 
     const authUserId = authResult.user.id;
 
-    const { error: profileError } = await supabaseAdmin.from("profiles").insert({
-      id: authUserId,
-      business_id: inviteRow.business_id,
-      full_name: workerRow.display_name,
-      role: workerRow.is_admin ? "admin" : "worker",
-    });
+    const { error: profileError } = await supabaseAdmin.from("profiles").upsert(
+  {
+    id: authUserId,
+    business_id: inviteRow.business_id,
+    full_name: workerRow.display_name,
+    role: workerRow.is_admin ? "admin" : "worker",
+  },
+  {
+    onConflict: "id",
+  },
+);
 
     if (profileError) {
       console.error("Staff profile insert error:", profileError);
