@@ -48,7 +48,7 @@ export default function StaffInvitePage() {
         setBusinessName(result.business_name);
         setLogoUrl(result.logo_url);
         setStaffName(result.staff_name);
-        setEmail(result.email ?? "");
+        setEmail("");
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Failed to load staff invite.";
