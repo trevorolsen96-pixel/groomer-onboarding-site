@@ -3,6 +3,11 @@ import Stripe from "stripe";
 import { stripe } from "../../../../lib/stripe";
 import { supabaseAdmin } from "../../../../lib/supabase-admin";
 
+type StripeSubscriptionItemWithPeriods = Stripe.SubscriptionItem & {
+  current_period_start?: number | null;
+  current_period_end?: number | null;
+};
+
 type StripeSubscriptionWithPeriods = Stripe.Subscription & {
   current_period_start?: number | null;
   current_period_end?: number | null;
@@ -13,13 +18,27 @@ function toIsoFromUnix(value?: number | null) {
   return new Date(value * 1000).toISOString();
 }
 
+function getCurrentPeriod(subscription: StripeSubscriptionWithPeriods) {
+  const firstItem = subscription.items.data[0] as
+    | StripeSubscriptionItemWithPeriods
+    | undefined;
+
+  return {
+    currentPeriodStart:
+      firstItem?.current_period_start ?? subscription.current_period_start ?? null,
+    currentPeriodEnd:
+      firstItem?.current_period_end ?? subscription.current_period_end ?? null,
+  };
+}
+
 function getAppAccessStatus(subscription: StripeSubscriptionWithPeriods) {
   if (subscription.status === "trialing") return "trialing";
   if (subscription.status === "active") return "active";
   if (subscription.status === "past_due") return "past_due";
 
   if (subscription.status === "canceled") {
-    const periodEnd = subscription.current_period_end;
+    const { currentPeriodEnd } = getCurrentPeriod(subscription);
+    const periodEnd = currentPeriodEnd;
     if (periodEnd && periodEnd * 1000 > Date.now()) {
       return "canceled";
     }
@@ -36,14 +55,15 @@ async function syncSubscription(subscription: Stripe.Subscription) {
     typeof sub.customer === "string" ? sub.customer : sub.customer.id;
 
   const appAccessStatus = getAppAccessStatus(sub);
+const { currentPeriodStart, currentPeriodEnd } = getCurrentPeriod(sub);
 
   const updateData = {
     subscription_status: sub.status,
     app_access_status: appAccessStatus,
     trial_starts_at: toIsoFromUnix(sub.trial_start),
     trial_ends_at: toIsoFromUnix(sub.trial_end),
-    current_period_starts_at: toIsoFromUnix(sub.current_period_start),
-    current_period_ends_at: toIsoFromUnix(sub.current_period_end),
+    current_period_starts_at: toIsoFromUnix(currentPeriodStart),
+    current_period_ends_at: toIsoFromUnix(currentPeriodEnd),
     cancel_at_period_end: sub.cancel_at_period_end,
     canceled_at: toIsoFromUnix(sub.canceled_at),
     payment_provider: "stripe",
