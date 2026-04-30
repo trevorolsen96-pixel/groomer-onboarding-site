@@ -37,7 +37,7 @@ export default function HomePage() {
         <AccountMenu />
       </header>
 
-      <section id="demo" className="mx-auto max-w-6xl scroll-mt-28 px-6 py-16">
+      <section id="demo" className="mx-auto max-w-6xl scroll-mt-16 px-6 py-16">
         <div className="grid items-center gap-12 lg:grid-cols-2">
           <div>
             <div className="mb-6">
