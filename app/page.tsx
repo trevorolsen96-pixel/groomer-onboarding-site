@@ -166,20 +166,55 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-4xl px-6 py-16 text-center">
+      <section className="mx-auto max-w-5xl px-6 py-16 text-center">
         <div className="soft-card p-10">
-          <h2 className="text-3xl font-bold text-[var(--text-primary)]">
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--rose-primary)]">
+            Built for mobile groomers
+          </p>
+
+          <h2 className="mt-3 text-3xl font-bold text-[var(--text-primary)]">
             Ready to simplify your grooming business?
           </h2>
 
-          <p className="mt-4 text-[var(--text-secondary)]">
-            Create your Wagzly account, start your trial, and set up your
-            grooming business profile.
+          <p className="mx-auto mt-4 max-w-2xl text-[var(--text-secondary)]">
+            Start your trial and see how Wagzly can help organize your schedule,
+            clients, pets, onboarding, reminders, and payments.
           </p>
 
-          <HomeCtas demoBookingUrl={demoBookingUrl} />
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            <ReviewCard
+              quote="Scheduling and client details are finally in one place."
+              name="Mobile grooming owner"
+            />
+            <ReviewCard
+              quote="The app feels simple enough to use during a busy grooming day."
+              name="Solo groomer"
+            />
+            <ReviewCard
+              quote="Wagzly makes the business side feel a lot less chaotic."
+              name="Grooming business owner"
+            />
+          </div>
+
+          <div className="mt-8 flex justify-center">
+            <HomeCtas demoBookingUrl={demoBookingUrl} showDemoCard={false} />
+          </div>
         </div>
       </section>
     </main>
+  );
+}
+
+function ReviewCard({ quote, name }: { quote: string; name: string }) {
+  return (
+    <div className="rounded-3xl bg-[var(--soft-surface)] p-5 text-left">
+      <p className="text-sm font-bold text-[var(--rose-primary)]">★★★★★</p>
+      <p className="mt-3 text-sm leading-6 text-[var(--text-primary)]">
+        “{quote}”
+      </p>
+      <p className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-secondary)]">
+        {name}
+      </p>
+    </div>
   );
 }
