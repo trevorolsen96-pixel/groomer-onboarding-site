@@ -52,24 +52,16 @@ export default function AccountMenu() {
             href="/login"
             onClick={() => setOpen(false)}
             className="block rounded-xl px-3 py-2 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--soft-surface)]"
-          >
-            Log in
-          </Link>
+            >
+            Log in / Create account
+            </Link>
 
-          <Link
-            href="/create-account"
-            onClick={() => setOpen(false)}
-            className="block rounded-xl px-3 py-2 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--soft-surface)]"
-          >
-            Create account
-          </Link>
-
-          <Link
+            <Link
             href="/account"
             onClick={() => setOpen(false)}
-            className="block rounded-xl px-3 py-2 text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--soft-surface)]"
-          >
-            Account & billing
+            className="block rounded-xl px-3 py-2 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--soft-surface)]"
+            >
+            Account
           </Link>
         </div>
       )}
