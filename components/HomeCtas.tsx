@@ -46,7 +46,7 @@ export default function HomeCtas({ demoBookingUrl }: HomeCtasProps) {
   }
 
   return (
-    <div className="mt-8">
+    <div className="mt-8 space-y-5">
       <div className="flex flex-wrap gap-4">
         {loggedIn ? (
           <Link href="/account" className="primary-button">
@@ -63,22 +63,30 @@ export default function HomeCtas({ demoBookingUrl }: HomeCtasProps) {
             </Link>
           </>
         )}
+      </div>
+
+      <div className="max-w-xl rounded-3xl border border-[var(--divider-soft)] bg-white/75 p-5 shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--rose-primary)]">
+          Want to see it first?
+        </p>
+
+        <h3 className="mt-2 text-xl font-bold text-[var(--text-primary)]">
+          Book a free 30-minute live demo
+        </h3>
+
+        <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
+        Book a free 30-minute live demo to explore scheduling, client management, onboarding, reminders, and see how Wagzly can help grow your grooming business.
+        </p>
 
         <a
           href={demoBookingUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="secondary-button"
+          className="secondary-button mt-4 inline-flex"
         >
           Book a demo
         </a>
       </div>
-
-      <p className="mt-3 max-w-md text-sm leading-6 text-[var(--text-secondary)]">
-        Book a free 30-minute live video demo with Trevor. You’ll get a
-        walkthrough of Wagzly, see how the app works, and have time to ask
-        questions.
-      </p>
     </div>
   );
 }
