@@ -597,6 +597,10 @@ function AccountCard({
 function DownloadAppCard() {
   return (
     <section className="soft-card p-6">
+      <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--rose-primary)]">
+        iOS and Android
+      </p>
+
       <h2 className="mt-2 text-2xl font-bold text-[var(--text-primary)]">
         Download Wagzly on your phone
       </h2>
