@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import AccountMenu from "../components/AccountMenu";
+import HomeCtas from "../components/HomeCtas";
 
 const demoBookingUrl = "https://wagzly.zohobookings.com/#/4937476000000034049";
 
@@ -68,24 +69,7 @@ export default function HomePage() {
               system.
             </p>
 
-            <div className="mt-8 flex flex-wrap gap-4">
-              <Link href="/create-account" className="primary-button">
-                Start 14-day trial
-              </Link>
-
-              <Link href="/login" className="secondary-button">
-                Log in
-              </Link>
-
-              <a
-                href={demoBookingUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="secondary-button"
-              >
-                Book a demo
-              </a>
-            </div>
+            <HomeCtas demoBookingUrl={demoBookingUrl} />
           </div>
 
           <div className="soft-card p-6">
@@ -112,12 +96,30 @@ export default function HomePage() {
 
         <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {[
-            ["Smart Scheduling", "Drag, drop, and manage your day with less effort."],
-            ["Route Planning", "Know where to go next and stay efficient on the road."],
-            ["Client Management", "Keep pet details, customer notes, and service history organized."],
-            ["Automated Reminders", "Reduce no-shows with reminders and confirmations."],
-            ["Payment Tracking", "Track collected payments, tips, and outstanding balances."],
-            ["Designed for Groomers", "Built specifically for mobile grooming businesses."],
+            [
+              "Smart Scheduling",
+              "Drag, drop, and manage your day with less effort.",
+            ],
+            [
+              "Route Planning",
+              "Know where to go next and stay efficient on the road.",
+            ],
+            [
+              "Client Management",
+              "Keep pet details, customer notes, and service history organized.",
+            ],
+            [
+              "Automated Reminders",
+              "Reduce no-shows with reminders and confirmations.",
+            ],
+            [
+              "Payment Tracking",
+              "Track collected payments, tips, and outstanding balances.",
+            ],
+            [
+              "Designed for Groomers",
+              "Built specifically for mobile grooming businesses.",
+            ],
           ].map(([title, desc], i) => (
             <div key={i} className="soft-card p-5">
               <h3 className="text-lg font-semibold">{title}</h3>
@@ -135,7 +137,8 @@ export default function HomePage() {
         </h2>
 
         <p className="mx-auto mt-3 max-w-2xl text-center text-[var(--text-secondary)]">
-          Start with a 14-day trial. No complicated setup, no long-term contract.
+          Start with a 14-day trial. No complicated setup, no long-term
+          contract.
         </p>
 
         <div className="mt-10 grid gap-6 sm:grid-cols-2">
@@ -174,15 +177,7 @@ export default function HomePage() {
             grooming business profile.
           </p>
 
-          <div className="mt-6 flex flex-wrap justify-center gap-3">
-            <Link href="/create-account" className="primary-button">
-              Start 14-day trial
-            </Link>
-
-            <Link href="/login" className="secondary-button">
-              Log in
-            </Link>
-          </div>
+          <HomeCtas demoBookingUrl={demoBookingUrl} />
         </div>
       </section>
     </main>
