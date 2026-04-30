@@ -6,6 +6,8 @@ function cleanText(value: unknown) {
 }
 
 export async function POST(request: Request) {
+  let userId: string | null = null;
+
   try {
     const body = await request.json();
 
@@ -64,7 +66,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const userId = authData.user.id;
+    userId = authData.user.id;
 
     const { data: business, error: businessError } = await supabaseAdmin
       .from("businesses")
@@ -75,17 +77,12 @@ export async function POST(request: Request) {
         trial_starts_at: trialStartsAt.toISOString(),
         trial_ends_at: trialEndsAt.toISOString(),
         plan: "basic",
-        })
+      })
       .select("id")
       .single();
 
     if (businessError || !business) {
-      await supabaseAdmin.auth.admin.deleteUser(userId);
-
-      return NextResponse.json(
-        { error: businessError?.message ?? "Unable to create business." },
-        { status: 400 }
-      );
+      throw new Error(businessError?.message ?? "Unable to create business.");
     }
 
     const businessId = business.id;
@@ -98,12 +95,7 @@ export async function POST(request: Request) {
     });
 
     if (profileError) {
-      await supabaseAdmin.auth.admin.deleteUser(userId);
-
-      return NextResponse.json(
-        { error: profileError.message },
-        { status: 400 }
-      );
+      throw new Error(profileError.message);
     }
 
     const { error: settingsError } = await supabaseAdmin
@@ -121,12 +113,7 @@ export async function POST(request: Request) {
       });
 
     if (settingsError) {
-      await supabaseAdmin.auth.admin.deleteUser(userId);
-
-      return NextResponse.json(
-        { error: settingsError.message },
-        { status: 400 }
-      );
+      throw new Error(settingsError.message);
     }
 
     return NextResponse.json({
@@ -134,10 +121,19 @@ export async function POST(request: Request) {
       businessId,
       trialEndsAt: trialEndsAt.toISOString(),
     });
-  } catch {
+  } catch (error) {
+    if (userId) {
+      await supabaseAdmin.auth.admin.deleteUser(userId);
+    }
+
     return NextResponse.json(
-      { error: "Something went wrong creating your account." },
-      { status: 500 }
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Something went wrong creating your account.",
+      },
+      { status: 400 }
     );
   }
 }
