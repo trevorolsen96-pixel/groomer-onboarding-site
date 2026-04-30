@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import AccountMenu from "../components/AccountMenu";
 
 const demoBookingUrl = "https://wagzly.zohobookings.com/#/4937476000000034049";
 
