@@ -29,13 +29,12 @@ export default function HomePage() {
           <a href="#pricing" className="hover:text-[var(--text-primary)]">
             Pricing
           </a>
-        
         </nav>
 
         <AccountMenu />
       </header>
 
-      <section id="demo" className="mx-auto max-w-6xl scroll-mt-16 px-6 py-16">
+      <section className="mx-auto max-w-6xl px-6 py-16">
         <div className="grid items-center gap-12 lg:grid-cols-2">
           <div>
             <div className="mb-6">
@@ -115,7 +114,9 @@ export default function HomePage() {
             ],
           ].map(([title, desc], i) => (
             <div key={i} className="soft-card p-5">
-              <h3 className="text-lg font-semibold">{title}</h3>
+              <h3 className="text-lg font-semibold text-[var(--text-primary)]">
+                {title}
+              </h3>
               <p className="mt-2 text-sm text-[var(--text-secondary)]">
                 {desc}
               </p>
@@ -136,8 +137,12 @@ export default function HomePage() {
 
         <div className="mt-10 grid gap-6 sm:grid-cols-2">
           <div className="soft-card p-6">
-            <h3 className="text-xl font-bold">Basic</h3>
-            <p className="mt-2 text-3xl font-bold">$39.99/mo</p>
+            <h3 className="text-xl font-bold text-[var(--text-primary)]">
+              Basic
+            </h3>
+            <p className="mt-2 text-3xl font-bold text-[var(--text-primary)]">
+              $39.99/mo
+            </p>
             <ul className="mt-4 space-y-2 text-sm text-[var(--text-secondary)]">
               <li>✓ 1 admin + 1 groomer</li>
               <li>✓ Scheduling tools</li>
@@ -147,8 +152,12 @@ export default function HomePage() {
           </div>
 
           <div className="soft-card border-2 border-[var(--rose-primary)] p-6">
-            <h3 className="text-xl font-bold">Pro</h3>
-            <p className="mt-2 text-3xl font-bold">$89.99/mo</p>
+            <h3 className="text-xl font-bold text-[var(--text-primary)]">
+              Pro
+            </h3>
+            <p className="mt-2 text-3xl font-bold text-[var(--text-primary)]">
+              $89.99/mo
+            </p>
             <ul className="mt-4 space-y-2 text-sm text-[var(--text-secondary)]">
               <li>✓ Everything in Basic</li>
               <li>✓ SMS reminders</li>
@@ -191,6 +200,46 @@ export default function HomePage() {
 
           <div className="mt-8 flex justify-center">
             <HomeCtas demoBookingUrl={demoBookingUrl} showDemoCard={false} />
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-5xl px-6 pb-20 pt-4 text-center">
+        <div className="soft-card p-8">
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--rose-primary)]">
+            iOS and Android
+          </p>
+
+          <h2 className="mt-3 text-2xl font-bold text-[var(--text-primary)]">
+            Take Wagzly with you on every grooming day.
+          </h2>
+
+          <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">
+            Wagzly is designed for supported iPhone and Android devices, so you
+            can manage appointments, clients, pets, and payments wherever the
+            day takes you.
+          </p>
+
+          <div className="mt-7 flex flex-wrap items-center justify-center gap-5">
+            <div className="flex h-[54px] w-[180px] items-center justify-center">
+              <Image
+                src="/images/store/appstore.svg"
+                alt="Download on the App Store"
+                width={180}
+                height={54}
+                className="h-[54px] w-[180px] object-contain"
+              />
+            </div>
+
+            <div className="flex h-[54px] w-[180px] items-center justify-center">
+              <Image
+                src="/images/store/googleplay.png"
+                alt="Get it on Google Play"
+                width={180}
+                height={54}
+                className="h-[54px] w-[180px] object-contain"
+              />
+            </div>
           </div>
         </div>
       </section>
