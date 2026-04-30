@@ -1,11 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseClient } from "../../lib/supabase-client";
 
-type Tab = "overview" | "billing" | "business" | "staff" | "security" | "support";
+type Tab =
+  | "overview"
+  | "billing"
+  | "business"
+  | "staff"
+  | "security"
+  | "support";
 
 type Profile = {
   id: string;
@@ -77,6 +83,14 @@ function prettyStatus(value?: string | null) {
 }
 
 export default function AccountPage() {
+  return (
+    <Suspense fallback={<AccountLoading />}>
+      <AccountPageContent />
+    </Suspense>
+  );
+}
+
+function AccountPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -280,17 +294,7 @@ export default function AccountPage() {
     business?.subscription_status === "incomplete_expired";
 
   if (loading) {
-    return (
-      <main className="site-shell">
-        <section className="mx-auto flex min-h-screen max-w-4xl items-center px-6 py-14">
-          <div className="soft-card w-full p-8">
-            <p className="text-lg font-bold text-[var(--text-primary)]">
-              Loading your account...
-            </p>
-          </div>
-        </section>
-      </main>
-    );
+    return <AccountLoading />;
   }
 
   return (
@@ -544,6 +548,20 @@ export default function AccountPage() {
               </AccountCard>
             ) : null}
           </div>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function AccountLoading() {
+  return (
+    <main className="site-shell">
+      <section className="mx-auto flex min-h-screen max-w-4xl items-center px-6 py-14">
+        <div className="soft-card w-full p-8">
+          <p className="text-lg font-bold text-[var(--text-primary)]">
+            Loading your account...
+          </p>
         </div>
       </section>
     </main>
