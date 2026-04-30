@@ -69,12 +69,13 @@ export async function POST(request: Request) {
     const { data: business, error: businessError } = await supabaseAdmin
       .from("businesses")
       .insert({
+        name: businessName,
         owner_user_id: userId,
         subscription_status: "trialing",
         trial_starts_at: trialStartsAt.toISOString(),
         trial_ends_at: trialEndsAt.toISOString(),
         plan: "basic",
-      })
+        })
       .select("id")
       .single();
 
