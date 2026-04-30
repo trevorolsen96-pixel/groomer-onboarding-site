@@ -12,7 +12,7 @@ export default function TermsPage() {
           </h1>
 
           <p className="mt-4 text-sm text-[var(--text-secondary)]">
-            Effective date: 4/27/26
+            Effective date: 4/27/2026
           </p>
 
           <div className="legal-copy mt-8 space-y-8">
@@ -20,7 +20,7 @@ export default function TermsPage() {
               <h2>1. Overview</h2>
               <p>
                 Welcome to Wagzly. These Terms of Service govern your access to
-                and use of the Wagzly website, software, onboarding tools, and
+                and use of Wagzly&apos;s website, software, onboarding tools, and
                 related services. By using Wagzly, you agree to these terms.
               </p>
             </section>
@@ -28,21 +28,20 @@ export default function TermsPage() {
             <section>
               <h2>2. Services</h2>
               <p>
-                Wagzly provides software and related tools designed to support
-                grooming businesses, including client onboarding, pet data
-                collection, communication preferences, and administrative
-                workflows.
+                Wagzly provides software tools designed to support grooming
+                businesses, including customer management, pet data tracking,
+                appointment scheduling, messaging, and administrative workflows.
               </p>
             </section>
 
             <section>
               <h2>3. Eligibility and Account Responsibility</h2>
               <p>
-                You must be legally able to enter into a binding agreement to
-                use Wagzly. If you create an account or use the service on
-                behalf of a business, you are responsible for maintaining the
-                confidentiality of your login credentials and for all activity
-                under your account.
+                You must be legally able to enter into a binding agreement to use
+                Wagzly. If you create an account or use the service on behalf of
+                a business, you are responsible for maintaining account security,
+                all activity under your account, and ensuring your use of the
+                service complies with applicable laws.
               </p>
             </section>
 
@@ -61,20 +60,30 @@ export default function TermsPage() {
             <section>
               <h2>5. Customer Data</h2>
               <p>
-                You may submit business, customer, pet, and appointment-related
-                data through Wagzly. You retain ownership of your data, and you
-                grant Wagzly permission to process that data as necessary to
-                provide the service.
+                You may submit business, customer, pet, appointment, and
+                communication-related data through Wagzly. You retain ownership
+                of your data, and you grant Wagzly permission to process, store,
+                and use that data as necessary to provide and improve the
+                service.
+              </p>
+              <p>
+                You are responsible for the accuracy of the data you enter, your
+                legal right to collect and use that data, and your compliance
+                with privacy, data protection, and customer communication laws.
               </p>
             </section>
 
             <section>
-              <h2>6. SMS and Communications</h2>
+              <h2>6. Messaging and Communications</h2>
               <p>
                 If you use messaging features, you are responsible for obtaining
                 any legally required consent from your customers before sending
-                SMS or similar communications. Message frequency, carrier
-                delivery, and message availability may vary.
+                SMS, text messages, reminders, or similar communications.
+              </p>
+              <p>
+                Message delivery depends on third-party providers, carrier
+                networks, customer devices, and customer settings. Wagzly does
+                not guarantee message delivery, timing, or availability.
               </p>
             </section>
 
@@ -83,8 +92,11 @@ export default function TermsPage() {
               <p>
                 Certain features may require payment or a subscription. Pricing,
                 billing terms, renewals, and feature access may be described
-                separately within the product or on a pricing page. Failure to
-                pay may result in suspension or termination of access.
+                separately within the product or on a pricing page.
+              </p>
+              <p>
+                Failure to pay may result in suspension or termination of access.
+                Unless otherwise stated, payments are non-refundable.
               </p>
             </section>
 
@@ -92,45 +104,65 @@ export default function TermsPage() {
               <h2>8. Availability</h2>
               <p>
                 We aim to keep Wagzly available and reliable, but we do not
-                guarantee uninterrupted service. Maintenance, outages, third
-                party failures, or other issues may affect availability.
+                guarantee uninterrupted or error-free service. Maintenance,
+                outages, third-party failures, or other issues may affect
+                availability.
               </p>
             </section>
 
             <section>
-              <h2>9. Intellectual Property</h2>
+              <h2>9. Third-Party Services</h2>
               <p>
-                Wagzly and its related branding, software, designs, and content
-                are owned by Wagzly or its licensors and are protected by
-                applicable intellectual property laws. Except as allowed by law,
-                you may not copy, modify, distribute, or reverse engineer the
-                service.
+                Wagzly may rely on third-party providers for hosting,
+                infrastructure, messaging, payments, analytics, and other service
+                functions. We are not responsible for failures, delays, outages,
+                or actions of third-party services.
               </p>
             </section>
 
             <section>
-              <h2>10. Disclaimer</h2>
+              <h2>10. Intellectual Property</h2>
+              <p>
+                Wagzly and its related branding, software, designs, content, and
+                materials are owned by Wagzly or its licensors and are protected
+                by applicable intellectual property laws. Except as allowed by
+                law, you may not copy, modify, distribute, or reverse engineer
+                the service.
+              </p>
+            </section>
+
+            <section>
+              <h2>11. Disclaimer</h2>
               <p>
                 Wagzly is provided on an “as is” and “as available” basis.
                 Except to the extent prohibited by law, we disclaim all
-                warranties, express or implied, including merchantability,
-                fitness for a particular purpose, and non-infringement.
+                warranties, express or implied, including merchantability, fitness
+                for a particular purpose, and non-infringement.
               </p>
             </section>
 
             <section>
-              <h2>11. Limitation of Liability</h2>
+              <h2>12. Limitation of Liability</h2>
               <p>
-                To the fullest extent permitted by law, Wagzly will not be
-                liable for any indirect, incidental, special, consequential, or
-                punitive damages, or for any loss of profits, data, goodwill, or
-                business interruption arising from or related to your use of the
-                service.
+                To the fullest extent permitted by law, Wagzly will not be liable
+                for any indirect, incidental, special, consequential, or punitive
+                damages, or for any loss of profits, data, goodwill, or business
+                interruption arising from or related to your use of the service.
               </p>
             </section>
 
             <section>
-              <h2>12. Termination</h2>
+              <h2>13. Indemnification</h2>
+              <p>
+                You agree to defend, indemnify, and hold harmless Wagzly from
+                any claims, damages, losses, liabilities, or expenses arising
+                from your use of the service, your customer data, your messaging
+                practices, or your violation of these terms or applicable laws.
+              </p>
+            </section>
+
+            <section>
+              <h2>14. Termination</h2>
               <p>
                 We may suspend or terminate access to the service if these terms
                 are violated or if continued access creates legal, technical, or
@@ -139,7 +171,15 @@ export default function TermsPage() {
             </section>
 
             <section>
-              <h2>13. Changes to These Terms</h2>
+              <h2>15. Governing Law</h2>
+              <p>
+                These terms are governed by the laws of the State of California,
+                without regard to conflict of law principles.
+              </p>
+            </section>
+
+            <section>
+              <h2>16. Changes to These Terms</h2>
               <p>
                 We may update these Terms of Service from time to time. Updated
                 terms become effective when posted unless otherwise stated.
@@ -147,7 +187,7 @@ export default function TermsPage() {
             </section>
 
             <section>
-              <h2>14. Contact</h2>
+              <h2>17. Contact</h2>
               <p>
                 For questions about these Terms of Service, contact us at:
                 support@wagzly.app

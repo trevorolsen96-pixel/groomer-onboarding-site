@@ -1,11 +1,78 @@
 import Image from "next/image";
+import Link from "next/link";
 
 const demoBookingUrl = "https://wagzly.zohobookings.com/#/4937476000000034049";
 
 export default function HomePage() {
   return (
     <main className="site-shell">
-      <section className="mx-auto max-w-6xl px-6 py-20">
+      <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
+        <Link href="/" className="flex items-center gap-3">
+          <Image
+            src="/images/logo/WagzlyApp.png"
+            alt="Wagzly"
+            width={44}
+            height={44}
+            priority
+          />
+          <span className="text-xl font-bold text-[var(--text-primary)]">
+            Wagzly
+          </span>
+        </Link>
+
+        <nav className="hidden items-center gap-7 text-sm font-semibold text-[var(--text-secondary)] md:flex">
+          <a href="#features" className="hover:text-[var(--text-primary)]">
+            Features
+          </a>
+          <a href="#pricing" className="hover:text-[var(--text-primary)]">
+            Pricing
+          </a>
+          <a
+            href={demoBookingUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-[var(--text-primary)]"
+          >
+            Book a demo
+          </a>
+        </nav>
+
+        <details className="group relative">
+          <summary className="flex cursor-pointer list-none items-center gap-2 rounded-full border border-[var(--divider-soft)] bg-white px-4 py-2 text-sm font-semibold text-[var(--text-primary)] shadow-sm">
+            Account
+            <span className="text-xs text-[var(--text-secondary)]">▾</span>
+          </summary>
+
+          <div className="absolute right-0 z-20 mt-3 w-64 rounded-2xl border border-[var(--divider-soft)] bg-white p-3 shadow-xl">
+            <p className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--rose-primary)]">
+              Wagzly Account
+            </p>
+
+            <Link
+              href="/login"
+              className="block rounded-xl px-3 py-2 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--soft-surface)]"
+            >
+              Log in
+            </Link>
+
+            <Link
+              href="/create-account"
+              className="block rounded-xl px-3 py-2 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--soft-surface)]"
+            >
+              Create account
+            </Link>
+
+            <Link
+              href="/account"
+              className="block rounded-xl px-3 py-2 text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--soft-surface)]"
+            >
+              Account & billing
+            </Link>
+          </div>
+        </details>
+      </header>
+
+      <section className="mx-auto max-w-6xl px-6 py-16">
         <div className="grid items-center gap-12 lg:grid-cols-2">
           <div>
             <div className="mb-6">
@@ -33,17 +100,17 @@ export default function HomePage() {
             </p>
 
             <div className="mt-8 flex flex-wrap gap-4">
+              <Link href="/create-account" className="primary-button">
+                Start 14-day trial
+              </Link>
+
               <a
                 href={demoBookingUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="primary-button"
+                className="secondary-button"
               >
                 Book a demo
-              </a>
-
-              <a href="#pricing" className="secondary-button">
-                View pricing
               </a>
             </div>
           </div>
@@ -65,7 +132,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-6 py-16">
+      <section id="features" className="mx-auto max-w-6xl px-6 py-16">
         <h2 className="text-center text-3xl font-bold text-[var(--text-primary)]">
           Everything you need to run your grooming business
         </h2>
@@ -94,6 +161,10 @@ export default function HomePage() {
           Simple pricing
         </h2>
 
+        <p className="mx-auto mt-3 max-w-2xl text-center text-[var(--text-secondary)]">
+          Start with a 14-day trial. No complicated setup, no long-term contract.
+        </p>
+
         <div className="mt-10 grid gap-6 sm:grid-cols-2">
           <div className="soft-card p-6">
             <h3 className="text-xl font-bold">Basic</h3>
@@ -119,73 +190,20 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-6 py-16">
-        <h2 className="text-center text-3xl font-bold text-[var(--text-primary)]">
-          What groomers are saying
-        </h2>
-
-        <div className="mt-10 grid gap-6 sm:grid-cols-2">
-          {[
-            "Wagzly helped me clean up my entire scheduling process.",
-            "I finally have one place for appointments, notes, and payments.",
-            "The reminders alone save me a ton of time every week.",
-            "This feels like it was made specifically for how mobile groomers work.",
-          ].map((text, i) => (
-            <div key={i} className="soft-card p-5">
-              <p className="text-[var(--text-secondary)]">“{text}”</p>
-              <p className="mt-3 text-sm font-semibold text-[var(--text-primary)]">
-                — Wagzly User
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
-
       <section className="mx-auto max-w-4xl px-6 py-16 text-center">
         <div className="soft-card p-10">
           <h2 className="text-3xl font-bold text-[var(--text-primary)]">
             Ready to simplify your grooming business?
           </h2>
+
           <p className="mt-4 text-[var(--text-secondary)]">
-            Book a demo and see how Wagzly can help you save time, stay
-            organized, and grow.
+            Create your Wagzly account, start your trial, and set up your
+            grooming business profile.
           </p>
 
-          <a
-            href={demoBookingUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="primary-button mt-6 inline-block"
-          >
-            Book a demo
-          </a>
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-4xl px-6 pb-20 text-center">
-        <div className="soft-card p-8">
-          <div className="mx-auto mb-4 flex justify-center">
-            <Image
-              src="/images/logo/WagzlyApp.png"
-              alt="Wagzly app icon"
-              width={72}
-              height={72}
-            />
-          </div>
-
-          <h3 className="text-xl font-semibold text-[var(--text-primary)]">
-            Get updates and grooming business tips
-          </h3>
-
-          <p className="mt-2 text-sm text-[var(--text-secondary)]">
-            Join the Wagzly newsletter for product updates, release news, and
-            grooming business tips.
-          </p>
-
-          <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <input placeholder="Enter your email" className="w-full max-w-xs" />
-            <button className="primary-button">Subscribe</button>
-          </div>
+          <Link href="/create-account" className="primary-button mt-6 inline-block">
+            Start 14-day trial
+          </Link>
         </div>
       </section>
     </main>
