@@ -66,7 +66,7 @@ export default function LoginPage() {
       return;
     }
 
-    if (profile.role !== "admin" && profile.role !== "owner") {
+    if (profile.role !== "admin") {
       await supabaseClient.auth.signOut();
       setSaving(false);
       setError(

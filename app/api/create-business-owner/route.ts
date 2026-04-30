@@ -7,6 +7,7 @@ function cleanText(value: unknown) {
 
 export async function POST(request: Request) {
   let userId: string | null = null;
+  let businessId: string | null = null;
 
   try {
     const body = await request.json();
@@ -61,12 +62,39 @@ export async function POST(request: Request) {
 
     if (authError || !authData.user) {
       return NextResponse.json(
-        { error: authError?.message ?? "Unable to create account." },
+        {
+          error:
+            authError?.message?.toLowerCase().includes("already")
+              ? "An account with this email already exists. Please log in instead."
+              : authError?.message ?? "Unable to create account.",
+        },
         { status: 400 }
       );
     }
 
     userId = authData.user.id;
+
+    const { data: existingProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("id, business_id, role")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (existingProfile?.business_id) {
+      const { data: existingBusiness } = await supabaseAdmin
+        .from("businesses")
+        .select("id")
+        .eq("id", existingProfile.business_id)
+        .maybeSingle();
+
+      if (existingBusiness) {
+        return NextResponse.json({
+          ok: true,
+          businessId: existingProfile.business_id,
+          trialEndsAt: trialEndsAt.toISOString(),
+        });
+      }
+    }
 
     const { data: business, error: businessError } = await supabaseAdmin
       .from("businesses")
@@ -85,14 +113,19 @@ export async function POST(request: Request) {
       throw new Error(businessError?.message ?? "Unable to create business.");
     }
 
-    const businessId = business.id;
+    businessId = business.id;
 
-    const { error: profileError } = await supabaseAdmin.from("profiles").insert({
-      id: userId,
-      business_id: businessId,
-      full_name: fullName,
-      role: "admin",
-    });
+    const { error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .upsert(
+        {
+          id: userId,
+          business_id: businessId,
+          full_name: fullName,
+          role: "admin",
+        },
+        { onConflict: "id" }
+      );
 
     if (profileError) {
       throw new Error(profileError.message);
@@ -100,17 +133,20 @@ export async function POST(request: Request) {
 
     const { error: settingsError } = await supabaseAdmin
       .from("business_settings")
-      .insert({
-        business_id: businessId,
-        business_mode: "mobile_grooming",
-        business_name: businessName,
-        phone: phone || null,
-        sms_enabled: false,
-        reschedule_sms_enabled: false,
-        default_customer_sms_mode: "enabled",
-        sms_timezone: "America/Los_Angeles",
-        ask_confirmation_day_before: false,
-      });
+      .upsert(
+        {
+          business_id: businessId,
+          business_mode: "mobile_grooming",
+          business_name: businessName,
+          phone: phone || null,
+          sms_enabled: false,
+          reschedule_sms_enabled: false,
+          default_customer_sms_mode: "enabled",
+          sms_timezone: "America/Los_Angeles",
+          ask_confirmation_day_before: false,
+        },
+        { onConflict: "business_id" }
+      );
 
     if (settingsError) {
       throw new Error(settingsError.message);
@@ -122,6 +158,10 @@ export async function POST(request: Request) {
       trialEndsAt: trialEndsAt.toISOString(),
     });
   } catch (error) {
+    if (businessId) {
+      await supabaseAdmin.from("businesses").delete().eq("id", businessId);
+    }
+
     if (userId) {
       await supabaseAdmin.auth.admin.deleteUser(userId);
     }
