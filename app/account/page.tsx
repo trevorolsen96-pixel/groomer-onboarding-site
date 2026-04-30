@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -122,14 +123,18 @@ function AccountPageContent() {
 
     if (billing === "reactivated") {
       setBillingMessage(
-        "Billing restarted successfully. Stripe may take a moment to sync your account status."
+        "Billing restarted successfully. Your Wagzly access is active again."
       );
+
+      router.replace("/account?tab=billing", { scroll: false });
+      return;
     }
 
     if (billing === "cancelled") {
       setBillingMessage("Billing setup was cancelled. No changes were made.");
+      router.replace("/account?tab=billing", { scroll: false });
     }
-  }, [searchParams]);
+  }, [router, searchParams]);
 
   useEffect(() => {
     async function loadAccount() {
@@ -286,14 +291,12 @@ function AccountPageContent() {
     }
   }
 
- 
-
   const shouldShowReactivate =
-  business?.subscription_status === "canceled" ||
-  business?.subscription_status === "incomplete_expired";
+    business?.subscription_status === "canceled" ||
+    business?.subscription_status === "incomplete_expired";
 
-const canManageBilling =
-  Boolean(business?.payment_customer_id) && !shouldShowReactivate;
+  const canManageBilling =
+    Boolean(business?.payment_customer_id) && !shouldShowReactivate;
 
   if (loading) {
     return <AccountLoading />;
@@ -360,47 +363,53 @@ const canManageBilling =
 
           <div>
             {activeTab === "overview" ? (
-              <AccountCard title="Overview">
-                <p className="text-[var(--text-secondary)]">
-                  {settings?.business_name ?? business?.name ?? "Your business"}{" "}
-                  is currently on the{" "}
-                  <strong className="capitalize text-[var(--text-primary)]">
-                    {business?.plan ?? "basic"}
-                  </strong>{" "}
-                  plan.
-                </p>
+              <div className="space-y-6">
+                <AccountCard title="Overview">
+                  <p className="text-[var(--text-secondary)]">
+                    {settings?.business_name ??
+                      business?.name ??
+                      "Your business"}{" "}
+                    is currently on the{" "}
+                    <strong className="capitalize text-[var(--text-primary)]">
+                      {business?.plan ?? "basic"}
+                    </strong>{" "}
+                    plan.
+                  </p>
 
-                <div className="mt-6 grid gap-4 sm:grid-cols-3">
-                  <Info label="Plan" value={business?.plan ?? "Basic"} />
-                  <Info
-                    label="Subscription"
-                    value={prettyStatus(business?.subscription_status)}
-                  />
-                  <Info
-                    label="App access"
-                    value={prettyStatus(business?.app_access_status)}
-                  />
-                  <Info
-                    label="Trial"
-                    value={
-                      trialDaysLeft !== null
-                        ? `${trialDaysLeft} day${
-                            trialDaysLeft === 1 ? "" : "s"
-                          } left`
-                        : "Not set"
-                    }
-                  />
-                  <Info
-                    label="Trial ends"
-                    value={formatDate(business?.trial_ends_at ?? null)}
-                  />
-                  <Info
-                    label="Business"
-                    value={settings?.business_name ?? business?.name}
-                  />
-                  <Info label="Account owner" value={profile?.full_name} />
-                </div>
-              </AccountCard>
+                  <div className="mt-6 grid gap-4 sm:grid-cols-3">
+                    <Info label="Plan" value={business?.plan ?? "Basic"} />
+                    <Info
+                      label="Subscription"
+                      value={prettyStatus(business?.subscription_status)}
+                    />
+                    <Info
+                      label="App access"
+                      value={prettyStatus(business?.app_access_status)}
+                    />
+                    <Info
+                      label="Trial"
+                      value={
+                        trialDaysLeft !== null
+                          ? `${trialDaysLeft} day${
+                              trialDaysLeft === 1 ? "" : "s"
+                            } left`
+                          : "Not set"
+                      }
+                    />
+                    <Info
+                      label="Trial ends"
+                      value={formatDate(business?.trial_ends_at ?? null)}
+                    />
+                    <Info
+                      label="Business"
+                      value={settings?.business_name ?? business?.name}
+                    />
+                    <Info label="Account owner" value={profile?.full_name} />
+                  </div>
+                </AccountCard>
+
+                <DownloadAppCard />
+              </div>
             ) : null}
 
             {activeTab === "billing" ? (
@@ -581,6 +590,48 @@ function AccountCard({
     <section className="soft-card p-6">
       <h2 className="text-2xl font-bold text-[var(--text-primary)]">{title}</h2>
       <div className="mt-5">{children}</div>
+    </section>
+  );
+}
+
+function DownloadAppCard() {
+  return (
+    <section className="soft-card p-6">
+      <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--rose-primary)]">
+        Next step
+      </p>
+
+      <h2 className="mt-2 text-2xl font-bold text-[var(--text-primary)]">
+        Download Wagzly on your phone
+      </h2>
+
+      <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">
+        After creating your account, download the Wagzly app to start managing
+        your schedule, clients, pets, payments, and grooming day from your
+        supported iPhone or Android device.
+      </p>
+
+      <div className="mt-6 flex flex-wrap items-center gap-5">
+        <div className="flex h-[54px] w-[180px] items-center justify-center">
+          <Image
+            src="/images/store/appstore.svg"
+            alt="Download on the App Store"
+            width={180}
+            height={54}
+            className="h-[54px] w-[180px] object-contain"
+          />
+        </div>
+
+        <div className="flex h-[54px] w-[180px] items-center justify-center">
+          <Image
+            src="/images/store/googleplay.png"
+            alt="Get it on Google Play"
+            width={180}
+            height={54}
+            className="h-[54px] w-[180px] object-contain"
+          />
+        </div>
+      </div>
     </section>
   );
 }

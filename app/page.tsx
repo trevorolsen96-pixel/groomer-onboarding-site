@@ -29,6 +29,9 @@ export default function HomePage() {
           <a href="#pricing" className="hover:text-[var(--text-primary)]">
             Pricing
           </a>
+          <a href="#download" className="hover:text-[var(--text-primary)]">
+            Download
+          </a>
         </nav>
 
         <AccountMenu />
@@ -204,7 +207,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-5xl px-6 pb-20 pt-4 text-center">
+      <section id="download" className="mx-auto max-w-5xl scroll-mt-28 px-6 pb-20 pt-4 text-center">
         <div className="soft-card p-8">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--rose-primary)]">
             iOS and Android
