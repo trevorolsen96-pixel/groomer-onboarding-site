@@ -25,7 +25,9 @@ function getCurrentPeriod(subscription: StripeSubscriptionWithPeriods) {
 
   return {
     currentPeriodStart:
-      firstItem?.current_period_start ?? subscription.current_period_start ?? null,
+      firstItem?.current_period_start ??
+      subscription.current_period_start ??
+      null,
     currentPeriodEnd:
       firstItem?.current_period_end ?? subscription.current_period_end ?? null,
   };
@@ -37,27 +39,29 @@ function getAppAccessStatus(subscription: StripeSubscriptionWithPeriods) {
   if (subscription.status === "past_due") return "past_due";
 
   if (subscription.status === "canceled") {
-    const { currentPeriodEnd } = getCurrentPeriod(subscription);
-    const periodEnd = currentPeriodEnd;
-    if (periodEnd && periodEnd * 1000 > Date.now()) {
-      return "canceled";
-    }
     return "blocked";
+  }
+
+  if (subscription.status === "unpaid") {
+    return "past_due";
   }
 
   return "blocked";
 }
 
-async function syncSubscription(subscription: Stripe.Subscription) {
+function getCustomerId(subscription: StripeSubscriptionWithPeriods) {
+  return typeof subscription.customer === "string"
+    ? subscription.customer
+    : subscription.customer.id;
+}
+
+function buildSubscriptionUpdateData(subscription: Stripe.Subscription) {
   const sub = subscription as StripeSubscriptionWithPeriods;
-
-  const customerId =
-    typeof sub.customer === "string" ? sub.customer : sub.customer.id;
-
+  const { currentPeriodStart, currentPeriodEnd } = getCurrentPeriod(sub);
+  const customerId = getCustomerId(sub);
   const appAccessStatus = getAppAccessStatus(sub);
-const { currentPeriodStart, currentPeriodEnd } = getCurrentPeriod(sub);
 
-  const updateData = {
+  return {
     subscription_status: sub.status,
     app_access_status: appAccessStatus,
     trial_starts_at: toIsoFromUnix(sub.trial_start),
@@ -66,6 +70,7 @@ const { currentPeriodStart, currentPeriodEnd } = getCurrentPeriod(sub);
     current_period_ends_at: toIsoFromUnix(currentPeriodEnd),
     cancel_at_period_end: sub.cancel_at_period_end,
     canceled_at: toIsoFromUnix(sub.canceled_at),
+    app_access_grace_until: null,
     payment_provider: "stripe",
     payment_customer_id: customerId,
     payment_subscription_id: sub.id,
@@ -76,11 +81,72 @@ const { currentPeriodStart, currentPeriodEnd } = getCurrentPeriod(sub);
           ? "trialing"
           : sub.status,
   };
+}
+
+async function syncSubscription(
+  subscription: Stripe.Subscription,
+  options?: {
+    businessId?: string | null;
+  }
+) {
+  const sub = subscription as StripeSubscriptionWithPeriods;
+  const customerId = getCustomerId(sub);
+  const updateData = buildSubscriptionUpdateData(subscription);
+
+  if (options?.businessId) {
+    await supabaseAdmin
+      .from("businesses")
+      .update(updateData)
+      .eq("id", options.businessId);
+
+    return;
+  }
+
+  const bySubscription = await supabaseAdmin
+    .from("businesses")
+    .update(updateData)
+    .eq("payment_subscription_id", sub.id)
+    .select("id");
+
+  if (bySubscription.error) {
+    throw bySubscription.error;
+  }
+
+  if ((bySubscription.data ?? []).length > 0) {
+    return;
+  }
 
   await supabaseAdmin
     .from("businesses")
     .update(updateData)
-    .eq("payment_subscription_id", sub.id);
+    .eq("payment_customer_id", customerId);
+}
+
+async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
+  const billingAction = session.metadata?.billing_action ?? null;
+  const businessId = session.metadata?.business_id ?? null;
+
+  if (billingAction !== "reactivate") {
+    return;
+  }
+
+  const subscriptionId =
+    typeof session.subscription === "string" ? session.subscription : null;
+
+  if (!businessId || !subscriptionId) {
+    console.error("Missing reactivation checkout data", {
+      businessId,
+      subscriptionId,
+      sessionId: session.id,
+    });
+    return;
+  }
+
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+
+  await syncSubscription(subscription, {
+    businessId,
+  });
 }
 
 async function markPaymentSucceeded(invoice: Stripe.Invoice) {
@@ -102,8 +168,9 @@ async function markPaymentSucceeded(invoice: Stripe.Invoice) {
     .from("businesses")
     .update({
       last_payment_status: "paid",
-      app_access_status: "active",
-      subscription_status: "active",
+      app_access_status:
+        subscription.status === "trialing" ? "trialing" : "active",
+      subscription_status: subscription.status,
       app_access_grace_until: null,
     })
     .eq("payment_subscription_id", subscriptionId);
@@ -159,11 +226,7 @@ export async function POST(request: Request) {
   try {
     const rawBody = await request.text();
 
-    event = stripe.webhooks.constructEvent(
-      rawBody,
-      signature,
-      webhookSecret
-    );
+    event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
   } catch (error) {
     return NextResponse.json(
       {
@@ -178,6 +241,13 @@ export async function POST(request: Request) {
 
   try {
     switch (event.type) {
+      case "checkout.session.completed": {
+        await handleCheckoutCompleted(
+          event.data.object as Stripe.Checkout.Session
+        );
+        break;
+      }
+
       case "customer.subscription.created":
       case "customer.subscription.updated": {
         await syncSubscription(event.data.object as Stripe.Subscription);
@@ -192,7 +262,9 @@ export async function POST(request: Request) {
           .update({
             subscription_status: "canceled",
             app_access_status: "blocked",
+            cancel_at_period_end: false,
             canceled_at: new Date().toISOString(),
+            app_access_grace_until: null,
             last_payment_status: "canceled",
           })
           .eq("payment_subscription_id", subscription.id);
@@ -219,9 +291,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          error instanceof Error
-            ? error.message
-            : "Webhook handler failed.",
+          error instanceof Error ? error.message : "Webhook handler failed.",
       },
       { status: 500 }
     );

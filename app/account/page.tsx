@@ -289,9 +289,8 @@ function AccountPageContent() {
   const canManageBilling = Boolean(business?.payment_customer_id);
 
   const shouldShowReactivate =
-    business?.app_access_status === "blocked" ||
-    business?.subscription_status === "canceled" ||
-    business?.subscription_status === "incomplete_expired";
+  business?.subscription_status === "canceled" ||
+  business?.subscription_status === "incomplete_expired";
 
   if (loading) {
     return <AccountLoading />;
