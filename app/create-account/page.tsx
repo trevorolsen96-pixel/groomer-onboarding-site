@@ -1,18 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
-import { supabaseClient } from "../../lib/supabase-client";
 
 export default function CreateAccountPage() {
-  const router = useRouter();
-
   const [fullName, setFullName] = useState("");
   const [businessName, setBusinessName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const [saving, setSaving] = useState(false);
@@ -24,7 +19,7 @@ export default function CreateAccountPage() {
     setSaving(true);
     setError("");
 
-    const response = await fetch("/api/create-business-owner", {
+    const response = await fetch("/api/stripe/create-owner-checkout-session", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -34,7 +29,6 @@ export default function CreateAccountPage() {
         businessName,
         phone,
         email,
-        password,
         acceptedTerms,
       }),
     });
@@ -43,21 +37,17 @@ export default function CreateAccountPage() {
 
     if (!response.ok) {
       setSaving(false);
-      setError(result.error ?? "Unable to create account.");
+      setError(result.error ?? "Unable to start checkout.");
       return;
     }
 
-    const { error: loginError } = await supabaseClient.auth.signInWithPassword({
-      email: email.trim().toLowerCase(),
-      password,
-    });
-
-    if (loginError) {
-      router.push("/login");
+    if (!result.url) {
+      setSaving(false);
+      setError("Stripe checkout did not return a checkout link.");
       return;
     }
 
-    router.push("/account");
+    window.location.href = result.url;
   }
 
   return (
@@ -74,9 +64,22 @@ export default function CreateAccountPage() {
             </h1>
 
             <p className="mt-5 text-lg leading-8 text-[var(--text-secondary)]">
-              Set up your owner account, create your business profile, and start
-              your 14-day Wagzly trial.
+              Add your payment method now, start your 14-day trial today, and
+              automatically continue with your monthly Wagzly subscription after
+              the trial ends.
             </p>
+
+            <div className="mt-6 rounded-3xl bg-white/70 p-5 shadow-sm">
+              <p className="font-bold text-[var(--text-primary)]">
+                Wagzly Basic
+              </p>
+              <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                14 days free, then $39.99/month.
+              </p>
+              <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                Cancel before the trial ends to avoid being charged.
+              </p>
+            </div>
 
             <p className="mt-5 text-sm leading-6 text-[var(--text-secondary)]">
               Staff accounts should not sign up here. Staff members must use
@@ -146,22 +149,6 @@ export default function CreateAccountPage() {
               />
             </div>
 
-            <div>
-              <label className="text-sm font-semibold text-[var(--text-primary)]">
-                Password
-              </label>
-              <input
-                value={password}
-                onChange={(event) => {
-                  setPassword(event.target.value);
-                  setError("");
-                }}
-                type="password"
-                placeholder="Create a password"
-                className="mt-2 w-full"
-              />
-            </div>
-
             <label className="flex gap-3 rounded-2xl bg-[var(--soft-surface)] p-4 text-sm leading-6 text-[var(--text-secondary)]">
               <input
                 type="checkbox"
@@ -192,7 +179,7 @@ export default function CreateAccountPage() {
             ) : null}
 
             <button type="submit" disabled={saving} className="primary-button w-full">
-              {saving ? "Creating account..." : "Start 14-day trial"}
+              {saving ? "Opening checkout..." : "Continue to secure checkout"}
             </button>
 
             <p className="text-center text-sm text-[var(--text-secondary)]">
