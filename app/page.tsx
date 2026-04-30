@@ -29,20 +29,15 @@ export default function HomePage() {
           <a href="#pricing" className="hover:text-[var(--text-primary)]">
             Pricing
           </a>
-          <a
-            href={demoBookingUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-[var(--text-primary)]"
-          >
-            Book a demo
-          </a>
+         <a href="#demo" className="hover:text-[var(--text-primary)]">
+  Book a demo
+</a>
         </nav>
 
         <AccountMenu />
       </header>
 
-      <section className="mx-auto max-w-6xl px-6 py-16">
+      <section id="demo" className="mx-auto max-w-6xl scroll-mt-28 px-6 py-16">
         <div className="grid items-center gap-12 lg:grid-cols-2">
           <div>
             <div className="mb-6">
