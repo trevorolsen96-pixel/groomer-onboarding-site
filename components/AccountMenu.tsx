@@ -1,70 +1,87 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { supabaseClient } from "../lib/supabase-client";
 
 export default function AccountMenu() {
-  const [open, setOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [email, setEmail] = useState<string | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (!menuRef.current) return;
+    let mounted = true;
 
-      if (!menuRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
+    async function loadSession() {
+      const { data } = await supabaseClient.auth.getSession();
+
+      if (!mounted) return;
+
+      setEmail(data.session?.user.email ?? null);
+      setLoading(false);
     }
 
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setOpen(false);
-      }
-    }
+    loadSession();
 
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleEscape);
+    const {
+      data: { subscription },
+    } = supabaseClient.auth.onAuthStateChange((_event, session) => {
+      setEmail(session?.user.email ?? null);
+      setLoading(false);
+    });
 
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleEscape);
+      mounted = false;
+      subscription.unsubscribe();
     };
   }, []);
 
+  async function handleLogout() {
+    setSigningOut(true);
+    await supabaseClient.auth.signOut();
+    setEmail(null);
+    setSigningOut(false);
+    window.location.href = "/";
+  }
+
+  if (loading) {
+    return (
+      <div className="h-10 w-28 rounded-full bg-[var(--soft-surface)]" />
+    );
+  }
+
+  if (!email) {
+    return (
+      <div className="flex items-center gap-2">
+        <Link href="/login" className="secondary-button">
+          Log in
+        </Link>
+
+        <Link href="/create-account" className="primary-button hidden sm:inline-flex">
+          Start trial
+        </Link>
+      </div>
+    );
+  }
+
   return (
-    <div ref={menuRef} className="relative">
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      <div className="hidden max-w-[220px] truncate rounded-full bg-white px-4 py-2 text-sm font-semibold text-[var(--text-secondary)] shadow-sm sm:block">
+        {email}
+      </div>
+
+      <Link href="/account" className="primary-button">
+        My account
+      </Link>
+
       <button
         type="button"
-        onClick={() => setOpen((value) => !value)}
-        className="flex items-center gap-2 rounded-full border border-[var(--divider-soft)] bg-white px-4 py-2 text-sm font-semibold text-[var(--text-primary)] shadow-sm"
+        onClick={handleLogout}
+        disabled={signingOut}
+        className="secondary-button"
       >
-        Account
-        <span className="text-xs text-[var(--text-secondary)]">▾</span>
+        {signingOut ? "Logging out..." : "Log out"}
       </button>
-
-      {open && (
-        <div className="absolute right-0 z-20 mt-3 w-64 rounded-2xl border border-[var(--divider-soft)] bg-white p-3 shadow-xl">
-          <p className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--rose-primary)]">
-            Wagzly Account
-          </p>
-
-          <Link
-            href="/login"
-            onClick={() => setOpen(false)}
-            className="block rounded-xl px-3 py-2 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--soft-surface)]"
-            >
-            Log in / Create account
-            </Link>
-
-            <Link
-            href="/account"
-            onClick={() => setOpen(false)}
-            className="block rounded-xl px-3 py-2 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--soft-surface)]"
-            >
-            Account
-          </Link>
-        </div>
-      )}
     </div>
   );
 }

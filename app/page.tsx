@@ -7,7 +7,7 @@ const demoBookingUrl = "https://wagzly.zohobookings.com/#/4937476000000034049";
 export default function HomePage() {
   return (
     <main className="site-shell">
-      <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
+      <header className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-6">
         <Link href="/" className="flex items-center gap-3">
           <Image
             src="/images/logo/WagzlyApp.png"
@@ -22,23 +22,23 @@ export default function HomePage() {
         </Link>
 
         <nav className="hidden items-center gap-7 text-sm font-semibold text-[var(--text-secondary)] md:flex">
-  <a href="#features" className="hover:text-[var(--text-primary)]">
-    Features
-  </a>
-  <a href="#pricing" className="hover:text-[var(--text-primary)]">
-    Pricing
-  </a>
-  <a
-    href={demoBookingUrl}
-    target="_blank"
-    rel="noopener noreferrer"
-    className="hover:text-[var(--text-primary)]"
-  >
-    Book a demo
-  </a>
-</nav>
+          <a href="#features" className="hover:text-[var(--text-primary)]">
+            Features
+          </a>
+          <a href="#pricing" className="hover:text-[var(--text-primary)]">
+            Pricing
+          </a>
+          <a
+            href={demoBookingUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-[var(--text-primary)]"
+          >
+            Book a demo
+          </a>
+        </nav>
 
-<AccountMenu />
+        <AccountMenu />
       </header>
 
       <section className="mx-auto max-w-6xl px-6 py-16">
@@ -71,6 +71,10 @@ export default function HomePage() {
             <div className="mt-8 flex flex-wrap gap-4">
               <Link href="/create-account" className="primary-button">
                 Start 14-day trial
+              </Link>
+
+              <Link href="/login" className="secondary-button">
+                Log in
               </Link>
 
               <a
@@ -170,9 +174,15 @@ export default function HomePage() {
             grooming business profile.
           </p>
 
-          <Link href="/create-account" className="primary-button mt-6 inline-block">
-            Start 14-day trial
-          </Link>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <Link href="/create-account" className="primary-button">
+              Start 14-day trial
+            </Link>
+
+            <Link href="/login" className="secondary-button">
+              Log in
+            </Link>
+          </div>
         </div>
       </section>
     </main>
