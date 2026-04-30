@@ -35,6 +35,52 @@ export async function POST(request: Request) {
       );
     }
 
+    const { data: existingUsers, error: existingUserError } =
+      await supabaseAdmin.auth.admin.listUsers();
+
+    if (existingUserError) {
+      return NextResponse.json(
+        { error: "Unable to verify this email. Please try again." },
+        { status: 400 }
+      );
+    }
+
+    const emailAlreadyExists = existingUsers.users.some(
+      (user) => user.email?.toLowerCase() === email
+    );
+
+    if (emailAlreadyExists) {
+      return NextResponse.json(
+        { error: "An account with this email already exists. Please log in instead." },
+        { status: 400 }
+      );
+    }
+
+    const { data: existingPendingSignup, error: existingPendingError } =
+      await supabaseAdmin
+        .from("pending_business_signups")
+        .select("id, status")
+        .eq("email", email)
+        .in("status", ["pending"])
+        .maybeSingle();
+
+    if (existingPendingError) {
+      return NextResponse.json(
+        { error: "Unable to verify this signup. Please try again." },
+        { status: 400 }
+      );
+    }
+
+    if (existingPendingSignup) {
+      return NextResponse.json(
+        {
+          error:
+            "There is already an unfinished signup for this email. Please use a different email or contact support.",
+        },
+        { status: 400 }
+      );
+    }
+
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
     const priceId = process.env.STRIPE_BASIC_PRICE_ID;
 
@@ -109,10 +155,7 @@ export async function POST(request: Request) {
       .eq("id", pendingSignup.id);
 
     if (updateError) {
-      return NextResponse.json(
-        { error: updateError.message },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: updateError.message }, { status: 400 });
     }
 
     return NextResponse.json({
