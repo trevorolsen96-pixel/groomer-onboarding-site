@@ -286,11 +286,14 @@ function AccountPageContent() {
     }
   }
 
-  const canManageBilling = Boolean(business?.payment_customer_id);
+ 
 
   const shouldShowReactivate =
   business?.subscription_status === "canceled" ||
   business?.subscription_status === "incomplete_expired";
+
+const canManageBilling =
+  Boolean(business?.payment_customer_id) && !shouldShowReactivate;
 
   if (loading) {
     return <AccountLoading />;
