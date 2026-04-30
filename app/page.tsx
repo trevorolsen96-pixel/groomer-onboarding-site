@@ -29,9 +29,7 @@ export default function HomePage() {
           <a href="#pricing" className="hover:text-[var(--text-primary)]">
             Pricing
           </a>
-         <a href="#demo" className="hover:text-[var(--text-primary)]">
-  Book a demo
-</a>
+        
         </nav>
 
         <AccountMenu />
