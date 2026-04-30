@@ -22,55 +22,23 @@ export default function HomePage() {
         </Link>
 
         <nav className="hidden items-center gap-7 text-sm font-semibold text-[var(--text-secondary)] md:flex">
-          <a href="#features" className="hover:text-[var(--text-primary)]">
-            Features
-          </a>
-          <a href="#pricing" className="hover:text-[var(--text-primary)]">
-            Pricing
-          </a>
-          <a
-            href={demoBookingUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-[var(--text-primary)]"
-          >
-            Book a demo
-          </a>
-        </nav>
+  <a href="#features" className="hover:text-[var(--text-primary)]">
+    Features
+  </a>
+  <a href="#pricing" className="hover:text-[var(--text-primary)]">
+    Pricing
+  </a>
+  <a
+    href={demoBookingUrl}
+    target="_blank"
+    rel="noopener noreferrer"
+    className="hover:text-[var(--text-primary)]"
+  >
+    Book a demo
+  </a>
+</nav>
 
-        <details className="group relative">
-          <summary className="flex cursor-pointer list-none items-center gap-2 rounded-full border border-[var(--divider-soft)] bg-white px-4 py-2 text-sm font-semibold text-[var(--text-primary)] shadow-sm">
-            Account
-            <span className="text-xs text-[var(--text-secondary)]">▾</span>
-          </summary>
-
-          <div className="absolute right-0 z-20 mt-3 w-64 rounded-2xl border border-[var(--divider-soft)] bg-white p-3 shadow-xl">
-            <p className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--rose-primary)]">
-              Wagzly Account
-            </p>
-
-            <Link
-              href="/login"
-              className="block rounded-xl px-3 py-2 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--soft-surface)]"
-            >
-              Log in
-            </Link>
-
-            <Link
-              href="/create-account"
-              className="block rounded-xl px-3 py-2 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--soft-surface)]"
-            >
-              Create account
-            </Link>
-
-            <Link
-              href="/account"
-              className="block rounded-xl px-3 py-2 text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--soft-surface)]"
-            >
-              Account & billing
-            </Link>
-          </div>
-        </details>
+<AccountMenu />
       </header>
 
       <section className="mx-auto max-w-6xl px-6 py-16">
