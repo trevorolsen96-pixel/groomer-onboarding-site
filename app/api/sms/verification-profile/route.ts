@@ -172,15 +172,48 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+    const submitUrl = new URL("/api/sms/submit-verification", request.url);
 
-    return NextResponse.json({ ok: true });
+    const submitResponse = await fetch(submitUrl.toString(), {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+      },
+    });
+
+    const submitResult = await submitResponse.json();
+
+    if (!submitResponse.ok) {
+      await supabaseAdmin
+        .from("business_sms_setup")
+        .update({
+          status: "failed",
+          failure_reason:
+            submitResult.error ??
+            "Messaging setup could not be completed. Please contact support@wagzly.app.",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("business_id", businessId);
+
+      return NextResponse.json(
+        {
+          error:
+            "Messaging setup could not be completed. Please contact support@wagzly.app and we’ll help finish your texting setup.",
+        },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      status: submitResult.status,
+      phoneNumber: submitResult.phoneNumber,
+    });
   } catch (error) {
     return NextResponse.json(
       {
         error:
-          error instanceof Error
-            ? error.message
-            : "Unable to save messaging setup.",
+          "Messaging setup could not be completed. Please contact support@wagzly.app and we’ll help finish your texting setup.",
       },
       { status: 400 }
     );

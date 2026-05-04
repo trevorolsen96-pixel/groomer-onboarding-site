@@ -17,7 +17,20 @@ function getTwilioClient() {
   return twilio(accountSid, authToken);
 }
 
+async function markSmsSetupFailed(businessId: string, reason: string) {
+  await supabaseAdmin
+    .from("business_sms_setup")
+    .update({
+      status: "failed",
+      failure_reason: reason,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("business_id", businessId);
+}
+
 export async function POST(request: Request) {
+  let businessId: string | null = null;
+
   try {
     const authHeader = request.headers.get("authorization") ?? "";
     const token = authHeader.replace("Bearer ", "").trim();
@@ -33,24 +46,31 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Not signed in." }, { status: 401 });
     }
 
-    const userId = userData.user.id;
-
     const { data: profile, error: profileError } = await supabaseAdmin
       .from("profiles")
       .select("business_id, role")
-      .eq("id", userId)
+      .eq("id", userData.user.id)
       .maybeSingle();
 
     if (profileError || !profile || profile.role !== "admin") {
       return NextResponse.json({ error: "Not authorized." }, { status: 403 });
     }
 
-    const businessId = profile.business_id;
+    businessId = profile.business_id;
+
+    if (!businessId) {
+      return NextResponse.json(
+        { error: "Business account was not found." },
+        { status: 400 }
+      );
+    }
+
+    const safeBusinessId = businessId;
 
     const { data: smsSetup, error: setupError } = await supabaseAdmin
       .from("business_sms_setup")
       .select("*")
-      .eq("business_id", businessId)
+      .eq("business_id", safeBusinessId)
       .maybeSingle();
 
     if (setupError || !smsSetup) {
@@ -58,6 +78,19 @@ export async function POST(request: Request) {
         { error: "Messaging setup was not found." },
         { status: 400 }
       );
+    }
+
+    if (
+      smsSetup.phone_number &&
+      smsSetup.twilio_phone_number_sid &&
+      ["number_assigned", "pending", "approved"].includes(smsSetup.status)
+    ) {
+      return NextResponse.json({
+        ok: true,
+        phoneNumber: smsSetup.phone_number,
+        phoneNumberSid: smsSetup.twilio_phone_number_sid,
+        status: smsSetup.status,
+      });
     }
 
     if (smsSetup.status !== "ready_to_submit") {
@@ -75,12 +108,20 @@ export async function POST(request: Request) {
       await supabaseAdmin
         .from("business_sms_verification_profile")
         .select("*")
-        .eq("business_id", businessId)
+        .eq("business_id", safeBusinessId)
         .maybeSingle();
 
     if (verificationProfileError || !verificationProfile) {
+      await markSmsSetupFailed(
+        safeBusinessId,
+        "Verification profile is missing. Please contact support@wagzly.app."
+      );
+
       return NextResponse.json(
-        { error: "Verification profile is missing." },
+        {
+          error:
+            "Messaging setup could not be completed. Please contact support@wagzly.app.",
+        },
         { status: 400 }
       );
     }
@@ -97,17 +138,29 @@ export async function POST(request: Request) {
     const selectedNumber = availableNumbers[0]?.phoneNumber;
 
     if (!selectedNumber) {
+      await markSmsSetupFailed(
+        safeBusinessId,
+        "No toll-free SMS numbers were available from Twilio."
+      );
+
       return NextResponse.json(
-        { error: "No toll-free SMS numbers are currently available." },
+        {
+          error:
+            "Messaging setup could not be completed. Please contact support@wagzly.app.",
+        },
         { status: 400 }
       );
     }
 
+    const friendlyName = `Wagzly - ${cleanText(
+      verificationProfile.dba_name ||
+        verificationProfile.legal_business_name ||
+        "Business"
+    )}`.slice(0, 64);
+
     const purchasedNumber = await twilioClient.incomingPhoneNumbers.create({
       phoneNumber: selectedNumber,
-      friendlyName: `Wagzly - ${cleanText(
-        verificationProfile.dba_name || verificationProfile.legal_business_name
-      )}`,
+      friendlyName,
     });
 
     const { error: updateError } = await supabaseAdmin
@@ -116,12 +169,24 @@ export async function POST(request: Request) {
         status: "number_assigned",
         phone_number: purchasedNumber.phoneNumber,
         twilio_phone_number_sid: purchasedNumber.sid,
+        failure_reason: null,
         updated_at: new Date().toISOString(),
       })
-      .eq("business_id", businessId);
+      .eq("business_id", safeBusinessId);
 
     if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 400 });
+      await markSmsSetupFailed(
+        safeBusinessId,
+        `Number was purchased but database update failed: ${updateError.message}`
+      );
+
+      return NextResponse.json(
+        {
+          error:
+            "Messaging setup could not be completed. Please contact support@wagzly.app.",
+        },
+        { status: 400 }
+      );
     }
 
     return NextResponse.json({
@@ -131,12 +196,17 @@ export async function POST(request: Request) {
       status: "number_assigned",
     });
   } catch (error) {
+    if (businessId) {
+      await markSmsSetupFailed(
+        businessId,
+        error instanceof Error ? error.message : "Unknown Twilio setup error."
+      );
+    }
+
     return NextResponse.json(
       {
         error:
-          error instanceof Error
-            ? error.message
-            : "Unable to submit messaging verification.",
+          "Messaging setup could not be completed. Please contact support@wagzly.app.",
       },
       { status: 400 }
     );
