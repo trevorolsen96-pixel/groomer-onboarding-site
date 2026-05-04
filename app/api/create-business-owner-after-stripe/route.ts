@@ -197,8 +197,24 @@ const currentPeriodEndsAt = toIsoFromUnix(
       );
 
     if (settingsError) {
-      throw new Error(settingsError.message);
+  throw new Error(settingsError.message);
     }
+
+    const { error: smsSetupError } = await supabaseAdmin
+      .from("business_sms_setup")
+      .upsert(
+        {
+          business_id: businessId,
+          status: "needs_info",
+        },
+        { onConflict: "business_id" }
+      );
+
+    if (smsSetupError) {
+      throw new Error(smsSetupError.message);
+    }
+
+
 
     const { error: pendingUpdateError } = await supabaseAdmin
       .from("pending_business_signups")
