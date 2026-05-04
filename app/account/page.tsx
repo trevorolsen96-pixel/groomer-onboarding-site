@@ -619,26 +619,45 @@ function AccountPageContent() {
                     </div>
                   ) : null}
 
-                  <div className="mt-6 rounded-2xl bg-[var(--soft-surface)] p-5">
-                    <p className="text-sm font-bold text-[var(--text-primary)]">
-                      Text messaging verification form
-                    </p>
+                  {smsSetup?.status === "needs_info" || smsSetup?.status === "failed" ? (
+                    <div className="mt-6 rounded-2xl bg-[var(--soft-surface)] p-5">
+                      <p className="text-sm font-bold text-[var(--text-primary)]">
+                        Text messaging verification form
+                      </p>
 
-                    <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-                      Complete this form so Wagzly can prepare this business for a dedicated
-                      toll-free texting number. SMS features remain disabled until verification is approved.
-                    </p>
+                      <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
+                        Complete this form so Wagzly can prepare this business for a dedicated
+                        toll-free texting number. SMS features remain disabled until verification
+                        is approved.
+                      </p>
 
-                    <div className="mt-6">
-                      <SmsVerificationSetupForm
-                        defaultBusinessName={settings?.business_name ?? business?.name}
-                        defaultBusinessPhone={settings?.phone}
-                        defaultBusinessWebsite={settings?.website}
-                        defaultContactName={profile?.full_name}
-                        onSaved={() => window.location.reload()}
-                      />
+                      <div className="mt-6">
+                        <SmsVerificationSetupForm
+                          defaultBusinessName={settings?.business_name ?? business?.name}
+                          defaultBusinessPhone={settings?.phone}
+                          defaultBusinessWebsite={settings?.website}
+                          defaultContactName={profile?.full_name}
+                          onSaved={() => window.location.reload()}
+                        />
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="mt-6 rounded-2xl bg-[var(--soft-surface)] p-5">
+                      <p className="text-sm font-bold text-[var(--text-primary)]">
+                        Setup submitted
+                      </p>
+
+                      <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
+                        Your texting setup information has been received. Wagzly will prepare and
+                        submit your dedicated toll-free texting number for verification. Messaging
+                        will stay disabled until approval is complete.
+                      </p>
+
+                      <p className="mt-4 text-sm font-semibold text-[var(--text-primary)]">
+                        We’ll notify you when your messaging status changes.
+                      </p>
+                    </div>
+                  )}
                 </AccountCard>
               </div>
             ) : null}
