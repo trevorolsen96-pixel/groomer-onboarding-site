@@ -9,6 +9,15 @@ function isFullPublicUrl(value: string) {
   return value.startsWith("https://") || value.startsWith("http://");
 }
 
+const BACKEND_OPT_IN_DESCRIPTION =
+  "Customers provide their phone number through Wagzly-powered onboarding, booking, client intake, or direct communication with the grooming business. Messages are used for appointment reminders, onboarding links, scheduling updates, reschedule notices, cancellation notices, and direct client communication.";
+
+const BACKEND_SAMPLE_MESSAGE_1 =
+  "Hi {{customer_name}}, this is {{business_name}}. Your grooming appointment is scheduled for {{appointment_date}} at {{appointment_time}}. Reply STOP to opt out.";
+
+const BACKEND_SAMPLE_MESSAGE_2 =
+  "Need help? Contact your grooming business directly or email support@wagzly.app. Reply STOP to opt out.";
+
 export async function POST(request: Request) {
   try {
     const authHeader = request.headers.get("authorization") ?? "";
@@ -69,10 +78,6 @@ export async function POST(request: Request) {
     );
     const businessType = cleanText(body.businessType);
 
-    const optInDescription = cleanText(body.optInDescription);
-    const sampleMessage1 = cleanText(body.sampleMessage1);
-    const sampleMessage2 = cleanText(body.sampleMessage2);
-
     if (!legalBusinessName) {
       return NextResponse.json(
         { error: "Enter the legal business name." },
@@ -114,6 +119,13 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!businessType) {
+      return NextResponse.json(
+        { error: "Select the business type." },
+        { status: 400 }
+      );
+    }
+
     if (!addressLine1 || !city || !state || !postalCode) {
       return NextResponse.json(
         { error: "Enter the full business address." },
@@ -124,6 +136,13 @@ export async function POST(request: Request) {
     if (!contactName || !contactEmail || !contactPhone) {
       return NextResponse.json(
         { error: "Enter the business contact details." },
+        { status: 400 }
+      );
+    }
+
+    if (!contactEmail.includes("@")) {
+      return NextResponse.json(
+        { error: "Enter a valid contact email." },
         { status: 400 }
       );
     }
@@ -152,17 +171,11 @@ export async function POST(request: Request) {
           contact_phone: contactPhone,
 
           business_registration_number: businessRegistrationNumber || null,
-          business_type: businessType || null,
+          business_type: businessType,
 
-          opt_in_description:
-            optInDescription ||
-            "Customers provide their phone number through Wagzly-powered onboarding, booking, client intake, or direct communication with the grooming business. Messages are used for appointment reminders, onboarding links, scheduling updates, and direct client communication.",
-          sample_message_1:
-            sampleMessage1 ||
-            "Hi {{customer_name}}, this is {{business_name}}. Your grooming appointment is scheduled for {{appointment_date}} at {{appointment_time}}. Reply STOP to opt out.",
-          sample_message_2:
-            sampleMessage2 ||
-            "Hi {{customer_name}}, here is your secure Wagzly onboarding link for {{business_name}}: {{onboarding_link}}. Reply STOP to opt out.",
+          opt_in_description: BACKEND_OPT_IN_DESCRIPTION,
+          sample_message_1: BACKEND_SAMPLE_MESSAGE_1,
+          sample_message_2: BACKEND_SAMPLE_MESSAGE_2,
 
           updated_at: new Date().toISOString(),
         },
@@ -220,7 +233,7 @@ export async function POST(request: Request) {
       status: submitResult.status,
       phoneNumber: submitResult.phoneNumber,
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       {
         error:

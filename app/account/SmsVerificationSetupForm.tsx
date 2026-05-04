@@ -28,6 +28,8 @@ export default function SmsVerificationSetupForm({
   const [businessEmail, setBusinessEmail] = useState("");
   const [businessWebsite, setBusinessWebsite] = useState(defaultBusinessWebsite ?? "");
 
+  const [businessType, setBusinessType] = useState("sole_proprietor");
+
   const [addressLine1, setAddressLine1] = useState("");
   const [addressLine2, setAddressLine2] = useState("");
   const [city, setCity] = useState("");
@@ -39,19 +41,6 @@ export default function SmsVerificationSetupForm({
   const [contactPhone, setContactPhone] = useState(defaultBusinessPhone ?? "");
 
   const [businessRegistrationNumber, setBusinessRegistrationNumber] = useState("");
-  const [businessType, setBusinessType] = useState("sole_proprietor");
-
-  const [optInDescription, setOptInDescription] = useState(
-    "Customers provide their phone number through Wagzly-powered onboarding, booking, client intake, or direct communication with the grooming business. Messages are used for appointment reminders, onboarding links, scheduling updates, and direct client communication."
-  );
-
-  const [sampleMessage1, setSampleMessage1] = useState(
-    "Hi {{customer_name}}, this is {{business_name}}. Your grooming appointment is scheduled for {{appointment_date}} at {{appointment_time}}. Reply STOP to opt out."
-  );
-
-  const [sampleMessage2, setSampleMessage2] = useState(
-    "Hi {{customer_name}}, here is your secure Wagzly onboarding link for {{business_name}}: {{onboarding_link}}. Reply STOP to opt out."
-  );
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -76,6 +65,7 @@ export default function SmsVerificationSetupForm({
           businessPhone,
           businessEmail,
           businessWebsite,
+          businessType,
           addressLine1,
           addressLine2,
           city,
@@ -85,10 +75,6 @@ export default function SmsVerificationSetupForm({
           contactEmail,
           contactPhone,
           businessRegistrationNumber,
-          businessType,
-          optInDescription,
-          sampleMessage1,
-          sampleMessage2,
         }),
       });
 
@@ -101,6 +87,7 @@ export default function SmsVerificationSetupForm({
       setSuccess(
         "Messaging setup saved. Wagzly is preparing your dedicated texting number."
       );
+
       onSaved();
     } catch (error) {
       setError(
@@ -183,11 +170,25 @@ export default function SmsVerificationSetupForm({
         </h3>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <Field label="Address line 1" value={addressLine1} onChange={setAddressLine1} required />
-          <Field label="Address line 2" value={addressLine2} onChange={setAddressLine2} />
+          <Field
+            label="Address line 1"
+            value={addressLine1}
+            onChange={setAddressLine1}
+            required
+          />
+          <Field
+            label="Address line 2"
+            value={addressLine2}
+            onChange={setAddressLine2}
+          />
           <Field label="City" value={city} onChange={setCity} required />
           <Field label="State" value={stateValue} onChange={setStateValue} required />
-          <Field label="ZIP code" value={postalCode} onChange={setPostalCode} required />
+          <Field
+            label="ZIP code"
+            value={postalCode}
+            onChange={setPostalCode}
+            required
+          />
         </div>
       </div>
 
@@ -197,26 +198,30 @@ export default function SmsVerificationSetupForm({
         </h3>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <Field label="Contact name" value={contactName} onChange={setContactName} required />
-          <Field label="Contact email" value={contactEmail} onChange={setContactEmail} required />
-          <Field label="Contact phone" value={contactPhone} onChange={setContactPhone} required />
+          <Field
+            label="Contact name"
+            value={contactName}
+            onChange={setContactName}
+            required
+          />
+          <Field
+            label="Contact email"
+            value={contactEmail}
+            onChange={setContactEmail}
+            required
+          />
+          <Field
+            label="Contact phone"
+            value={contactPhone}
+            onChange={setContactPhone}
+            required
+          />
           <Field
             label="EIN / registration number"
             value={businessRegistrationNumber}
             onChange={setBusinessRegistrationNumber}
+            helperText="Optional. Use EIN, business registration number, or leave blank for sole proprietor setups if unavailable."
           />
-        </div>
-      </div>
-
-      <div>
-        <h3 className="text-lg font-bold text-[var(--text-primary)]">
-          Consent and sample messages
-        </h3>
-
-        <div className="mt-4 space-y-4">
-          <TextArea label="Opt-in description" value={optInDescription} onChange={setOptInDescription} required />
-          <TextArea label="Sample message 1" value={sampleMessage1} onChange={setSampleMessage1} required />
-          <TextArea label="Sample message 2" value={sampleMessage2} onChange={setSampleMessage2} required />
         </div>
       </div>
 
@@ -288,33 +293,6 @@ function SelectField({
           </option>
         ))}
       </select>
-    </label>
-  );
-}
-
-function TextArea({
-  label,
-  value,
-  onChange,
-  required = false,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  required?: boolean;
-}) {
-  return (
-    <label className="block">
-      <span className="text-sm font-semibold text-[var(--text-primary)]">
-        {label}
-        {required ? " *" : ""}
-      </span>
-      <textarea
-        className="mt-2 min-h-[110px] w-full rounded-2xl border border-[var(--soft-border)] bg-white px-4 py-3 text-sm leading-6 text-[var(--text-primary)] outline-none focus:border-[var(--rose-primary)]"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        required={required}
-      />
     </label>
   );
 }
