@@ -5,6 +5,10 @@ function cleanText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function isFullPublicUrl(value: string) {
+  return value.startsWith("https://") || value.startsWith("http://");
+}
+
 export async function POST(request: Request) {
   try {
     const authHeader = request.headers.get("authorization") ?? "";
@@ -36,6 +40,13 @@ export async function POST(request: Request) {
     const body = await request.json();
 
     const businessId = profile.business_id;
+
+    if (!businessId) {
+      return NextResponse.json(
+        { error: "Business account was not found." },
+        { status: 400 }
+      );
+    }
 
     const legalBusinessName = cleanText(body.legalBusinessName);
     const dbaName = cleanText(body.dbaName);
@@ -83,6 +94,26 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!businessWebsite) {
+      return NextResponse.json(
+        {
+          error:
+            "Enter a business website, Facebook page, Yelp page, Google Business Profile, or public business listing.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!isFullPublicUrl(businessWebsite)) {
+      return NextResponse.json(
+        {
+          error:
+            "Enter a full website or public business page link starting with https:// or http://.",
+        },
+        { status: 400 }
+      );
+    }
+
     if (!addressLine1 || !city || !state || !postalCode) {
       return NextResponse.json(
         { error: "Enter the full business address." },
@@ -93,16 +124,6 @@ export async function POST(request: Request) {
     if (!contactName || !contactEmail || !contactPhone) {
       return NextResponse.json(
         { error: "Enter the business contact details." },
-        { status: 400 }
-      );
-    }
-
-    if (!businessWebsite) {
-      return NextResponse.json(
-        {
-          error:
-            "Enter a business website, Facebook page, Instagram page, Yelp page, or public business listing.",
-        },
         { status: 400 }
       );
     }
@@ -172,6 +193,7 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
     const submitUrl = new URL("/api/sms/submit-verification", request.url);
 
     const submitResponse = await fetch(submitUrl.toString(), {
@@ -184,14 +206,14 @@ export async function POST(request: Request) {
     const submitResult = await submitResponse.json();
 
     if (!submitResponse.ok) {
-  return NextResponse.json(
-    {
-      error:
-        "Messaging setup could not be completed. Please contact support@wagzly.app and we’ll help finish your texting setup.",
-    },
-    { status: 400 }
-  );
-}
+      return NextResponse.json(
+        {
+          error:
+            "Messaging setup could not be completed. Please contact support@wagzly.app and we’ll help finish your texting setup.",
+        },
+        { status: 400 }
+      );
+    }
 
     return NextResponse.json({
       ok: true,
