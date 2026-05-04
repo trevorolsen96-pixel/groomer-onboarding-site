@@ -1,0 +1,155 @@
+import { NextResponse } from "next/server";
+import { supabaseAdmin } from "../../../../lib/supabase-admin";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+function cleanText(value: FormDataEntryValue | null) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizePhone(value: string) {
+  const digits = value.replace(/\D/g, "");
+
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  if (value.startsWith("+")) return value.replace(/[^\d+]/g, "");
+
+  return value;
+}
+
+function emptyTwimlResponse() {
+  return new NextResponse("<Response></Response>", {
+    status: 200,
+    headers: { "content-type": "text/xml" },
+  });
+}
+
+export async function GET() {
+  return emptyTwimlResponse();
+}
+
+export async function POST(request: Request) {
+  try {
+    const formData = await request.formData();
+
+    const fromPhone = normalizePhone(cleanText(formData.get("From")));
+    const toPhone = normalizePhone(cleanText(formData.get("To")));
+    const body = cleanText(formData.get("Body"));
+
+    if (!fromPhone || !toPhone || !body) {
+      return emptyTwimlResponse();
+    }
+
+    const { data: smsSetup } = await supabaseAdmin
+      .from("business_sms_setup")
+      .select("business_id, phone_number, status")
+      .eq("phone_number", toPhone)
+      .eq("status", "approved")
+      .maybeSingle();
+
+    if (!smsSetup?.business_id) {
+      return emptyTwimlResponse();
+    }
+
+    const businessId = smsSetup.business_id;
+    const now = new Date().toISOString();
+
+    const { data: customers } = await supabaseAdmin
+      .from("customers")
+      .select("id, name, phone, secondary_contact_phone, image_url")
+      .eq("business_id", businessId);
+
+    const customer = (customers ?? []).find((item) => {
+      return (
+        normalizePhone(item.phone ?? "") === fromPhone ||
+        normalizePhone(item.secondary_contact_phone ?? "") === fromPhone
+      );
+    });
+
+    if (!customer) {
+      await supabaseAdmin.from("sms_events").insert({
+        business_id: businessId,
+        direction: "inbound",
+        event_type: "unmatched_inbound_message",
+        message_body: body,
+        from_phone: fromPhone,
+        to_phone: toPhone,
+        created_at: now,
+      });
+
+      return emptyTwimlResponse();
+    }
+
+    const { data: existingConversation } = await supabaseAdmin
+      .from("message_conversations")
+      .select("*")
+      .eq("business_id", businessId)
+      .eq("customer_id", customer.id)
+      .maybeSingle();
+
+    let conversationId = existingConversation?.id as string | undefined;
+
+    if (!conversationId) {
+      const { data: insertedConversation, error: insertConversationError } =
+        await supabaseAdmin
+          .from("message_conversations")
+          .insert({
+            business_id: businessId,
+            customer_id: customer.id,
+            customer_name: customer.name,
+            customer_phone: customer.phone,
+            customer_image_url: customer.image_url,
+            last_message_body: body,
+            last_message_at: now,
+            unread_count: 1,
+            created_at: now,
+          })
+          .select("id")
+          .single();
+
+      if (insertConversationError || !insertedConversation) {
+        throw new Error(
+          insertConversationError?.message ?? "Unable to create conversation."
+        );
+      }
+
+      conversationId = insertedConversation.id;
+    }
+
+    await supabaseAdmin.from("message_items").insert({
+      business_id: businessId,
+      conversation_id: conversationId,
+      customer_id: customer.id,
+      direction: "inbound",
+      body,
+      status: "received",
+      provider: "twilio",
+      created_at: now,
+    });
+
+    await supabaseAdmin
+      .from("message_conversations")
+      .update({
+        last_message_body: body,
+        last_message_at: now,
+        unread_count: (existingConversation?.unread_count ?? 0) + 1,
+      })
+      .eq("id", conversationId);
+
+    await supabaseAdmin.from("sms_events").insert({
+      business_id: businessId,
+      customer_id: customer.id,
+      direction: "inbound",
+      event_type: "manual_message_reply",
+      message_body: body,
+      from_phone: fromPhone,
+      to_phone: toPhone,
+      created_at: now,
+    });
+
+    return emptyTwimlResponse();
+  } catch {
+    return emptyTwimlResponse();
+  }
+}
