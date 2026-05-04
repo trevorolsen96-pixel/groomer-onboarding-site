@@ -25,6 +25,71 @@ function emptyTwimlResponse() {
   });
 }
 
+async function updateLatestAppointmentConfirmation({
+  businessId,
+  customerId,
+  body,
+}: {
+  businessId: string;
+  customerId: string;
+  body: string;
+}) {
+  const clean = body.trim().toLowerCase();
+
+  const yesValues = new Set(["yes", "y", "confirm", "confirmed"]);
+  const noValues = new Set(["no", "n", "reschedule"]);
+
+  let status: string | null = null;
+
+  if (yesValues.has(clean)) {
+    status = "confirmed";
+  }
+
+  if (noValues.has(clean)) {
+    status = "needs_reschedule";
+  }
+
+  if (!status) return;
+
+  const now = new Date().toISOString();
+
+  const { data: appointments } = await supabaseAdmin
+    .from("appointments")
+    .select("id, scheduled_at")
+    .eq("business_id", businessId)
+    .eq("customer_id", customerId)
+    .eq("confirmation_status", "pending")
+    .gte("scheduled_at", now)
+    .order("scheduled_at", { ascending: true })
+    .limit(1);
+
+  const appointment = appointments?.[0];
+
+  if (!appointment?.id) return;
+
+  await supabaseAdmin
+    .from("appointments")
+    .update({
+      confirmation_status: status,
+      confirmation_responded_at: now,
+    })
+    .eq("id", appointment.id)
+    .eq("business_id", businessId);
+
+  await supabaseAdmin.from("sms_events").insert({
+    business_id: businessId,
+    customer_id: customerId,
+    appointment_id: appointment.id,
+    direction: "inbound",
+    event_type:
+      status === "confirmed"
+        ? "appointment_confirmed"
+        : "appointment_needs_reschedule",
+    message_body: body,
+    created_at: now,
+  });
+}
+
 export async function GET() {
   return emptyTwimlResponse();
 }
@@ -80,6 +145,12 @@ export async function POST(request: Request) {
 
       return emptyTwimlResponse();
     }
+
+    await updateLatestAppointmentConfirmation({
+      businessId,
+      customerId: customer.id,
+      body,
+    });
 
     const { data: existingConversation } = await supabaseAdmin
       .from("message_conversations")
