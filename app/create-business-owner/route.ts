@@ -6,6 +6,8 @@ function cleanText(value: unknown) {
 }
 
 export async function POST(request: Request) {
+  let userId: string | null = null;
+
   try {
     const body = await request.json();
 
@@ -64,7 +66,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const userId = authData.user.id;
+    userId = authData.user.id;
 
     const { data: business, error: businessError } = await supabaseAdmin
       .from("businesses")
@@ -104,17 +106,42 @@ export async function POST(request: Request) {
       );
     }
 
-    await supabaseAdmin.from("business_settings").insert({
-      business_id: businessId,
-      business_mode: "mobile_grooming",
-      business_name: businessName,
-      phone: phone || null,
-      sms_enabled: false,
-      reschedule_sms_enabled: false,
-      default_customer_sms_mode: "enabled",
-      sms_timezone: "America/Los_Angeles",
-      ask_confirmation_day_before: false,
-    });
+    const { error: settingsError } = await supabaseAdmin
+      .from("business_settings")
+      .insert({
+        business_id: businessId,
+        business_mode: "mobile_grooming",
+        business_name: businessName,
+        phone: phone || null,
+        sms_enabled: false,
+        reschedule_sms_enabled: false,
+        default_customer_sms_mode: "enabled",
+        sms_timezone: "America/Los_Angeles",
+        ask_confirmation_day_before: false,
+      });
+
+    if (settingsError) {
+      await supabaseAdmin.auth.admin.deleteUser(userId);
+      return NextResponse.json(
+        { error: settingsError.message },
+        { status: 400 }
+      );
+    }
+
+    const { error: smsSetupError } = await supabaseAdmin
+      .from("business_sms_setup")
+      .insert({
+        business_id: businessId,
+        status: "needs_info",
+      });
+
+    if (smsSetupError) {
+      await supabaseAdmin.auth.admin.deleteUser(userId);
+      return NextResponse.json(
+        { error: smsSetupError.message },
+        { status: 400 }
+      );
+    }
 
     return NextResponse.json({
       ok: true,
@@ -122,6 +149,10 @@ export async function POST(request: Request) {
       trialEndsAt: trialEndsAt.toISOString(),
     });
   } catch (error) {
+    if (userId) {
+      await supabaseAdmin.auth.admin.deleteUser(userId);
+    }
+
     return NextResponse.json(
       { error: "Something went wrong creating your account." },
       { status: 500 }

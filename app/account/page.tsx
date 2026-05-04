@@ -10,6 +10,7 @@ type Tab =
   | "overview"
   | "billing"
   | "business"
+  | "messaging"
   | "staff"
   | "security"
   | "support";
@@ -46,10 +47,22 @@ type BusinessSettings = {
   sms_timezone: string | null;
 };
 
+type BusinessSmsSetup = {
+  business_id: string;
+  status: string;
+  phone_number: string | null;
+  twilio_phone_number_sid: string | null;
+  twilio_verification_sid: string | null;
+  failure_reason: string | null;
+  submitted_at: string | null;
+  approved_at: string | null;
+};
+
 const tabs: { key: Tab; label: string }[] = [
   { key: "overview", label: "Overview" },
   { key: "billing", label: "Billing" },
   { key: "business", label: "Business" },
+  { key: "messaging", label: "Messaging" },
   { key: "staff", label: "Staff" },
   { key: "security", label: "Security" },
   { key: "support", label: "Support" },
@@ -83,6 +96,44 @@ function prettyStatus(value?: string | null) {
   return value.replaceAll("_", " ");
 }
 
+function smsStatusTitle(status?: string | null) {
+  switch (status) {
+    case "needs_info":
+      return "Text messaging setup needed";
+    case "ready_to_submit":
+      return "Text messaging ready to submit";
+    case "pending":
+      return "Text messaging setup in progress";
+    case "approved":
+      return "Messaging active";
+    case "failed":
+      return "Verification failed — action needed";
+    case "disabled":
+      return "Messaging disabled";
+    default:
+      return "Text messaging setup needed";
+  }
+}
+
+function smsStatusDescription(status?: string | null) {
+  switch (status) {
+    case "needs_info":
+      return "Complete your business texting setup so Wagzly can request a dedicated toll-free texting number for your business.";
+    case "ready_to_submit":
+      return "Your information has been saved and is ready to submit for toll-free verification.";
+    case "pending":
+      return "Your dedicated Wagzly texting number is being verified. SMS features stay disabled until approval is complete.";
+    case "approved":
+      return "Your dedicated texting number is approved. Wagzly messaging can now be used for client texts, reminders, onboarding links, and scheduling updates.";
+    case "failed":
+      return "Your toll-free verification needs attention. Review the issue below or contact Wagzly support.";
+    case "disabled":
+      return "Text messaging is currently disabled for this business.";
+    default:
+      return "Complete your business texting setup to enable dedicated client messaging.";
+  }
+}
+
 export default function AccountPage() {
   return (
     <Suspense fallback={<AccountLoading />}>
@@ -105,6 +156,7 @@ function AccountPageContent() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [business, setBusiness] = useState<Business | null>(null);
   const [settings, setSettings] = useState<BusinessSettings | null>(null);
+  const [smsSetup, setSmsSetup] = useState<BusinessSmsSetup | null>(null);
   const [staffCount, setStaffCount] = useState(0);
   const [pendingInviteCount, setPendingInviteCount] = useState(0);
 
@@ -166,35 +218,48 @@ function AccountPageContent() {
 
       const businessId = profileData.business_id;
 
-      const [businessResult, settingsResult, staffResult, inviteResult] =
-        await Promise.all([
-          supabaseClient
-            .from("businesses")
-            .select(
-              "id, name, owner_user_id, subscription_status, app_access_status, trial_starts_at, trial_ends_at, current_period_ends_at, cancel_at_period_end, payment_customer_id, payment_subscription_id, plan"
-            )
-            .eq("id", businessId)
-            .maybeSingle(),
+      const [
+        businessResult,
+        settingsResult,
+        smsSetupResult,
+        staffResult,
+        inviteResult,
+      ] = await Promise.all([
+        supabaseClient
+          .from("businesses")
+          .select(
+            "id, name, owner_user_id, subscription_status, app_access_status, trial_starts_at, trial_ends_at, current_period_ends_at, cancel_at_period_end, payment_customer_id, payment_subscription_id, plan"
+          )
+          .eq("id", businessId)
+          .maybeSingle(),
 
-          supabaseClient
-            .from("business_settings")
-            .select(
-              "business_id, business_name, phone, website, business_mode, sms_enabled, sms_timezone"
-            )
-            .eq("business_id", businessId)
-            .maybeSingle(),
+        supabaseClient
+          .from("business_settings")
+          .select(
+            "business_id, business_name, phone, website, business_mode, sms_enabled, sms_timezone"
+          )
+          .eq("business_id", businessId)
+          .maybeSingle(),
 
-          supabaseClient
-            .from("profiles")
-            .select("id", { count: "exact", head: true })
-            .eq("business_id", businessId)
-            .eq("role", "worker"),
+        supabaseClient
+          .from("business_sms_setup")
+          .select(
+            "business_id, status, phone_number, twilio_phone_number_sid, twilio_verification_sid, failure_reason, submitted_at, approved_at"
+          )
+          .eq("business_id", businessId)
+          .maybeSingle(),
 
-          supabaseClient
-            .from("staff_invites")
-            .select("id", { count: "exact", head: true })
-            .eq("business_id", businessId),
-        ]);
+        supabaseClient
+          .from("profiles")
+          .select("id", { count: "exact", head: true })
+          .eq("business_id", businessId)
+          .eq("role", "worker"),
+
+        supabaseClient
+          .from("staff_invites")
+          .select("id", { count: "exact", head: true })
+          .eq("business_id", businessId),
+      ]);
 
       if (businessResult.error || !businessResult.data) {
         setError("Unable to load your business account.");
@@ -202,7 +267,12 @@ function AccountPageContent() {
         return;
       }
 
-      if (settingsResult.error || staffResult.error || inviteResult.error) {
+      if (
+        settingsResult.error ||
+        smsSetupResult.error ||
+        staffResult.error ||
+        inviteResult.error
+      ) {
         setError("Unable to load your account details.");
         setLoading(false);
         return;
@@ -210,6 +280,7 @@ function AccountPageContent() {
 
       setBusiness(businessResult.data);
       setSettings(settingsResult.data);
+      setSmsSetup(smsSetupResult.data);
       setStaffCount(staffResult.count ?? 0);
       setPendingInviteCount(inviteResult.count ?? 0);
       setLoading(false);
@@ -315,8 +386,8 @@ function AccountPageContent() {
           </h1>
 
           <p className="mt-3 max-w-2xl text-[var(--text-secondary)]">
-            Manage your subscription, billing, business profile, staff, and
-            account access.
+            Manage your subscription, billing, business profile, staff,
+            messaging, and account access.
           </p>
         </div>
 
@@ -405,8 +476,18 @@ function AccountPageContent() {
                       value={settings?.business_name ?? business?.name}
                     />
                     <Info label="Account owner" value={profile?.full_name} />
+                    <Info
+                      label="Messaging"
+                      value={smsStatusTitle(smsSetup?.status)}
+                    />
                   </div>
                 </AccountCard>
+
+                <MessagingStatusCard
+                  smsSetup={smsSetup}
+                  smsEnabled={settings?.sms_enabled ?? false}
+                  onSetupClick={() => setActiveTab("messaging")}
+                />
 
                 <DownloadAppCard />
               </div>
@@ -504,6 +585,58 @@ function AccountPageContent() {
               </AccountCard>
             ) : null}
 
+            {activeTab === "messaging" ? (
+              <div className="space-y-6">
+                <MessagingStatusCard
+                  smsSetup={smsSetup}
+                  smsEnabled={settings?.sms_enabled ?? false}
+                />
+
+                <AccountCard title="Dedicated Texting Number">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Info
+                      label="Messaging status"
+                      value={smsStatusTitle(smsSetup?.status)}
+                    />
+                    <Info
+                      label="Dedicated number"
+                      value={smsSetup?.phone_number}
+                    />
+                    <Info
+                      label="Submitted"
+                      value={formatDate(smsSetup?.submitted_at ?? null)}
+                    />
+                    <Info
+                      label="Approved"
+                      value={formatDate(smsSetup?.approved_at ?? null)}
+                    />
+                  </div>
+
+                  {smsSetup?.failure_reason ? (
+                    <div className="mt-5 rounded-2xl bg-red-50 px-5 py-4 text-sm font-semibold text-red-700">
+                      {smsSetup.failure_reason}
+                    </div>
+                  ) : null}
+
+                  <div className="mt-6 rounded-2xl bg-[var(--soft-surface)] p-5">
+                    <p className="text-sm font-bold text-[var(--text-primary)]">
+                      Next step
+                    </p>
+
+                    <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
+                      Next we will add the setup form here. That form will
+                      collect the business verification details needed to request
+                      a dedicated toll-free texting number.
+                    </p>
+
+                    <button type="button" className="primary-button mt-4" disabled>
+                      Setup form coming next
+                    </button>
+                  </div>
+                </AccountCard>
+              </div>
+            ) : null}
+
             {activeTab === "staff" ? (
               <AccountCard title="Staff">
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -545,7 +678,8 @@ function AccountPageContent() {
             {activeTab === "support" ? (
               <AccountCard title="Support">
                 <p className="text-[var(--text-secondary)]">
-                  Need help with setup, billing, or your Wagzly account?
+                  Need help with setup, billing, messaging, or your Wagzly
+                  account?
                 </p>
 
                 <div className="mt-5 flex flex-wrap gap-3">
@@ -594,6 +728,63 @@ function AccountCard({
   );
 }
 
+function MessagingStatusCard({
+  smsSetup,
+  smsEnabled,
+  onSetupClick,
+}: {
+  smsSetup: BusinessSmsSetup | null;
+  smsEnabled: boolean;
+  onSetupClick?: () => void;
+}) {
+  const status = smsSetup?.status ?? "needs_info";
+  const isApproved = status === "approved";
+  const isFailed = status === "failed";
+  const isPending = status === "pending";
+
+  return (
+    <section
+      className={`soft-card border p-6 ${
+        isApproved
+          ? "border-green-200"
+          : isFailed
+          ? "border-red-200"
+          : isPending
+          ? "border-yellow-200"
+          : "border-[var(--soft-border)]"
+      }`}
+    >
+      <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--rose-primary)]">
+        Text messaging
+      </p>
+
+      <h2 className="mt-2 text-2xl font-bold text-[var(--text-primary)]">
+        {smsStatusTitle(status)}
+      </h2>
+
+      <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">
+        {smsStatusDescription(status)}
+      </p>
+
+      <div className="mt-6 grid gap-4 sm:grid-cols-3">
+        <Info label="SMS enabled" value={smsEnabled ? "Yes" : "No"} />
+        <Info label="Verification" value={prettyStatus(status)} />
+        <Info label="Texting number" value={smsSetup?.phone_number} />
+      </div>
+
+      {onSetupClick ? (
+        <button
+          type="button"
+          className="primary-button mt-6"
+          onClick={onSetupClick}
+        >
+          View messaging setup
+        </button>
+      ) : null}
+    </section>
+  );
+}
+
 function DownloadAppCard() {
   return (
     <section className="soft-card p-6">
@@ -607,8 +798,8 @@ function DownloadAppCard() {
 
       <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">
         After creating your account, download the Wagzly app to start managing
-        your schedule, clients, pets, payments, and grooming day from your
-        supported iPhone or Android device.
+        your schedule, clients, pets, payments, messaging, and grooming day from
+        your supported iPhone or Android device.
       </p>
 
       <div className="mt-6 flex flex-wrap items-center gap-5">
