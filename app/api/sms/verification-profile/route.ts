@@ -184,25 +184,14 @@ export async function POST(request: Request) {
     const submitResult = await submitResponse.json();
 
     if (!submitResponse.ok) {
-      await supabaseAdmin
-        .from("business_sms_setup")
-        .update({
-          status: "failed",
-          failure_reason:
-            submitResult.error ??
-            "Messaging setup could not be completed. Please contact support@wagzly.app.",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("business_id", businessId);
-
-      return NextResponse.json(
-        {
-          error:
-            "Messaging setup could not be completed. Please contact support@wagzly.app and we’ll help finish your texting setup.",
-        },
-        { status: 400 }
-      );
-    }
+  return NextResponse.json(
+    {
+      error:
+        "Messaging setup could not be completed. Please contact support@wagzly.app and we’ll help finish your texting setup.",
+    },
+    { status: 400 }
+  );
+}
 
     return NextResponse.json({
       ok: true,
