@@ -30,7 +30,7 @@ function formatDateTime(value: Date) {
   });
 }
 
-async function deletePendingAppointmentMessages({
+async function deletePendingAppointmentReminders({
   businessId,
   appointmentId,
 }: {
@@ -42,6 +42,7 @@ async function deletePendingAppointmentMessages({
     .delete()
     .eq("business_id", businessId)
     .eq("appointment_id", appointmentId)
+    .eq("message_type", "appointment_reminder")
     .eq("status", "pending");
 }
 
@@ -111,7 +112,7 @@ async function upsertAppointmentReminder({
       selectedRule.offset_minutes * 60 * 1000
   );
 
-  await deletePendingAppointmentMessages({ businessId, appointmentId });
+  await deletePendingAppointmentReminders({ businessId, appointmentId });
 
   if (scheduledFor.getTime() <= Date.now()) {
     return "past_due_removed";
@@ -183,7 +184,7 @@ export async function POST(request: Request) {
     }
 
     if (action === "cancel_reminder_only") {
-      await deletePendingAppointmentMessages({ businessId, appointmentId });
+      await deletePendingAppointmentReminders({ businessId, appointmentId });
 
       return NextResponse.json({
         ok: true,
@@ -212,7 +213,7 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (settings?.sms_enabled === false) {
-      await deletePendingAppointmentMessages({ businessId, appointmentId });
+      await deletePendingAppointmentReminders({ businessId, appointmentId });
 
       return NextResponse.json({
         ok: true,
@@ -245,7 +246,7 @@ export async function POST(request: Request) {
     const appointmentDateTime = new Date(appointment.scheduled_at);
 
     if (appointmentDateTime.getTime() <= Date.now()) {
-      await deletePendingAppointmentMessages({ businessId, appointmentId });
+      await deletePendingAppointmentReminders({ businessId, appointmentId });
 
       return NextResponse.json({
         ok: true,
@@ -368,7 +369,7 @@ export async function POST(request: Request) {
         `Your grooming appointment on ${appointmentDate} has been cancelled. ` +
         `Please contact us if you have any questions.`;
 
-      await deletePendingAppointmentMessages({ businessId, appointmentId });
+      await deletePendingAppointmentReminders({ businessId, appointmentId });
 
       await queueImmediateSms({
         businessId,
