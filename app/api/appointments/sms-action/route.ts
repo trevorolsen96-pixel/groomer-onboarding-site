@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import twilio from "twilio";
 import { supabaseAdmin } from "../../../../lib/supabase-admin";
 
 type SmsAction =
@@ -31,142 +30,50 @@ function formatDateTime(value: Date) {
   });
 }
 
-function getTwilioClient() {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-
-  if (!accountSid || !authToken) {
-    throw new Error("Twilio environment variables are missing.");
-  }
-
-  return twilio(accountSid, authToken);
-}
-
-async function recordOutboundMessage({
+async function deletePendingAppointmentMessages({
   businessId,
-  customerId,
-  customerName,
-  customerPhone,
-  customerImageUrl,
-  messageBody,
-  createdAt,
+  appointmentId,
 }: {
   businessId: string;
-  customerId: string;
-  customerName: string;
-  customerPhone: string | null;
-  customerImageUrl?: string | null;
-  messageBody: string;
-  createdAt: string;
+  appointmentId: string;
 }) {
-  const { data: existingConversation } = await supabaseAdmin
-    .from("message_conversations")
-    .select("id")
-    .eq("business_id", businessId)
-    .eq("customer_id", customerId)
-    .maybeSingle();
-
-  let conversationId = existingConversation?.id as string | undefined;
-
-  if (!conversationId) {
-    const { data: insertedConversation, error: insertError } =
-      await supabaseAdmin
-        .from("message_conversations")
-        .insert({
-          business_id: businessId,
-          customer_id: customerId,
-          customer_name: customerName || "Client",
-          customer_phone: customerPhone,
-          customer_image_url: customerImageUrl ?? null,
-          last_message_body: messageBody,
-          last_message_at: createdAt,
-          unread_count: 0,
-          created_at: createdAt,
-        })
-        .select("id")
-        .single();
-
-    if (insertError || !insertedConversation) {
-      throw new Error(insertError?.message ?? "Unable to create conversation.");
-    }
-
-    conversationId = insertedConversation.id;
-  }
-
-  await supabaseAdmin.from("message_items").insert({
-    business_id: businessId,
-    conversation_id: conversationId,
-    customer_id: customerId,
-    direction: "outbound",
-    body: messageBody,
-    status: "sent",
-    provider: "twilio",
-    created_at: createdAt,
-  });
-
   await supabaseAdmin
-    .from("message_conversations")
-    .update({
-      last_message_body: messageBody,
-      last_message_at: createdAt,
-    })
-    .eq("id", conversationId);
+    .from("sms_outbound_queue")
+    .delete()
+    .eq("business_id", businessId)
+    .eq("appointment_id", appointmentId)
+    .eq("status", "pending");
 }
 
-async function sendNow({
+async function queueImmediateSms({
   businessId,
   customerId,
   appointmentId,
-  fromPhone,
+  messageType,
   toPhone,
-  body,
-  eventType,
-  customerName,
-  customerImageUrl,
+  message,
 }: {
   businessId: string;
   customerId: string;
   appointmentId: string;
-  fromPhone: string;
+  messageType: string;
   toPhone: string;
-  body: string;
-  eventType: string;
-  customerName: string;
-  customerImageUrl?: string | null;
+  message: string;
 }) {
-  const client = getTwilioClient();
-
-  const sent = await client.messages.create({
-    from: fromPhone,
-    to: toPhone,
-    body,
-  });
-
-  const now = new Date().toISOString();
-
-  await recordOutboundMessage({
-    businessId,
-    customerId,
-    customerName,
-    customerPhone: toPhone,
-    customerImageUrl,
-    messageBody: body,
-    createdAt: now,
-  });
-
-  await supabaseAdmin.from("sms_events").insert({
+  await supabaseAdmin.from("sms_outbound_queue").insert({
     business_id: businessId,
     customer_id: customerId,
     appointment_id: appointmentId,
-    direction: "outbound",
-    event_type: eventType,
-    message_body: body,
-    from_phone: fromPhone,
+    message_type: messageType,
+    rule_type: "immediate",
     to_phone: toPhone,
-    created_at: now,
+    body_rendered: message,
+    scheduled_for_utc: new Date().toISOString(),
+    status: "pending",
+    dedupe_key: `${appointmentId}:${messageType}:${Date.now()}`,
+    attempt_count: 0,
+    updated_at: new Date().toISOString(),
   });
-
-  return sent.sid;
 }
 
 async function upsertAppointmentReminder({
@@ -204,15 +111,9 @@ async function upsertAppointmentReminder({
       selectedRule.offset_minutes * 60 * 1000
   );
 
-  if (scheduledFor.getTime() <= Date.now()) {
-    await supabaseAdmin
-      .from("sms_outbound_queue")
-      .delete()
-      .eq("business_id", businessId)
-      .eq("appointment_id", appointmentId)
-      .eq("rule_type", selectedRule.rule_type)
-      .eq("status", "pending");
+  await deletePendingAppointmentMessages({ businessId, appointmentId });
 
+  if (scheduledFor.getTime() <= Date.now()) {
     return "past_due_removed";
   }
 
@@ -220,15 +121,6 @@ async function upsertAppointmentReminder({
     `Hi ${customerName}, this is ${businessName}. ` +
     `Your grooming appointment is ${appointmentDate}. ` +
     `Reply YES to confirm, or NO if you need to reschedule.`;
-
-      await supabaseAdmin
-    .from("sms_outbound_queue")
-    .delete()
-    .eq("business_id", businessId)
-    .eq("appointment_id", appointmentId)
-    .eq("status", "pending");
-
-  const dedupeKey = `${appointmentId}:${selectedRule.rule_type}`;
 
   await supabaseAdmin.from("sms_outbound_queue").upsert(
     {
@@ -241,7 +133,7 @@ async function upsertAppointmentReminder({
       body_rendered: message,
       scheduled_for_utc: scheduledFor.toISOString(),
       status: "pending",
-      dedupe_key: dedupeKey,
+      dedupe_key: `${appointmentId}:${selectedRule.rule_type}`,
       attempt_count: 0,
       updated_at: new Date().toISOString(),
     },
@@ -290,6 +182,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Not authorized." }, { status: 403 });
     }
 
+    if (action === "cancel_reminder_only") {
+      await deletePendingAppointmentMessages({ businessId, appointmentId });
+
+      return NextResponse.json({
+        ok: true,
+        status: "cancelled",
+        reminderStatus: "cancelled",
+      });
+    }
+
     const { data: smsSetup } = await supabaseAdmin
       .from("business_sms_setup")
       .select("status, phone_number")
@@ -309,28 +211,8 @@ export async function POST(request: Request) {
       .eq("business_id", businessId)
       .maybeSingle();
 
-        if (action === "cancel_reminder_only") {
-  await supabaseAdmin
-    .from("sms_outbound_queue")
-    .delete()
-    .eq("business_id", businessId)
-    .eq("appointment_id", appointmentId)
-    .eq("status", "pending");
-
-  return NextResponse.json({
-    ok: true,
-    status: "cancelled",
-    reminderStatus: "cancelled",
-  });
-}
-
-    if (settings?.sms_enabled === false && action === "schedule_reminder") {
-      await supabaseAdmin
-        .from("sms_outbound_queue")
-        .delete()
-        .eq("business_id", businessId)
-        .eq("appointment_id", appointmentId)
-        .eq("status", "pending");
+    if (settings?.sms_enabled === false) {
+      await deletePendingAppointmentMessages({ businessId, appointmentId });
 
       return NextResponse.json({
         ok: true,
@@ -360,6 +242,18 @@ export async function POST(request: Request) {
       );
     }
 
+    const appointmentDateTime = new Date(appointment.scheduled_at);
+
+    if (appointmentDateTime.getTime() <= Date.now()) {
+      await deletePendingAppointmentMessages({ businessId, appointmentId });
+
+      return NextResponse.json({
+        ok: true,
+        status: "skipped",
+        reminderStatus: "past_appointment_removed",
+      });
+    }
+
     const { data: customer } = await supabaseAdmin
       .from("customers")
       .select("id, name, phone, image_url")
@@ -374,12 +268,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const fromPhone = normalizePhone(smsSetup.phone_number);
     const toPhone = normalizePhone(customer.phone);
     const businessName =
       cleanText(settings?.business_name) || "your grooming business";
     const customerName = cleanText(customer.name) || "there";
-    const appointmentDate = formatDateTime(new Date(appointment.scheduled_at));
+    const appointmentDate = formatDateTime(appointmentDateTime);
 
     if (action === "schedule_reminder") {
       const reminderStatus = await upsertAppointmentReminder({
@@ -394,17 +287,19 @@ export async function POST(request: Request) {
       });
 
       if (reminderStatus === "no_rule") {
-        return NextResponse.json(
-          { error: "No reminder timing is enabled." },
-          { status: 400 }
-        );
+        return NextResponse.json({
+          ok: true,
+          status: "skipped",
+          reminderStatus: "no_rule",
+        });
       }
 
       if (reminderStatus === "past_due_removed") {
-        return NextResponse.json(
-          { error: "This reminder time has already passed." },
-          { status: 400 }
-        );
+        return NextResponse.json({
+          ok: true,
+          status: "skipped",
+          reminderStatus: "past_due_removed",
+        });
       }
 
       await supabaseAdmin
@@ -430,16 +325,13 @@ export async function POST(request: Request) {
         `Your grooming appointment has been updated to ${appointmentDate}. ` +
         `Reply YES to confirm, or NO if you need to reschedule.`;
 
-      const providerMessageId = await sendNow({
+      await queueImmediateSms({
         businessId,
         customerId: customer.id,
         appointmentId,
-        fromPhone,
+        messageType: "appointment_reschedule",
         toPhone,
-        body: message,
-        eventType: "appointment_reschedule",
-        customerName,
-        customerImageUrl: customer.image_url,
+        message,
       });
 
       await supabaseAdmin
@@ -465,9 +357,8 @@ export async function POST(request: Request) {
 
       return NextResponse.json({
         ok: true,
-        status: "sent",
+        status: "queued",
         reminderStatus,
-        providerMessageId,
       });
     }
 
@@ -477,30 +368,21 @@ export async function POST(request: Request) {
         `Your grooming appointment on ${appointmentDate} has been cancelled. ` +
         `Please contact us if you have any questions.`;
 
-      const providerMessageId = await sendNow({
+      await deletePendingAppointmentMessages({ businessId, appointmentId });
+
+      await queueImmediateSms({
         businessId,
         customerId: customer.id,
         appointmentId,
-        fromPhone,
+        messageType: "appointment_cancellation",
         toPhone,
-        body: message,
-        eventType: "appointment_cancellation",
-        customerName,
-        customerImageUrl: customer.image_url,
+        message,
       });
-
-      await supabaseAdmin
-        .from("sms_outbound_queue")
-        .delete()
-        .eq("business_id", businessId)
-        .eq("appointment_id", appointmentId)
-        .eq("status", "pending");
 
       return NextResponse.json({
         ok: true,
-        status: "sent",
+        status: "queued",
         reminderStatus: "cancelled",
-        providerMessageId,
       });
     }
 
