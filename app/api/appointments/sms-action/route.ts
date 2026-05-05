@@ -19,15 +19,28 @@ function normalizePhone(value: string) {
   return value;
 }
 
+function firstNameOnly(value: string) {
+  const clean = value.trim();
+  if (!clean) return "there";
+  return clean.split(/\s+/)[0] || "there";
+}
+
 function formatDateTime(value: Date) {
-  return value.toLocaleString("en-US", {
+  const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/Los_Angeles",
-    weekday: "short",
-    month: "short",
-    day: "numeric",
+    year: "2-digit",
+    month: "2-digit",
+    day: "2-digit",
     hour: "numeric",
     minute: "2-digit",
-  });
+  }).formatToParts(value);
+
+  const get = (type: string) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+
+  return `${get("month")}/${get("day")}/${get("year")} ${get("hour")}:${get(
+    "minute"
+  )} ${get("dayPeriod")}`;
 }
 
 async function deletePendingAppointmentReminders({
@@ -120,8 +133,8 @@ async function upsertAppointmentReminder({
 
   const message =
     `Hi ${customerName}, this is ${businessName}. ` +
-    `Your grooming appointment is ${appointmentDate}. ` +
-    `Reply YES to confirm, or NO if you need to reschedule.`;
+    `Your grooming appt is ${appointmentDate}. ` +
+    `Reply YES to confirm or NO to reschedule.`;
 
   await supabaseAdmin.from("sms_outbound_queue").upsert(
     {
@@ -272,7 +285,7 @@ export async function POST(request: Request) {
     const toPhone = normalizePhone(customer.phone);
     const businessName =
       cleanText(settings?.business_name) || "your grooming business";
-    const customerName = cleanText(customer.name) || "there";
+    const customerName = firstNameOnly(cleanText(customer.name));
     const appointmentDate = formatDateTime(appointmentDateTime);
 
     if (action === "schedule_reminder") {
@@ -323,8 +336,8 @@ export async function POST(request: Request) {
     if (action === "reschedule") {
       const message =
         `Hi ${customerName}, this is ${businessName}. ` +
-        `Your grooming appointment has been updated to ${appointmentDate}. ` +
-        `Reply YES to confirm, or NO if you need to reschedule.`;
+        `Your grooming appt is now ${appointmentDate}. ` +
+        `Reply YES to confirm or NO to reschedule.`;
 
       await queueImmediateSms({
         businessId,
@@ -366,8 +379,8 @@ export async function POST(request: Request) {
     if (action === "cancellation") {
       const message =
         `Hi ${customerName}, this is ${businessName}. ` +
-        `Your grooming appointment on ${appointmentDate} has been cancelled. ` +
-        `Please contact us if you have any questions.`;
+        `Your grooming appt on ${appointmentDate} has been cancelled. ` +
+        `Questions? Reply here.`;
 
       await deletePendingAppointmentReminders({ businessId, appointmentId });
 
