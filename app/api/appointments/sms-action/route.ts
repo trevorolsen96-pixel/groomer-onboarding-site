@@ -38,6 +38,77 @@ function getTwilioClient() {
   return twilio(accountSid, authToken);
 }
 
+async function recordOutboundMessage({
+  businessId,
+  customerId,
+  customerName,
+  customerPhone,
+  customerImageUrl,
+  messageBody,
+  createdAt,
+}: {
+  businessId: string;
+  customerId: string;
+  customerName: string;
+  customerPhone: string | null;
+  customerImageUrl?: string | null;
+  messageBody: string;
+  createdAt: string;
+}) {
+  const { data: existingConversation } = await supabaseAdmin
+    .from("message_conversations")
+    .select("id")
+    .eq("business_id", businessId)
+    .eq("customer_id", customerId)
+    .maybeSingle();
+
+  let conversationId = existingConversation?.id as string | undefined;
+
+  if (!conversationId) {
+    const { data: insertedConversation, error: insertError } =
+      await supabaseAdmin
+        .from("message_conversations")
+        .insert({
+          business_id: businessId,
+          customer_id: customerId,
+          customer_name: customerName || "Client",
+          customer_phone: customerPhone,
+          customer_image_url: customerImageUrl ?? null,
+          last_message_body: messageBody,
+          last_message_at: createdAt,
+          unread_count: 0,
+          created_at: createdAt,
+        })
+        .select("id")
+        .single();
+
+    if (insertError || !insertedConversation) {
+      throw new Error(insertError?.message ?? "Unable to create conversation.");
+    }
+
+    conversationId = insertedConversation.id;
+  }
+
+  await supabaseAdmin.from("message_items").insert({
+    business_id: businessId,
+    conversation_id: conversationId,
+    customer_id: customerId,
+    direction: "outbound",
+    body: messageBody,
+    status: "sent",
+    provider: "twilio",
+    created_at: createdAt,
+  });
+
+  await supabaseAdmin
+    .from("message_conversations")
+    .update({
+      last_message_body: messageBody,
+      last_message_at: createdAt,
+    })
+    .eq("id", conversationId);
+}
+
 async function sendNow({
   businessId,
   customerId,
@@ -46,6 +117,8 @@ async function sendNow({
   toPhone,
   body,
   eventType,
+  customerName,
+  customerImageUrl,
 }: {
   businessId: string;
   customerId: string;
@@ -54,6 +127,8 @@ async function sendNow({
   toPhone: string;
   body: string;
   eventType: string;
+  customerName: string;
+  customerImageUrl?: string | null;
 }) {
   const client = getTwilioClient();
 
@@ -64,6 +139,16 @@ async function sendNow({
   });
 
   const now = new Date().toISOString();
+
+  await recordOutboundMessage({
+    businessId,
+    customerId,
+    customerName,
+    customerPhone: toPhone,
+    customerImageUrl,
+    messageBody: body,
+    createdAt: now,
+  });
 
   await supabaseAdmin.from("sms_events").insert({
     business_id: businessId,
@@ -108,9 +193,7 @@ async function upsertAppointmentReminder({
     .limit(1)
     .maybeSingle();
 
-  if (!selectedRule) {
-    return "no_rule";
-  }
+  if (!selectedRule) return "no_rule";
 
   const scheduledFor = new Date(
     new Date(appointmentScheduledAt).getTime() -
@@ -245,7 +328,7 @@ export async function POST(request: Request) {
 
     const { data: customer } = await supabaseAdmin
       .from("customers")
-      .select("id, name, phone")
+      .select("id, name, phone, image_url")
       .eq("id", appointment.customer_id)
       .eq("business_id", businessId)
       .maybeSingle();
@@ -321,6 +404,8 @@ export async function POST(request: Request) {
         toPhone,
         body: message,
         eventType: "appointment_reschedule",
+        customerName,
+        customerImageUrl: customer.image_url,
       });
 
       await supabaseAdmin
@@ -366,6 +451,8 @@ export async function POST(request: Request) {
         toPhone,
         body: message,
         eventType: "appointment_cancellation",
+        customerName,
+        customerImageUrl: customer.image_url,
       });
 
       await supabaseAdmin
