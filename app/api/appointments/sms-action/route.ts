@@ -80,6 +80,83 @@ async function sendNow({
   return sent.sid;
 }
 
+async function upsertAppointmentReminder({
+  businessId,
+  customerId,
+  appointmentId,
+  appointmentScheduledAt,
+  customerName,
+  businessName,
+  toPhone,
+  appointmentDate,
+}: {
+  businessId: string;
+  customerId: string;
+  appointmentId: string;
+  appointmentScheduledAt: string;
+  customerName: string;
+  businessName: string;
+  toPhone: string;
+  appointmentDate: string;
+}) {
+  const { data: selectedRule } = await supabaseAdmin
+    .from("business_sms_reminder_rules")
+    .select("rule_type, offset_minutes, enabled")
+    .eq("business_id", businessId)
+    .eq("enabled", true)
+    .order("offset_minutes", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!selectedRule) {
+    return "no_rule";
+  }
+
+  const scheduledFor = new Date(
+    new Date(appointmentScheduledAt).getTime() -
+      selectedRule.offset_minutes * 60 * 1000
+  );
+
+  if (scheduledFor.getTime() <= Date.now()) {
+    await supabaseAdmin
+      .from("sms_outbound_queue")
+      .delete()
+      .eq("business_id", businessId)
+      .eq("appointment_id", appointmentId)
+      .eq("rule_type", selectedRule.rule_type)
+      .eq("status", "pending");
+
+    return "past_due_removed";
+  }
+
+  const message =
+    `Hi ${customerName}, this is ${businessName}. ` +
+    `Your grooming appointment is ${appointmentDate}. ` +
+    `Reply YES to confirm, or NO if you need to reschedule.`;
+
+  const dedupeKey = `${appointmentId}:${selectedRule.rule_type}`;
+
+  await supabaseAdmin.from("sms_outbound_queue").upsert(
+    {
+      business_id: businessId,
+      customer_id: customerId,
+      appointment_id: appointmentId,
+      message_type: "appointment_reminder",
+      rule_type: selectedRule.rule_type,
+      to_phone: toPhone,
+      body_rendered: message,
+      scheduled_for_utc: scheduledFor.toISOString(),
+      status: "pending",
+      dedupe_key: dedupeKey,
+      attempt_count: 0,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "dedupe_key" }
+  );
+
+  return "refreshed";
+}
+
 export async function POST(request: Request) {
   try {
     const authHeader = request.headers.get("authorization") ?? "";
@@ -184,61 +261,34 @@ export async function POST(request: Request) {
     const toPhone = normalizePhone(customer.phone);
     const businessName =
       cleanText(settings?.business_name) || "your grooming business";
+    const customerName = cleanText(customer.name) || "there";
     const appointmentDate = formatDateTime(new Date(appointment.scheduled_at));
 
     if (action === "schedule_reminder") {
-      const { data: selectedRule } = await supabaseAdmin
-        .from("business_sms_reminder_rules")
-        .select("rule_type, offset_minutes, enabled")
-        .eq("business_id", businessId)
-        .eq("enabled", true)
-        .order("offset_minutes", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const reminderStatus = await upsertAppointmentReminder({
+        businessId,
+        customerId: customer.id,
+        appointmentId,
+        appointmentScheduledAt: appointment.scheduled_at,
+        customerName,
+        businessName,
+        toPhone,
+        appointmentDate,
+      });
 
-      if (!selectedRule) {
+      if (reminderStatus === "no_rule") {
         return NextResponse.json(
           { error: "No reminder timing is enabled." },
           { status: 400 }
         );
       }
 
-      const scheduledFor = new Date(
-        new Date(appointment.scheduled_at).getTime() -
-          selectedRule.offset_minutes * 60 * 1000
-      );
-
-      if (scheduledFor.getTime() <= Date.now()) {
+      if (reminderStatus === "past_due_removed") {
         return NextResponse.json(
           { error: "This reminder time has already passed." },
           { status: 400 }
         );
       }
-
-      const message =
-        `Hi ${customer.name}, this is ${businessName}. ` +
-        `Your grooming appointment is ${appointmentDate}. ` +
-        `Reply YES to confirm, or NO if you need to reschedule.`;
-
-      const dedupeKey = `${appointmentId}:${selectedRule.rule_type}`;
-
-      await supabaseAdmin.from("sms_outbound_queue").upsert(
-        {
-          business_id: businessId,
-          customer_id: customer.id,
-          appointment_id: appointmentId,
-          message_type: "appointment_reminder",
-          rule_type: selectedRule.rule_type,
-          to_phone: toPhone,
-          body_rendered: message,
-          scheduled_for_utc: scheduledFor.toISOString(),
-          status: "pending",
-          dedupe_key: dedupeKey,
-          attempt_count: 0,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "dedupe_key" }
-      );
 
       await supabaseAdmin
         .from("appointments")
@@ -250,12 +300,16 @@ export async function POST(request: Request) {
         .eq("id", appointmentId)
         .eq("business_id", businessId);
 
-      return NextResponse.json({ ok: true, status: "queued" });
+      return NextResponse.json({
+        ok: true,
+        status: "queued",
+        reminderStatus,
+      });
     }
 
     if (action === "reschedule") {
       const message =
-        `Hi ${customer.name}, this is ${businessName}. ` +
+        `Hi ${customerName}, this is ${businessName}. ` +
         `Your grooming appointment has been updated to ${appointmentDate}. ` +
         `Reply YES to confirm, or NO if you need to reschedule.`;
 
@@ -279,12 +333,28 @@ export async function POST(request: Request) {
         .eq("id", appointmentId)
         .eq("business_id", businessId);
 
-      return NextResponse.json({ ok: true, status: "sent", providerMessageId });
+      const reminderStatus = await upsertAppointmentReminder({
+        businessId,
+        customerId: customer.id,
+        appointmentId,
+        appointmentScheduledAt: appointment.scheduled_at,
+        customerName,
+        businessName,
+        toPhone,
+        appointmentDate,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        status: "sent",
+        reminderStatus,
+        providerMessageId,
+      });
     }
 
     if (action === "cancellation") {
       const message =
-        `Hi ${customer.name}, this is ${businessName}. ` +
+        `Hi ${customerName}, this is ${businessName}. ` +
         `Your grooming appointment on ${appointmentDate} has been cancelled. ` +
         `Please contact us if you have any questions.`;
 
@@ -298,10 +368,25 @@ export async function POST(request: Request) {
         eventType: "appointment_cancellation",
       });
 
-      return NextResponse.json({ ok: true, status: "sent", providerMessageId });
+      await supabaseAdmin
+        .from("sms_outbound_queue")
+        .delete()
+        .eq("business_id", businessId)
+        .eq("appointment_id", appointmentId)
+        .eq("status", "pending");
+
+      return NextResponse.json({
+        ok: true,
+        status: "sent",
+        reminderStatus: "cancelled",
+        providerMessageId,
+      });
     }
 
-    return NextResponse.json({ error: "Unsupported SMS action." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Unsupported SMS action." },
+      { status: 400 }
+    );
   } catch (error) {
     return NextResponse.json(
       {
