@@ -14,13 +14,6 @@ function getTwilioClient() {
 }
 
 export async function GET(request: Request) {
-  const cronSecret = process.env.CRON_SECRET;
-  const providedSecret = request.headers.get("x-cron-secret");
-
-  if (cronSecret && providedSecret !== cronSecret) {
-    return NextResponse.json({ error: "Not authorized." }, { status: 401 });
-  }
-
   try {
     const now = new Date().toISOString();
 
