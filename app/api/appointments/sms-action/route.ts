@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import twilio from "twilio";
 import { supabaseAdmin } from "../../../../lib/supabase-admin";
 
-type SmsAction = "schedule_reminder" | "reschedule" | "cancellation";
+type SmsAction =
+  | "schedule_reminder"
+  | "reschedule"
+  | "cancellation"
+  | "cancel_reminder_only";
 
 function cleanText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -217,6 +221,13 @@ async function upsertAppointmentReminder({
     `Your grooming appointment is ${appointmentDate}. ` +
     `Reply YES to confirm, or NO if you need to reschedule.`;
 
+      await supabaseAdmin
+    .from("sms_outbound_queue")
+    .delete()
+    .eq("business_id", businessId)
+    .eq("appointment_id", appointmentId)
+    .eq("status", "pending");
+
   const dedupeKey = `${appointmentId}:${selectedRule.rule_type}`;
 
   await supabaseAdmin.from("sms_outbound_queue").upsert(
@@ -298,11 +309,34 @@ export async function POST(request: Request) {
       .eq("business_id", businessId)
       .maybeSingle();
 
-    if (settings?.sms_enabled === false) {
-      return NextResponse.json(
-        { error: "SMS reminders are turned off for this business." },
-        { status: 400 }
-      );
+        if (action === "cancel_reminder_only") {
+  await supabaseAdmin
+    .from("sms_outbound_queue")
+    .delete()
+    .eq("business_id", businessId)
+    .eq("appointment_id", appointmentId)
+    .eq("status", "pending");
+
+  return NextResponse.json({
+    ok: true,
+    status: "cancelled",
+    reminderStatus: "cancelled",
+  });
+}
+
+    if (settings?.sms_enabled === false && action === "schedule_reminder") {
+      await supabaseAdmin
+        .from("sms_outbound_queue")
+        .delete()
+        .eq("business_id", businessId)
+        .eq("appointment_id", appointmentId)
+        .eq("status", "pending");
+
+      return NextResponse.json({
+        ok: true,
+        status: "skipped",
+        reminderStatus: "sms_disabled",
+      });
     }
 
     if (action === "reschedule" && settings?.reschedule_sms_enabled === false) {
