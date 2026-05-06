@@ -157,6 +157,46 @@ async function upsertAppointmentReminder({
   return "refreshed";
 }
 
+function calculateSmsSegments(message: string) {
+  const length = message.trim().length;
+
+  if (length <= 0) return 1;
+
+  return Math.ceil(length / 160);
+}
+
+async function assertSmsCreditsAvailable(
+  businessId: string,
+  neededCredits: number
+) {
+  const { data, error } = await supabaseAdmin.rpc(
+    "get_business_sms_usage_summary",
+    {
+      p_business_id: businessId,
+    }
+  );
+
+  if (error) {
+    throw new Error("Unable to verify SMS credits.");
+  }
+
+  const summary = Array.isArray(data) ? data[0] : data;
+
+  const remainingCredits = Number(
+    summary?.remaining_credits ?? 0
+  );
+
+  const plan = String(
+    summary?.plan ?? "basic"
+  ).toLowerCase();
+
+  if (remainingCredits < neededCredits) {
+    throw new Error(
+      `sms_credits_exceeded plan=${plan} needed=${neededCredits} remaining=${remainingCredits}`
+    );
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const authHeader = request.headers.get("authorization") ?? "";
@@ -335,9 +375,16 @@ export async function POST(request: Request) {
 
     if (action === "reschedule") {
       const message =
-        `Hi ${customerName}, this is ${businessName}. ` +
-        `Your grooming appt is now ${appointmentDate}. ` +
-        `Reply YES to confirm or NO to reschedule.`;
+  `Hi ${customerName}, this is ${businessName}. ` +
+  `Your grooming appt is now ${appointmentDate}. ` +
+  `Reply YES to confirm or NO to reschedule.`;
+
+const segments = calculateSmsSegments(message);
+
+await assertSmsCreditsAvailable(
+  businessId,
+  segments
+);
 
       await queueImmediateSms({
         businessId,
@@ -381,6 +428,12 @@ export async function POST(request: Request) {
         `Hi ${customerName}, this is ${businessName}. ` +
         `Your grooming appt on ${appointmentDate} has been cancelled. ` +
         `Questions? Reply here.`;
+        const segments = calculateSmsSegments(message);
+
+        await assertSmsCreditsAvailable(
+          businessId,
+          segments
+        );
 
       await deletePendingAppointmentReminders({ businessId, appointmentId });
 
