@@ -170,7 +170,7 @@ async function assertSmsCreditsAvailable(
   neededCredits: number
 ) {
   const { data, error } = await supabaseAdmin.rpc(
-    "get_business_sms_usage_summary",
+    "get_sms_credit_summary",
     {
       p_business_id: businessId,
     }
