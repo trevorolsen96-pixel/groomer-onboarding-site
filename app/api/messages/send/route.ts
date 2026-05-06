@@ -21,6 +21,39 @@ function getTwilioClient() {
   return twilio(accountSid, authToken);
 }
 
+function smsSegmentsForText(body: string) {
+  return Math.max(1, Math.ceil(body.length / 160));
+}
+
+async function assertSmsCreditsAvailable({
+  businessId,
+  body,
+}: {
+  businessId: string;
+  body: string;
+}) {
+  const neededCredits = smsSegmentsForText(body);
+
+  const { data, error } = await supabaseAdmin.rpc("get_sms_credit_summary", {
+    p_business_id: businessId,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const summary = Array.isArray(data) ? data[0] : data;
+  const remainingCredits = Number(summary?.remaining_credits ?? 0);
+
+  if (remainingCredits < neededCredits) {
+    throw new Error(
+      `Not enough SMS credits. This message needs ${neededCredits} credit${
+        neededCredits === 1 ? "" : "s"
+      }, but only ${remainingCredits} remain.`
+    );
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const authHeader = request.headers.get("authorization") ?? "";
@@ -75,8 +108,7 @@ export async function POST(request: Request) {
     ) {
       return NextResponse.json(
         {
-          error:
-            "Text messaging is not approved for this business yet.",
+          error: "Text messaging is not approved for this business yet.",
         },
         { status: 400 }
       );
@@ -107,6 +139,11 @@ export async function POST(request: Request) {
     }
 
     const fromPhone = normalizePhone(smsSetup.phone_number);
+
+    await assertSmsCreditsAvailable({
+      businessId,
+      body: messageBody,
+    });
 
     const twilioClient = getTwilioClient();
 
