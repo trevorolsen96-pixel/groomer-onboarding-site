@@ -44,12 +44,11 @@ async function assertSmsCreditsAvailable({
 
   const summary = Array.isArray(data) ? data[0] : data;
   const remainingCredits = Number(summary?.remaining_credits ?? 0);
+  const plan = String(summary?.plan ?? "basic").toLowerCase();
 
-  if (remainingCredits < neededCredits) {
+    if (remainingCredits < neededCredits) {
     throw new Error(
-      `Not enough SMS credits. This message needs ${neededCredits} credit${
-        neededCredits === 1 ? "" : "s"
-      }, but only ${remainingCredits} remain.`
+      `sms_credits_exceeded plan=${plan} needed=${neededCredits} remaining=${remainingCredits}`
     );
   }
 }
