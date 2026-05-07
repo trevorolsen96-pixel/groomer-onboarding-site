@@ -4,9 +4,33 @@ import Image from "next/image";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://www.wagzly.com"),
   title: "Wagzly",
   description:
     "Wagzly provides beautiful client onboarding for mobile grooming businesses.",
+  openGraph: {
+    title: "Wagzly",
+    description:
+      "Wagzly provides beautiful client onboarding for mobile grooming businesses.",
+    url: "https://www.wagzly.com",
+    siteName: "Wagzly",
+    images: [
+      {
+        url: "/images/logo/WagzlyHLarge.png",
+        width: 1200,
+        height: 630,
+        alt: "Wagzly",
+      },
+    ],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Wagzly",
+    description:
+      "Wagzly provides beautiful client onboarding for mobile grooming businesses.",
+    images: ["/images/logo/WagzlyHLarge.png"],
+  },
 };
 
 export default function RootLayout({
