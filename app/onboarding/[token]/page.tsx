@@ -45,6 +45,13 @@ type PetQuestionnaire = {
   answers: QuestionAnswer[];
 };
 
+type PetRecordUpload = {
+  id: string;
+  pet_index: number;
+  document_type: string;
+  file: File;
+};
+
 type BrandingResponse = {
   request_id: string;
   business_name: string;
@@ -52,6 +59,7 @@ type BrandingResponse = {
   status: string;
   agreements: Agreement[];
   questions: OnboardingQuestion[];
+  require_pet_records_onboarding: boolean;
   error?: string;
 };
 
@@ -88,6 +96,8 @@ export default function OnboardingTokenPage() {
   >([]);
 
   const [questions, setQuestions] = useState<OnboardingQuestion[]>([]);
+  const [requirePetRecords, setRequirePetRecords] = useState(false);
+const [petRecords, setPetRecords] = useState<PetRecordUpload[]>([]);
   const [petQuestionnaires, setPetQuestionnaires] = useState<
     PetQuestionnaire[]
   >([]);
@@ -129,6 +139,7 @@ export default function OnboardingTokenPage() {
         setLogoUrl(result.logo_url);
         setAgreements(result.agreements ?? []);
         setQuestions(loadedQuestions);
+        setRequirePetRecords(result.require_pet_records_onboarding ?? false);
 
         setAgreementAcceptances(
           (result.agreements ?? []).map((agreement) => ({
@@ -237,6 +248,41 @@ export default function OnboardingTokenPage() {
     );
   }
 
+  function documentTypeLabel(type: string) {
+  switch (type) {
+    case "rabies":
+      return "Rabies Certificate";
+    case "vaccines":
+      return "Vaccine Records";
+    case "vet_note":
+      return "Vet Note";
+    case "medication":
+      return "Medication Instructions";
+    default:
+      return "Other Record";
+  }
+}
+
+function addPetRecord(petIndex: number, documentType: string, file: File) {
+  setPetRecords((prev) => [
+    ...prev,
+    {
+      id: crypto.randomUUID(),
+      pet_index: petIndex,
+      document_type: documentType,
+      file,
+    },
+  ]);
+}
+
+function removePetRecord(recordId: string) {
+  setPetRecords((prev) => prev.filter((record) => record.id !== recordId));
+}
+
+function getPetRecords(petIndex: number) {
+  return petRecords.filter((record) => record.pet_index === petIndex);
+}
+
   function addPet() {
     setPets((prev) => [...prev, emptyPet()]);
     setPetQuestionnaires((prev) => [
@@ -264,6 +310,16 @@ export default function OnboardingTokenPage() {
           pet_index: newIndex,
         }));
     });
+
+    setPetRecords((prev) =>
+  prev
+    .filter((record) => record.pet_index !== index)
+    .map((record) => ({
+      ...record,
+      pet_index:
+        record.pet_index > index ? record.pet_index - 1 : record.pet_index,
+    })),
+);
   }
 
   function validateRequiredQuestions() {
@@ -407,19 +463,53 @@ export default function OnboardingTokenPage() {
       return;
     }
 
+
+    if (requirePetRecords) {
+  const everyPetHasRecord = pets.every((_, petIndex) =>
+    petRecords.some((record) => record.pet_index === petIndex),
+  );
+
+  if (!everyPetHasRecord) {
+    setSubmitError("Please upload at least one record for each pet.");
+    setSubmitting(false);
+    return;
+  }
+}
     try {
-      const response = await fetch(`/api/onboarding/${token}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          ...form,
-          pets,
-          agreements: agreementAcceptances,
-          pet_questionnaire: petQuestionnaires,
-        }),
-      });
+      const uploadPayload = petRecords.map((record, index) => {
+  const fileKey = `pet_record_${index}`;
+
+  return {
+    pet_index: record.pet_index,
+    file_key: fileKey,
+    document_type: record.document_type,
+    title: documentTypeLabel(record.document_type),
+    file_name: record.file.name,
+    mime_type: record.file.type || "application/octet-stream",
+  };
+});
+
+const formData = new FormData();
+
+formData.append(
+  "payload",
+  JSON.stringify({
+    ...form,
+    pets,
+    agreements: agreementAcceptances,
+    pet_questionnaire: petQuestionnaires,
+    pet_records: uploadPayload,
+  }),
+);
+
+petRecords.forEach((record, index) => {
+  formData.append(`pet_record_${index}`, record.file);
+});
+
+const response = await fetch(`/api/onboarding/${token}`, {
+  method: "POST",
+  body: formData,
+});
 
       const result = await response.json();
 
@@ -564,6 +654,67 @@ export default function OnboardingTokenPage() {
                       </div>
                     </div>
                   ) : null}
+                  <div className="mt-6 border-t border-[var(--divider-soft)] pt-5">
+  <h4 className="text-base font-semibold">
+    Pet records {requirePetRecords ? <span className="text-[var(--rose-primary)]">*</span> : null}
+  </h4>
+  <p className="mt-1 text-sm text-[var(--text-secondary)]">
+    Upload rabies certificates, vaccine records, vet notes, screenshots, photos, or PDFs.
+  </p>
+
+  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+    {["rabies", "vaccines", "vet_note", "medication", "other"].map((type) => (
+      <label
+        key={type}
+        className="cursor-pointer rounded-[16px] border border-[var(--divider-soft)] bg-[var(--cream-background)] px-4 py-3 text-sm font-semibold text-[var(--text-primary)] transition hover:border-[var(--rose-primary)]"
+      >
+        <input
+          type="file"
+          accept="image/*,.pdf"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            addPetRecord(index, type, file);
+            e.currentTarget.value = "";
+          }}
+        />
+        Upload {documentTypeLabel(type)}
+      </label>
+    ))}
+  </div>
+
+  <div className="mt-4 space-y-2">
+    {getPetRecords(index).length === 0 ? (
+      <p className="text-sm text-[var(--text-secondary)]">
+        No records uploaded yet.
+      </p>
+    ) : (
+      getPetRecords(index).map((record) => (
+        <div
+          key={record.id}
+          className="flex items-center justify-between gap-3 rounded-[14px] border border-[var(--divider-soft)] bg-white px-4 py-3"
+        >
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-[var(--text-primary)]">
+              {documentTypeLabel(record.document_type)}
+            </p>
+            <p className="truncate text-xs text-[var(--text-secondary)]">
+              {record.file.name}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => removePetRecord(record.id)}
+            className="shrink-0 rounded-lg border border-[rgba(184,92,114,0.2)] px-3 py-2 text-xs font-medium text-[var(--error-rose)]"
+          >
+            Remove
+          </button>
+        </div>
+      ))
+    )}
+  </div>
+</div>
                 </div>
               ))}
             </div>

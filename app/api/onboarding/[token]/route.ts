@@ -26,6 +26,15 @@ type PetQuestionnairePayload = {
   answers: QuestionAnswerPayload[];
 };
 
+type PetRecordUploadPayload = {
+  pet_index: number;
+  file_key: string;
+  document_type: string;
+  title: string;
+  file_name: string;
+  mime_type: string;
+};
+
 type SubmissionPayload = {
   owner_first_name: string;
   owner_last_name: string;
@@ -40,6 +49,7 @@ type SubmissionPayload = {
   pets: PetPayload[];
   agreements: AgreementAcceptancePayload[];
   pet_questionnaire: PetQuestionnairePayload[];
+  pet_records?: PetRecordUploadPayload[];
 };
 
 function badRequest(message: string) {
@@ -52,6 +62,28 @@ function normalizeToken(token: string) {
 
 function buildCustomerName(firstName: string, lastName: string) {
   return `${firstName.trim()} ${lastName.trim()}`.trim();
+}
+
+function cleanFileName(value: string) {
+  return value
+    .trim()
+    .replace(/[^a-zA-Z0-9._-]/g, "_")
+    .replace(/_+/g, "_") || "record";
+}
+
+function documentTypeTitle(type: string) {
+  switch (type) {
+    case "rabies":
+      return "Rabies Certificate";
+    case "vaccines":
+      return "Vaccine Records";
+    case "vet_note":
+      return "Vet Note";
+    case "medication":
+      return "Medication Instructions";
+    default:
+      return "Other Record";
+  }
 }
 
 function buildAddress(
@@ -98,7 +130,7 @@ export async function GET(
 
     const { data: settingsRow, error: settingsError } = await supabaseAdmin
       .from("business_settings")
-      .select("business_name, logo_url")
+      .select("business_name, logo_url, require_pet_records_onboarding")
       .eq("business_id", requestRow.business_id)
       .single();
 
@@ -148,6 +180,8 @@ export async function GET(
       status: requestRow.status,
       agreements: agreementsRows ?? [],
       questions: questionsRows ?? [],
+      require_pet_records_onboarding:
+        settingsRow.require_pet_records_onboarding ?? false,
     });
   } catch (error) {
     console.error("GET onboarding token error:", error);
@@ -165,7 +199,24 @@ export async function POST(
   try {
     const { token } = await context.params;
     const cleanToken = normalizeToken(token);
-    const body = (await req.json()) as SubmissionPayload;
+    const contentType = req.headers.get("content-type") ?? "";
+
+let body: SubmissionPayload;
+let formData: FormData | null = null;
+
+if (contentType.includes("multipart/form-data")) {
+  formData = await req.formData();
+
+  const payloadRaw = formData.get("payload");
+
+  if (typeof payloadRaw !== "string") {
+    return badRequest("Missing onboarding payload.");
+  }
+
+  body = JSON.parse(payloadRaw) as SubmissionPayload;
+} else {
+  body = (await req.json()) as SubmissionPayload;
+}
 
     if (!body.owner_first_name?.trim()) return badRequest("First name is required.");
     if (!body.owner_last_name?.trim()) return badRequest("Last name is required.");
@@ -234,6 +285,36 @@ export async function POST(
         return badRequest("All required client agreements must be accepted.");
       }
     }
+
+    const { data: settingsValidationRow, error: settingsValidationError } =
+  await supabaseAdmin
+    .from("business_settings")
+    .select("require_pet_records_onboarding")
+    .eq("business_id", requestRow.business_id)
+    .single();
+
+if (settingsValidationError || !settingsValidationRow) {
+  console.error("Settings validation error:", settingsValidationError);
+  return NextResponse.json(
+    { error: "Failed to validate onboarding settings." },
+    { status: 500 },
+  );
+}
+
+const requirePetRecords =
+  settingsValidationRow.require_pet_records_onboarding ?? false;
+
+if (requirePetRecords) {
+  for (let petIndex = 0; petIndex < body.pets.length; petIndex += 1) {
+    const hasRecord = (body.pet_records ?? []).some(
+      (record) => record.pet_index === petIndex && record.file_key?.trim(),
+    );
+
+    if (!hasRecord) {
+      return badRequest("Please upload at least one record for each pet.");
+    }
+  }
+}
 
     const { data: requiredQuestions, error: requiredQuestionsError } =
       await supabaseAdmin
@@ -400,6 +481,75 @@ export async function POST(
         );
       }
     }
+
+    const petDocumentRows = [];
+
+for (const record of body.pet_records ?? []) {
+  const createdPet = createdPets[record.pet_index];
+
+  if (!createdPet?.id || !record.file_key?.trim()) continue;
+
+  const uploadedFile = formData?.get(record.file_key);
+
+  if (!(uploadedFile instanceof File)) continue;
+
+  const originalFileName = cleanFileName(
+    record.file_name || uploadedFile.name || "record",
+  );
+
+  const mimeType =
+    record.mime_type || uploadedFile.type || "application/octet-stream";
+
+  const timestamp = Date.now();
+  const filePath = `${requestRow.business_id}/${customerRow.id}/${createdPet.id}/${timestamp}-${originalFileName}`;
+
+  const bytes = await uploadedFile.arrayBuffer();
+
+  const { error: uploadError } = await supabaseAdmin.storage
+    .from("pet-documents")
+    .upload(filePath, bytes, {
+      contentType: mimeType,
+      upsert: false,
+    });
+
+  if (uploadError) {
+    console.error("Pet record upload error:", uploadError);
+    return NextResponse.json(
+      { error: "Customer created, but failed to upload pet records." },
+      { status: 500 },
+    );
+  }
+
+  const { data: publicUrlData } = supabaseAdmin.storage
+    .from("pet-documents")
+    .getPublicUrl(filePath);
+
+  petDocumentRows.push({
+    business_id: requestRow.business_id,
+    customer_id: customerRow.id,
+    pet_id: createdPet.id,
+    document_type: record.document_type || "other",
+    title: record.title || documentTypeTitle(record.document_type),
+    file_url: publicUrlData.publicUrl,
+    file_path: filePath,
+    file_name: originalFileName,
+    mime_type: mimeType,
+  });
+}
+
+if (petDocumentRows.length > 0) {
+  const { error: petDocumentsError } = await supabaseAdmin
+    .from("pet_documents")
+    .insert(petDocumentRows);
+
+  if (petDocumentsError) {
+    console.error("Pet documents insert error:", petDocumentsError);
+    return NextResponse.json(
+      { error: "Customer and pets created, but failed to save pet records." },
+      { status: 500 },
+    );
+  }
+}
 
     const { error: updateError } = await supabaseAdmin
       .from("onboarding_requests")
