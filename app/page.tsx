@@ -129,47 +129,110 @@ export default function HomePage() {
       </section>
 
       <section id="pricing" className="mx-auto max-w-6xl px-6 py-16">
-        <h2 className="text-center text-3xl font-bold text-[var(--text-primary)]">
-          Simple pricing
-        </h2>
+  <h2 className="text-center text-3xl font-bold text-[var(--text-primary)]">
+    Simple pricing
+  </h2>
 
-        <p className="mx-auto mt-3 max-w-2xl text-center text-[var(--text-secondary)]">
-          Start with a 14-day trial. No complicated setup, no long-term
-          contract.
-        </p>
+  <p className="mx-auto mt-3 max-w-2xl text-center text-[var(--text-secondary)]">
+    Every Wagzly plan includes the full scheduling system. Basic gives
+    owner-operators the essentials, while Pro adds tools to help you grow.
+  </p>
 
-        <div className="mt-10 grid gap-6 sm:grid-cols-2">
-          <div className="soft-card p-6">
-            <h3 className="text-xl font-bold text-[var(--text-primary)]">
-              Basic
-            </h3>
-            <p className="mt-2 text-3xl font-bold text-[var(--text-primary)]">
-              $39.99/mo
-            </p>
-            <ul className="mt-4 space-y-2 text-sm text-[var(--text-secondary)]">
-              <li>✓ 1 admin + 1 groomer</li>
-              <li>✓ Scheduling tools</li>
-              <li>✓ Client onboarding</li>
-              <li>✓ Customer and pet profiles</li>
-            </ul>
-          </div>
+  <div className="mt-10 grid gap-6 lg:grid-cols-2">
+    <div className="soft-card p-6">
+      <h3 className="text-xl font-bold text-[var(--text-primary)]">
+        Wagzly Basic
+      </h3>
+      <p className="mt-2 text-3xl font-bold text-[var(--text-primary)]">
+        $39.99/mo
+      </p>
+      <p className="mt-1 text-sm font-bold text-[var(--rose-primary)]">
+        14-day free trial
+      </p>
+      <p className="mt-4 text-sm leading-6 text-[var(--text-secondary)]">
+        Everything you need to run your grooming business with appointments,
+        customers, pets, reminders, and daily scheduling tools.
+      </p>
+    </div>
 
-          <div className="soft-card border-2 border-[var(--rose-primary)] p-6">
-            <h3 className="text-xl font-bold text-[var(--text-primary)]">
-              Pro
-            </h3>
-            <p className="mt-2 text-3xl font-bold text-[var(--text-primary)]">
-              $89.99/mo
-            </p>
-            <ul className="mt-4 space-y-2 text-sm text-[var(--text-secondary)]">
-              <li>✓ Everything in Basic</li>
-              <li>✓ SMS reminders</li>
-              <li>✓ Advanced reporting</li>
-              <li>✓ More automation features</li>
-            </ul>
-          </div>
+    <div className="soft-card border-2 border-[var(--rose-primary)] p-6">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-xl font-bold text-[var(--text-primary)]">
+            Wagzly Pro
+          </h3>
+          <p className="mt-2 text-3xl font-bold text-[var(--text-primary)]">
+            $89.99/mo
+          </p>
+          <p className="mt-1 text-sm font-bold text-[var(--rose-primary)]">
+            14-day free trial
+          </p>
         </div>
-      </section>
+
+        <span className="rounded-full bg-[var(--rose-primary)] px-3 py-1 text-xs font-bold text-white">
+          Most flexible
+        </span>
+      </div>
+
+      <p className="mt-4 text-sm leading-6 text-[var(--text-secondary)]">
+        Everything in Basic, plus more texting power, payment tools,
+        unlimited staff, unlimited vans, and features designed to help you
+        scale.
+      </p>
+    </div>
+  </div>
+
+  <div className="mt-6 overflow-hidden rounded-3xl bg-white/70 shadow-sm">
+    <table className="w-full border-collapse text-sm">
+      <thead className="bg-[var(--soft-surface)]">
+        <tr>
+          <th className="px-4 py-3 text-left text-[var(--text-primary)]">
+            Feature
+          </th>
+          <th className="px-4 py-3 text-center text-[var(--text-primary)]">
+            Basic
+          </th>
+          <th className="px-4 py-3 text-center text-[var(--text-primary)]">
+            Pro
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {[
+          ["Full appointment scheduling", "🐾", "🐾"],
+          ["Calendar views", "🐾", "🐾"],
+          ["Customer & pet profiles", "🐾", "🐾"],
+          ["Services, add-ons, notes & flags", "🐾", "🐾"],
+          ["Appointment reminders", "🐾", "🐾"],
+          ["Staff / groomers", "1", "Unlimited"],
+          ["Vehicles / vans", "1", "Unlimited"],
+          ["SMS credits", "200/mo", "900/mo"],
+          ["Payment links", "—", "🐾"],
+          ["Expenses / finance tools", "—", "🐾"],
+          ["Message pack add-ons", "—", "🐾"],
+        ].map(([feature, basic, pro]) => (
+          <tr key={feature} className="border-t border-black/5">
+            <td className="px-4 py-3 font-semibold text-[var(--text-primary)]">
+              {feature}
+            </td>
+            <td className="px-4 py-3 text-center font-bold text-[var(--text-secondary)]">
+              {basic}
+            </td>
+            <td className="px-4 py-3 text-center font-bold text-[var(--text-secondary)]">
+              {pro}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+
+  <div className="mt-8 flex justify-center">
+    <Link href="/create-account" className="primary-button">
+      Start your 14-day trial
+    </Link>
+  </div>
+</section>
 
       <section className="mx-auto max-w-5xl px-6 py-16 text-center">
         <div className="soft-card p-10">
