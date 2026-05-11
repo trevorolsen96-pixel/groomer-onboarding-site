@@ -10,6 +10,11 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
+    const selectedPlan =
+      cleanText(body.plan).toLowerCase() === "pro"
+        ? "pro"
+        : "basic";
+
     const fullName = cleanText(body.fullName);
     const businessName = cleanText(body.businessName);
     const phone = cleanText(body.phone);
@@ -17,20 +22,31 @@ export async function POST(request: Request) {
     const acceptedTerms = body.acceptedTerms === true;
 
     if (!fullName) {
-      return NextResponse.json({ error: "Enter your full name." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Enter your full name." },
+        { status: 400 }
+      );
     }
 
     if (!businessName) {
-      return NextResponse.json({ error: "Enter your business name." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Enter your business name." },
+        { status: 400 }
+      );
     }
 
     if (!email || !email.includes("@")) {
-      return NextResponse.json({ error: "Enter a valid email." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Enter a valid email." },
+        { status: 400 }
+      );
     }
 
     if (!acceptedTerms) {
       return NextResponse.json(
-        { error: "You must accept the Terms and Privacy Policy." },
+        {
+          error: "You must accept the Terms and Privacy Policy.",
+        },
         { status: 400 }
       );
     }
@@ -40,7 +56,9 @@ export async function POST(request: Request) {
 
     if (existingUserError) {
       return NextResponse.json(
-        { error: "Unable to verify this email. Please try again." },
+        {
+          error: "Unable to verify this email. Please try again.",
+        },
         { status: 400 }
       );
     }
@@ -51,7 +69,10 @@ export async function POST(request: Request) {
 
     if (emailAlreadyExists) {
       return NextResponse.json(
-        { error: "An account with this email already exists. Please log in instead." },
+        {
+          error:
+            "An account with this email already exists. Please log in instead.",
+        },
         { status: 400 }
       );
     }
@@ -66,7 +87,9 @@ export async function POST(request: Request) {
 
     if (existingPendingError) {
       return NextResponse.json(
-        { error: "Unable to verify this signup. Please try again." },
+        {
+          error: "Unable to verify this signup. Please try again.",
+        },
         { status: 400 }
       );
     }
@@ -75,14 +98,18 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "There is already an unfinished signup for this email. Please use a different email or contact support.",
+            "There is already an unfinished signup for this email.",
         },
         { status: 400 }
       );
     }
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
-    const priceId = process.env.STRIPE_BASIC_PRICE_ID;
+
+    const priceId =
+      selectedPlan === "pro"
+        ? process.env.STRIPE_PRO_PRICE_ID
+        : process.env.STRIPE_BASIC_PRICE_ID;
 
     if (!siteUrl) {
       return NextResponse.json(
@@ -93,26 +120,38 @@ export async function POST(request: Request) {
 
     if (!priceId) {
       return NextResponse.json(
-        { error: "Missing STRIPE_BASIC_PRICE_ID." },
+        {
+          error: `Missing ${
+            selectedPlan === "pro"
+              ? "STRIPE_PRO_PRICE_ID"
+              : "STRIPE_BASIC_PRICE_ID"
+          }.`,
+        },
         { status: 500 }
       );
     }
 
-    const { data: pendingSignup, error: pendingError } = await supabaseAdmin
-      .from("pending_business_signups")
-      .insert({
-        full_name: fullName,
-        business_name: businessName,
-        phone: phone || null,
-        email,
-        status: "pending",
-      })
-      .select("id")
-      .single();
+    const { data: pendingSignup, error: pendingError } =
+      await supabaseAdmin
+        .from("pending_business_signups")
+        .insert({
+          full_name: fullName,
+          business_name: businessName,
+          phone: phone || null,
+          email,
+          status: "pending",
+          selected_plan: selectedPlan,
+        })
+        .select("id")
+        .single();
 
     if (pendingError || !pendingSignup) {
       return NextResponse.json(
-        { error: pendingError?.message ?? "Unable to start signup." },
+        {
+          error:
+            pendingError?.message ??
+            "Unable to start signup.",
+        },
         { status: 400 }
       );
     }
@@ -122,40 +161,55 @@ export async function POST(request: Request) {
       customer_email: email,
       payment_method_collection: "always",
       allow_promotion_codes: true,
+
       line_items: [
         {
           price: priceId,
           quantity: 1,
         },
       ],
+
       subscription_data: {
         trial_period_days: 14,
         metadata: {
           pending_signup_id: pendingSignup.id,
           business_name: businessName,
+          selected_plan: selectedPlan,
         },
       },
+
       metadata: {
         pending_signup_id: pendingSignup.id,
         full_name: fullName,
         business_name: businessName,
         email,
+        selected_plan: selectedPlan,
       },
-      success_url: `${siteUrl}/create-account/finish?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${siteUrl}/create-account?checkout=cancelled`,
+
+      success_url:
+        `${siteUrl}/create-account/finish?session_id={CHECKOUT_SESSION_ID}`,
+
+      cancel_url:
+        `${siteUrl}/create-account?checkout=cancelled`,
     });
 
-    const { error: updateError } = await supabaseAdmin
-      .from("pending_business_signups")
-      .update({
-        stripe_checkout_session_id: session.id,
-        stripe_customer_id:
-          typeof session.customer === "string" ? session.customer : null,
-      })
-      .eq("id", pendingSignup.id);
+    const { error: updateError } =
+      await supabaseAdmin
+        .from("pending_business_signups")
+        .update({
+          stripe_checkout_session_id: session.id,
+          stripe_customer_id:
+            typeof session.customer === "string"
+              ? session.customer
+              : null,
+        })
+        .eq("id", pendingSignup.id);
 
     if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 400 });
+      return NextResponse.json(
+        { error: updateError.message },
+        { status: 400 }
+      );
     }
 
     return NextResponse.json({
