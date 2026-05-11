@@ -161,6 +161,8 @@ function AccountPageContent() {
   const [staffCount, setStaffCount] = useState(0);
   const [pendingInviteCount, setPendingInviteCount] = useState(0);
 
+  const isTrialing = business?.subscription_status === "trialing";
+
   const trialDaysLeft = useMemo(
     () => daysLeft(business?.trial_ends_at ?? null),
     [business?.trial_ends_at]
@@ -400,13 +402,30 @@ function AccountPageContent() {
 
         <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
           <aside className="soft-card h-fit p-3 lg:sticky lg:top-6">
-            <nav className="flex gap-2 overflow-x-auto pb-1 lg:block lg:space-y-1 lg:overflow-visible lg:pb-0">
+            <div className="lg:hidden">
+              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--rose-primary)]">
+                Account section
+              </label>
+              <select
+                value={activeTab}
+                onChange={(event) => setActiveTab(event.target.value as Tab)}
+                className="w-full rounded-2xl border border-[var(--soft-border)] bg-white px-4 py-3 text-sm font-bold text-[var(--text-primary)] outline-none"
+              >
+                {tabs.map((tab) => (
+                  <option key={tab.key} value={tab.key}>
+                    {tab.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <nav className="hidden lg:block lg:space-y-1">
               {tabs.map((tab) => (
                 <button
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveTab(tab.key)}
-                  className={`shrink-0 rounded-2xl px-4 py-3 text-left text-sm font-semibold lg:block lg:w-full ${
+                  className={`block w-full rounded-2xl px-4 py-3 text-left text-sm font-semibold ${
                     activeTab === tab.key
                       ? "bg-[var(--rose-primary)] text-white"
                       : "text-[var(--text-secondary)] hover:bg-[var(--soft-surface)] hover:text-[var(--text-primary)]"
@@ -427,9 +446,12 @@ function AccountPageContent() {
               <p className="mt-1 text-sm capitalize text-[var(--text-secondary)]">
                 App access: {prettyStatus(business?.app_access_status)}
               </p>
-              <p className="mt-1 text-xs text-[var(--text-secondary)]">
-                Trial ends {formatDate(business?.trial_ends_at ?? null)}
-              </p>
+
+              {isTrialing ? (
+                <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                  Trial ends {formatDate(business?.trial_ends_at ?? null)}
+                </p>
+              ) : null}
             </div>
           </aside>
 
@@ -458,20 +480,26 @@ function AccountPageContent() {
                       label="App access"
                       value={prettyStatus(business?.app_access_status)}
                     />
-                    <Info
-                      label="Trial"
-                      value={
-                        trialDaysLeft !== null
-                          ? `${trialDaysLeft} day${
-                              trialDaysLeft === 1 ? "" : "s"
-                            } left`
-                          : "Not set"
-                      }
-                    />
-                    <Info
-                      label="Trial ends"
-                      value={formatDate(business?.trial_ends_at ?? null)}
-                    />
+
+                    {isTrialing ? (
+                      <>
+                        <Info
+                          label="Trial"
+                          value={
+                            trialDaysLeft !== null
+                              ? `${trialDaysLeft} day${
+                                  trialDaysLeft === 1 ? "" : "s"
+                                } left`
+                              : "Not set"
+                          }
+                        />
+                        <Info
+                          label="Trial ends"
+                          value={formatDate(business?.trial_ends_at ?? null)}
+                        />
+                      </>
+                    ) : null}
+
                     <Info
                       label="Business"
                       value={settings?.business_name ?? business?.name}
@@ -512,10 +540,14 @@ function AccountPageContent() {
                     label="App access"
                     value={prettyStatus(business?.app_access_status)}
                   />
-                  <Info
-                    label="Trial ends"
-                    value={formatDate(business?.trial_ends_at ?? null)}
-                  />
+
+                  {isTrialing ? (
+                    <Info
+                      label="Trial ends"
+                      value={formatDate(business?.trial_ends_at ?? null)}
+                    />
+                  ) : null}
+
                   <Info
                     label="Current billing period ends"
                     value={formatDate(business?.current_period_ends_at ?? null)}
@@ -619,21 +651,24 @@ function AccountPageContent() {
                     </div>
                   ) : null}
 
-                  {smsSetup?.status === "needs_info" || smsSetup?.status === "failed" ? (
+                  {smsSetup?.status === "needs_info" ||
+                  smsSetup?.status === "failed" ? (
                     <div className="mt-6 rounded-2xl bg-[var(--soft-surface)] p-5">
                       <p className="text-sm font-bold text-[var(--text-primary)]">
                         Text messaging verification form
                       </p>
 
                       <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-                        Complete this form so Wagzly can prepare this business for a dedicated
-                        toll-free texting number. SMS features remain disabled until verification
-                        is approved.
+                        Complete this form so Wagzly can prepare this business
+                        for a dedicated toll-free texting number. SMS features
+                        remain disabled until verification is approved.
                       </p>
 
                       <div className="mt-6">
                         <SmsVerificationSetupForm
-                          defaultBusinessName={settings?.business_name ?? business?.name}
+                          defaultBusinessName={
+                            settings?.business_name ?? business?.name
+                          }
                           defaultBusinessPhone={settings?.phone}
                           defaultBusinessWebsite={settings?.website}
                           defaultContactName={profile?.full_name}
@@ -648,9 +683,10 @@ function AccountPageContent() {
                       </p>
 
                       <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-                        Your texting setup information has been received. Wagzly will prepare and
-                        submit your dedicated toll-free texting number for verification. Messaging
-                        will stay disabled until approval is complete.
+                        Your texting setup information has been received.
+                        Wagzly will prepare and submit your dedicated toll-free
+                        texting number for verification. Messaging will stay
+                        disabled until approval is complete.
                       </p>
 
                       <p className="mt-4 text-sm font-semibold text-[var(--text-primary)]">
