@@ -20,7 +20,7 @@ const comparisonRows = [
 ];
 
 export default function CreateAccountPage() {
-  const [selectedPlan, setSelectedPlan] = useState<WagzlyPlan>("basic");
+  const [selectedPlan, setSelectedPlan] = useState<WagzlyPlan>("pro");
 
   const [fullName, setFullName] = useState("");
   const [businessName, setBusinessName] = useState("");
@@ -313,29 +313,33 @@ function PlanCard({
     <button
       type="button"
       onClick={onClick}
-      className={`relative rounded-3xl p-6 text-left shadow-sm transition ${
-        selected
-          ? "bg-white ring-2 ring-[var(--rose-primary)]"
-          : "bg-white/70 ring-1 ring-black/5 hover:bg-white"
-      }`}
+      className={`relative rounded-3xl p-4 text-left shadow-sm transition sm:p-6 ${
+  selected
+    ? "bg-white ring-2 ring-[var(--rose-primary)]"
+    : "bg-white/70 ring-1 ring-black/5 hover:bg-white"
+}`}
     >
       {badge ? (
-        <span className="absolute right-5 top-5 rounded-full bg-[var(--rose-primary)] px-3 py-1 text-xs font-bold text-white">
+        <span className="absolute right-4 top-4 rounded-full bg-[var(--rose-primary)] px-2.5 py-1 text-[11px] font-bold text-white sm:right-5 sm:top-5 sm:px-3 sm:text-xs">
           {badge}
         </span>
       ) : null}
 
-      <p className="text-2xl font-bold text-[var(--text-primary)]">{title}</p>
-      <p className="mt-2 text-3xl font-bold text-[var(--text-primary)]">
-        {price}
-      </p>
+      <p className="text-xl font-bold text-[var(--text-primary)] sm:text-2xl">
+  {title}
+</p>
+<p className="mt-1 text-2xl font-bold text-[var(--text-primary)] sm:mt-2 sm:text-3xl">
+  {price}
+</p>
       <p className="mt-1 text-sm font-bold text-[var(--rose-primary)]">
         14-day free trial
       </p>
-      <p className="mt-5 font-bold text-[var(--text-primary)]">{subtitle}</p>
-      <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-        {description}
-      </p>
+      <p className="mt-3 font-bold text-[var(--text-primary)] sm:mt-5">
+  {subtitle}
+</p>
+<p className="mt-1 text-sm leading-5 text-[var(--text-secondary)] sm:mt-2 sm:leading-6">
+  {description}
+</p>
     </button>
   );
 }
