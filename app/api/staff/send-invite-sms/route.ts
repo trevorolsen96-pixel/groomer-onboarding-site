@@ -2,84 +2,125 @@ import { NextRequest, NextResponse } from "next/server";
 import twilio from "twilio";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
-type StaffInviteSmsPayload = {
-  phone?: string;
-  staffName?: string;
-  link?: string;
-};
+function cleanText(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
 
-export async function POST(req: NextRequest) {
+function normalizePhone(value: string) {
+  return value.replace(/[^\d+]/g, "");
+}
+
+function getTwilioClient() {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+
+  if (!accountSid || !authToken) {
+    throw new Error("Twilio environment variables are missing.");
+  }
+
+  return twilio(accountSid, authToken);
+}
+
+export async function POST(request: NextRequest) {
   try {
-    const authHeader = req.headers.get("authorization") ?? "";
-    const accessToken = authHeader.replace("Bearer ", "").trim();
+    const authHeader = request.headers.get("authorization") ?? "";
+    const token = authHeader.replace("Bearer ", "").trim();
 
-    if (!accessToken) {
+    if (!token) {
       return NextResponse.json(
-        { error: "Missing authorization token." },
-        { status: 401 },
+        { error: "Not signed in." },
+        { status: 401 }
       );
     }
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabaseAdmin.auth.getUser(accessToken);
+    const { data: userData, error: userError } =
+      await supabaseAdmin.auth.getUser(token);
 
-    if (userError || !user) {
+    if (userError || !userData.user) {
       return NextResponse.json(
-        { error: "Invalid authorization token." },
-        { status: 401 },
+        { error: "Not signed in." },
+        { status: 401 }
       );
     }
 
-    const body = (await req.json()) as StaffInviteSmsPayload;
+    const body = await request.json();
 
-    const phone = (body.phone ?? "").trim();
-    const staffName = (body.staffName ?? "there").trim() || "there";
-    const link = (body.link ?? "").trim();
+    const businessId = cleanText(body.businessId);
+    const toPhone = normalizePhone(cleanText(body.phone));
+    const staffName = cleanText(body.staffName);
+    const inviteLink = cleanText(body.link);
 
-    if (!phone) {
+    if (!businessId || !toPhone || !inviteLink) {
       return NextResponse.json(
-        { error: "Phone number is required." },
-        { status: 400 },
+        { error: "Missing invite details." },
+        { status: 400 }
       );
     }
 
-    if (!link) {
+    const { data: profile, error: profileError } =
+      await supabaseAdmin
+        .from("profiles")
+        .select("business_id")
+        .eq("id", userData.user.id)
+        .maybeSingle();
+
+    if (
+      profileError ||
+      !profile ||
+      profile.business_id !== businessId
+    ) {
       return NextResponse.json(
-        { error: "Invite link is required." },
-        { status: 400 },
+        { error: "Not authorized." },
+        { status: 403 }
       );
     }
 
-    const accountSid = process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-    const fromNumber = process.env.TWILIO_PHONE_NUMBER;
+    const { data: smsSetup, error: smsSetupError } =
+      await supabaseAdmin
+        .from("business_sms_setup")
+        .select("status, phone_number")
+        .eq("business_id", businessId)
+        .maybeSingle();
 
-    if (!accountSid || !authToken || !fromNumber) {
+    if (
+      smsSetupError ||
+      !smsSetup ||
+      smsSetup.status !== "approved" ||
+      !smsSetup.phone_number
+    ) {
       return NextResponse.json(
-        { error: "Twilio is not configured." },
-        { status: 500 },
+        {
+          error:
+            "Text messaging is not approved for this business yet.",
+        },
+        { status: 400 }
       );
     }
 
-    const client = twilio(accountSid, authToken);
+    const fromPhone = normalizePhone(
+      smsSetup.phone_number
+    );
 
-    await client.messages.create({
-      to: phone,
-      from: fromNumber,
-      body: `Hi ${staffName}, you have been invited to join Wagzly. Create your staff account here: ${link}`,
+    const twilioClient = getTwilioClient();
+
+    await twilioClient.messages.create({
+      from: fromPhone,
+      to: toPhone,
+      body: `Hi ${staffName || "there"}, you have been invited to join Wagzly. Create your staff account here: ${inviteLink}`,
     });
 
     return NextResponse.json({
-      success: true,
+      ok: true,
     });
   } catch (error) {
-    console.error("Send staff invite SMS error:", error);
-
     return NextResponse.json(
-      { error: "Failed to send staff invite text message." },
-      { status: 500 },
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unable to send invite.",
+      },
+      { status: 400 }
     );
   }
 }
