@@ -3,6 +3,10 @@
     {
       "path": "/api/sms/process-queue",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/pet-care-reminders/process",
+      "schedule": "0 16 * * *"
     }
   ]
 }
