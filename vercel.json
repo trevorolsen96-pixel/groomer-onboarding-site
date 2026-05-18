@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/pet-care-reminders/process",
-      "schedule": "0 16 * * *"
+      "schedule": "*/15 * * * *"
     }
   ]
 }
