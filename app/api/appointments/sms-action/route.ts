@@ -158,8 +158,26 @@ async function upsertAppointmentReminder({
       { onConflict: "dedupe_key" }
     );
 
-  if (queueError) {
+    if (queueError) {
     throw new Error(`Unable to queue appointment reminder: ${queueError.message}`);
+  }
+
+  const { data: queuedRow, error: verifyError } = await supabaseAdmin
+    .from("sms_outbound_queue")
+    .select("id, appointment_id, message_type, rule_type, scheduled_for_utc, status")
+    .eq("business_id", businessId)
+    .eq("appointment_id", appointmentId)
+    .eq("message_type", "appointment_reminder")
+    .maybeSingle();
+
+  if (verifyError) {
+    throw new Error(`Unable to verify queued reminder: ${verifyError.message}`);
+  }
+
+  if (!queuedRow) {
+    throw new Error(
+      `Reminder upsert reported success, but no sms_outbound_queue row exists for appointment ${appointmentId}`
+    );
   }
 
   return "refreshed";
