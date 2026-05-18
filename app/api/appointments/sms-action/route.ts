@@ -25,9 +25,9 @@ function firstNameOnly(value: string) {
   return clean.split(/\s+/)[0] || "there";
 }
 
-function formatDateTime(value: Date) {
+function formatDateTime(value: Date, timezone: string) {
   const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Los_Angeles",
+    timeZone: timezone || "America/Los_Angeles",
     year: "2-digit",
     month: "2-digit",
     day: "2-digit",
@@ -74,6 +74,8 @@ async function queueImmediateSms({
   toPhone: string;
   message: string;
 }) {
+  const now = new Date().toISOString();
+
   await supabaseAdmin.from("sms_outbound_queue").insert({
     business_id: businessId,
     customer_id: customerId,
@@ -82,11 +84,11 @@ async function queueImmediateSms({
     rule_type: "immediate",
     to_phone: toPhone,
     body_rendered: message,
-    scheduled_for_utc: new Date().toISOString(),
+    scheduled_for_utc: now,
     status: "pending",
     dedupe_key: `${appointmentId}:${messageType}:${Date.now()}`,
     attempt_count: 0,
-    updated_at: new Date().toISOString(),
+    updated_at: now,
   });
 }
 
@@ -122,7 +124,7 @@ async function upsertAppointmentReminder({
 
   const scheduledFor = new Date(
     new Date(appointmentScheduledAt).getTime() -
-      selectedRule.offset_minutes * 60 * 1000
+      Number(selectedRule.offset_minutes ?? 0) * 60 * 1000
   );
 
   await deletePendingAppointmentReminders({ businessId, appointmentId });
@@ -159,9 +161,7 @@ async function upsertAppointmentReminder({
 
 function calculateSmsSegments(message: string) {
   const length = message.trim().length;
-
   if (length <= 0) return 1;
-
   return Math.ceil(length / 160);
 }
 
@@ -169,26 +169,17 @@ async function assertSmsCreditsAvailable(
   businessId: string,
   neededCredits: number
 ) {
-  const { data, error } = await supabaseAdmin.rpc(
-    "get_sms_credit_summary",
-    {
-      p_business_id: businessId,
-    }
-  );
+  const { data, error } = await supabaseAdmin.rpc("get_sms_credit_summary", {
+    p_business_id: businessId,
+  });
 
   if (error) {
     throw new Error("Unable to verify SMS credits.");
   }
 
   const summary = Array.isArray(data) ? data[0] : data;
-
-  const remainingCredits = Number(
-    summary?.remaining_credits ?? 0
-  );
-
-  const plan = String(
-    summary?.plan ?? "basic"
-  ).toLowerCase();
+  const remainingCredits = Number(summary?.remaining_credits ?? 0);
+  const plan = String(summary?.plan ?? "basic").toLowerCase();
 
   if (remainingCredits < neededCredits) {
     throw new Error(
@@ -248,7 +239,7 @@ export async function POST(request: Request) {
 
     const { data: smsSetup } = await supabaseAdmin
       .from("business_sms_setup")
-      .select("status, phone_number")
+      .select("status, phone_number, timezone")
       .eq("business_id", businessId)
       .maybeSingle();
 
@@ -258,6 +249,9 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    const businessTimezone =
+      cleanText(smsSetup.timezone) || "America/Los_Angeles";
 
     const { data: settings } = await supabaseAdmin
       .from("business_settings")
@@ -326,7 +320,10 @@ export async function POST(request: Request) {
     const businessName =
       cleanText(settings?.business_name) || "your grooming business";
     const customerName = firstNameOnly(cleanText(customer.name));
-    const appointmentDate = formatDateTime(appointmentDateTime);
+    const appointmentDate = formatDateTime(
+      appointmentDateTime,
+      businessTimezone
+    );
 
     if (action === "schedule_reminder") {
       const reminderStatus = await upsertAppointmentReminder({
@@ -375,16 +372,13 @@ export async function POST(request: Request) {
 
     if (action === "reschedule") {
       const message =
-  `Hi ${customerName}, this is ${businessName}. ` +
-  `Your grooming appt is now ${appointmentDate}. ` +
-  `Reply YES to confirm or NO to reschedule.`;
+        `Hi ${customerName}, this is ${businessName}. ` +
+        `Your grooming appt is now ${appointmentDate}. ` +
+        `Reply YES to confirm or NO to reschedule.`;
 
-const segments = calculateSmsSegments(message);
+      const segments = calculateSmsSegments(message);
 
-await assertSmsCreditsAvailable(
-  businessId,
-  segments
-);
+      await assertSmsCreditsAvailable(businessId, segments);
 
       await queueImmediateSms({
         businessId,
@@ -428,12 +422,10 @@ await assertSmsCreditsAvailable(
         `Hi ${customerName}, this is ${businessName}. ` +
         `Your grooming appt on ${appointmentDate} has been cancelled. ` +
         `Questions? Reply here.`;
-        const segments = calculateSmsSegments(message);
 
-        await assertSmsCreditsAvailable(
-          businessId,
-          segments
-        );
+      const segments = calculateSmsSegments(message);
+
+      await assertSmsCreditsAvailable(businessId, segments);
 
       await deletePendingAppointmentReminders({ businessId, appointmentId });
 
