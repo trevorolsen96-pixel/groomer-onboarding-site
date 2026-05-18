@@ -138,23 +138,29 @@ async function upsertAppointmentReminder({
     `Your grooming appt is ${appointmentDate}. ` +
     `Reply YES to confirm or NO to reschedule.`;
 
-  await supabaseAdmin.from("sms_outbound_queue").upsert(
-    {
-      business_id: businessId,
-      customer_id: customerId,
-      appointment_id: appointmentId,
-      message_type: "appointment_reminder",
-      rule_type: selectedRule.rule_type,
-      to_phone: toPhone,
-      body_rendered: message,
-      scheduled_for_utc: scheduledFor.toISOString(),
-      status: "pending",
-      dedupe_key: `${appointmentId}:${selectedRule.rule_type}`,
-      attempt_count: 0,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "dedupe_key" }
-  );
+    const { error: queueError } = await supabaseAdmin
+    .from("sms_outbound_queue")
+    .upsert(
+      {
+        business_id: businessId,
+        customer_id: customerId,
+        appointment_id: appointmentId,
+        message_type: "appointment_reminder",
+        rule_type: selectedRule.rule_type,
+        to_phone: toPhone,
+        body_rendered: message,
+        scheduled_for_utc: scheduledFor.toISOString(),
+        status: "pending",
+        dedupe_key: `${appointmentId}:${selectedRule.rule_type}`,
+        attempt_count: 0,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "dedupe_key" }
+    );
+
+  if (queueError) {
+    throw new Error(`Unable to queue appointment reminder: ${queueError.message}`);
+  }
 
   return "refreshed";
 }
