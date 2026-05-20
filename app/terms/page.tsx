@@ -190,7 +190,7 @@ export default function TermsPage() {
               <h2>17. Contact</h2>
               <p>
                 For questions about these Terms of Service, contact us at:
-                support@wagzly.app
+                support@wagzly.com
               </p>
             </section>
           </div>

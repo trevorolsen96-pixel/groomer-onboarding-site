@@ -114,13 +114,13 @@ export async function POST(request: Request) {
     if (verificationProfileError || !verificationProfile) {
       await markSmsSetupFailed(
         safeBusinessId,
-        "Verification profile is missing. Please contact support@wagzly.app."
+        "Verification profile is missing. Please contact support@wagzly.com."
       );
 
       return NextResponse.json(
         {
           error:
-            "Messaging setup could not be completed. Please contact support@wagzly.app.",
+            "Messaging setup could not be completed. Please contact support@wagzly.com.",
         },
         { status: 400 }
       );
@@ -146,7 +146,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "Messaging setup could not be completed. Please contact support@wagzly.app.",
+            "Messaging setup could not be completed. Please contact support@wagzly.com.",
         },
         { status: 400 }
       );
@@ -183,7 +183,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "Messaging setup could not be completed. Please contact support@wagzly.app.",
+            "Messaging setup could not be completed. Please contact support@wagzly.com.",
         },
         { status: 400 }
       );
@@ -206,7 +206,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "Messaging setup could not be completed. Please contact support@wagzly.app.",
+          "Messaging setup could not be completed. Please contact support@wagzly.com.",
       },
       { status: 400 }
     );

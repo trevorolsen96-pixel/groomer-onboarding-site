@@ -141,7 +141,7 @@ export default function PrivacyPage() {
               <h2>10. Account and Data Deletion</h2>
               <p>
                 Users may request deletion of their account or data by contacting
-                us at support@wagzly.app. We will process deletion requests in
+                us at support@wagzly.com. We will process deletion requests in
                 accordance with applicable laws and operational requirements.
               </p>
             </section>
@@ -175,7 +175,7 @@ export default function PrivacyPage() {
               <h2>14. Contact</h2>
               <p>
                 For questions about this Privacy Policy, contact us at:
-                support@wagzly.app
+                support@wagzly.com
               </p>
             </section>
           </div>

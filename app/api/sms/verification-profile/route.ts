@@ -16,7 +16,7 @@ const BACKEND_SAMPLE_MESSAGE_1 =
   "Hi {{customer_name}}, this is {{business_name}}. Your grooming appointment is scheduled for {{appointment_date}} at {{appointment_time}}. Reply STOP to opt out.";
 
 const BACKEND_SAMPLE_MESSAGE_2 =
-  "Need help? Contact your grooming business directly or email support@wagzly.app. Reply STOP to opt out.";
+  "Need help? Contact your grooming business directly or email support@wagzly.com. Reply STOP to opt out.";
 
 export async function POST(request: Request) {
   try {
@@ -222,7 +222,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "Messaging setup could not be completed. Please contact support@wagzly.app and we’ll help finish your texting setup.",
+            "Messaging setup could not be completed. Please contact support@wagzly.com and we’ll help finish your texting setup.",
         },
         { status: 400 }
       );
@@ -237,7 +237,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "Messaging setup could not be completed. Please contact support@wagzly.app and we’ll help finish your texting setup.",
+          "Messaging setup could not be completed. Please contact support@wagzly.com and we’ll help finish your texting setup.",
       },
       { status: 400 }
     );

@@ -747,7 +747,7 @@ function AccountPageContent() {
                   <Link href="/" className="secondary-button">
                     Back to home
                   </Link>
-                  <a href="mailto:support@wagzly.app" className="primary-button">
+                  <a href="mailto:support@wagzly.com" className="primary-button">
                     Contact support
                   </a>
                 </div>
