@@ -3,7 +3,7 @@ import Link from "next/link";
 import AccountMenu from "../components/AccountMenu";
 import HomeCtas from "../components/HomeCtas";
 
-const demoBookingUrl = "https://wagzly.zohobookings.com/#/4937476000000034049";
+const demoBookingUrl = "https://calendar.app.google/wwNEKQs1KnJEaxbz6";
 
 export default function HomePage() {
   return (
