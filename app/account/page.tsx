@@ -726,13 +726,31 @@ function AccountPageContent() {
                 </div>
 
                 <button
-                  className="secondary-button mt-5"
-                  type="button"
-                  onClick={handleSignOut}
-                  disabled={signingOut}
-                >
-                  {signingOut ? "Signing out..." : "Sign out"}
-                </button>
+  className="secondary-button mt-5"
+  type="button"
+  onClick={handleSignOut}
+  disabled={signingOut}
+>
+  {signingOut ? "Signing out..." : "Sign out"}
+</button>
+
+<div className="mt-6 rounded-2xl bg-red-50 p-5">
+  <p className="text-sm font-bold text-red-700">
+    Delete account
+  </p>
+
+  <p className="mt-2 text-sm leading-6 text-red-700/80">
+    To request deletion of your Wagzly account and associated data, visit our
+    account deletion page.
+  </p>
+
+  <a
+    href="/delete-account"
+    className="secondary-button mt-4 inline-flex"
+  >
+    Request account deletion
+  </a>
+</div>
               </AccountCard>
             ) : null}
 
