@@ -142,6 +142,7 @@ export async function POST(request: Request) {
         to_phone: toPhone,
         created_at: now,
       });
+      
 
       return emptyTwimlResponse();
     }
@@ -208,7 +209,7 @@ export async function POST(request: Request) {
       })
       .eq("id", conversationId);
 
-    await supabaseAdmin.from("sms_events").insert({
+        await supabaseAdmin.from("sms_events").insert({
       business_id: businessId,
       customer_id: customer.id,
       direction: "inbound",
@@ -218,6 +219,29 @@ export async function POST(request: Request) {
       to_phone: toPhone,
       created_at: now,
     });
+
+    try {
+      const pushUrl = process.env.GOOGLE_PUSH_FUNCTION_URL;
+      const pushSecret = process.env.WAGZLY_PUSH_SECRET;
+
+      if (pushUrl && pushSecret && conversationId) {
+        await fetch(pushUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-wagzly-push-secret": pushSecret,
+          },
+          body: JSON.stringify({
+            businessId,
+            conversationId,
+            customerName: customer.name,
+            messageBody: body,
+          }),
+        });
+      }
+    } catch (pushError) {
+      console.error("Inbound SMS push notification failed:", pushError);
+    }
 
     return emptyTwimlResponse();
   } catch {
