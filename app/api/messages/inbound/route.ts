@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { GoogleAuth } from "google-auth-library";
+import { getVercelOidcToken } from "@vercel/oidc";
 import { supabaseAdmin } from "../../../../lib/supabase-admin";
 
 export const runtime = "nodejs";
@@ -227,35 +227,86 @@ export async function POST(request: Request) {
       hasPushSecret: !!process.env.WAGZLY_PUSH_SECRET,
     });
 
-    try {
-  const pushUrl = process.env.GOOGLE_PUSH_FUNCTION_URL;
-  const pushSecret = process.env.WAGZLY_PUSH_SECRET;
+        try {
+      const pushUrl = process.env.GOOGLE_PUSH_FUNCTION_URL;
+      const pushSecret = process.env.WAGZLY_PUSH_SECRET;
+      const serviceAccountEmail = process.env.GCP_SERVICE_ACCOUNT_EMAIL;
 
-  if (pushUrl && pushSecret && conversationId) {
-    const auth = new GoogleAuth();
+      if (pushUrl && pushSecret && serviceAccountEmail && conversationId) {
+        const vercelToken = await getVercelOidcToken();
 
-    const client = await auth.getIdTokenClient(pushUrl);
+        const stsResponse = await fetch("https://sts.googleapis.com/v1/token", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({
+            grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
+            audience:
+              "//iam.googleapis.com/projects/443606887092/locations/global/workloadIdentityPools/vercel-pool/providers/vercel-provider",
+            scope: "https://www.googleapis.com/auth/cloud-platform",
+            requested_token_type:
+              "urn:ietf:params:oauth:token-type:access_token",
+            subject_token_type: "urn:ietf:params:oauth:token-type:jwt",
+            subject_token: vercelToken,
+          }),
+        });
 
-    const response = await client.request({
-      url: pushUrl,
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-wagzly-push-secret": pushSecret,
-      },
-      data: {
-        businessId,
-        conversationId,
-        customerName: customer.name,
-        messageBody: body,
-      },
-    });
+        const stsJson = await stsResponse.json();
 
-    console.log("Push notification response:", response.data);
-  }
-} catch (pushError) {
-  console.error("Inbound SMS push notification failed:", pushError);
-}
+        if (!stsResponse.ok) {
+          console.error("Google STS token exchange failed:", stsJson);
+          throw new Error("Google STS token exchange failed");
+        }
+
+        const iamResponse = await fetch(
+          `https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${serviceAccountEmail}:generateIdToken`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${stsJson.access_token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              audience: pushUrl,
+              includeEmail: true,
+            }),
+          }
+        );
+
+        const iamJson = await iamResponse.json();
+
+        if (!iamResponse.ok) {
+          console.error("Google IAM ID token failed:", iamJson);
+          throw new Error("Google IAM ID token failed");
+        }
+
+        const pushResponse = await fetch(pushUrl, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${iamJson.token}`,
+            "Content-Type": "application/json",
+            "x-wagzly-push-secret": pushSecret,
+          },
+          body: JSON.stringify({
+            businessId,
+            conversationId,
+            customerName: customer.name,
+            messageBody: body,
+          }),
+        });
+
+        const pushText = await pushResponse.text();
+
+        console.log("Push response:", {
+          status: pushResponse.status,
+          body: pushText,
+        });
+      }
+    } catch (pushError) {
+      console.error("Inbound SMS push notification failed:", pushError);
+    }
+
     return emptyTwimlResponse();
   } catch {
     return emptyTwimlResponse();
