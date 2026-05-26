@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { GoogleAuth } from "google-auth-library";
 import { supabaseAdmin } from "../../../../lib/supabase-admin";
 
 export const runtime = "nodejs";
@@ -209,7 +210,7 @@ export async function POST(request: Request) {
       })
       .eq("id", conversationId);
 
-        await supabaseAdmin.from("sms_events").insert({
+           await supabaseAdmin.from("sms_events").insert({
       business_id: businessId,
       customer_id: customer.id,
       direction: "inbound",
@@ -220,29 +221,41 @@ export async function POST(request: Request) {
       created_at: now,
     });
 
+    console.log("About to send inbound SMS push", {
+      hasConversationId: !!conversationId,
+      hasPushUrl: !!process.env.GOOGLE_PUSH_FUNCTION_URL,
+      hasPushSecret: !!process.env.WAGZLY_PUSH_SECRET,
+    });
+
     try {
-      const pushUrl = process.env.GOOGLE_PUSH_FUNCTION_URL;
-      const pushSecret = process.env.WAGZLY_PUSH_SECRET;
+  const pushUrl = process.env.GOOGLE_PUSH_FUNCTION_URL;
+  const pushSecret = process.env.WAGZLY_PUSH_SECRET;
 
-      if (pushUrl && pushSecret && conversationId) {
-        await fetch(pushUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-wagzly-push-secret": pushSecret,
-          },
-          body: JSON.stringify({
-            businessId,
-            conversationId,
-            customerName: customer.name,
-            messageBody: body,
-          }),
-        });
-      }
-    } catch (pushError) {
-      console.error("Inbound SMS push notification failed:", pushError);
-    }
+  if (pushUrl && pushSecret && conversationId) {
+    const auth = new GoogleAuth();
 
+    const client = await auth.getIdTokenClient(pushUrl);
+
+    const response = await client.request({
+      url: pushUrl,
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-wagzly-push-secret": pushSecret,
+      },
+      data: {
+        businessId,
+        conversationId,
+        customerName: customer.name,
+        messageBody: body,
+      },
+    });
+
+    console.log("Push notification response:", response.data);
+  }
+} catch (pushError) {
+  console.error("Inbound SMS push notification failed:", pushError);
+}
     return emptyTwimlResponse();
   } catch {
     return emptyTwimlResponse();
