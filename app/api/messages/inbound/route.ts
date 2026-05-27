@@ -88,6 +88,7 @@ async function updateLatestAppointmentConfirmation({
         : "appointment_needs_reschedule",
     message_body: body,
     created_at: now,
+    is_closed: false,
   });
 }
 
@@ -207,6 +208,7 @@ export async function POST(request: Request) {
         last_message_body: body,
         last_message_at: now,
         unread_count: (existingConversation?.unread_count ?? 0) + 1,
+        is_closed: false,
       })
       .eq("id", conversationId);
 
@@ -308,7 +310,8 @@ export async function POST(request: Request) {
     }
 
     return emptyTwimlResponse();
-  } catch {
-    return emptyTwimlResponse();
-  }
+  } catch (error) {
+  console.error("Twilio inbound route failed:", error);
+  return emptyTwimlResponse();
+}
 }
