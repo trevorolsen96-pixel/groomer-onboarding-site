@@ -950,7 +950,7 @@ function AccountPageContent() {
                         ) : null}
 
                         <p className="mt-4 text-xs text-[var(--text-secondary)]">
-                          Changes are prorated and applied to your next invoice automatically.
+                          Credits are available immediately. Packs are billed at your next renewal alongside your subscription. You can remove a pack at any time as long as your usage this period stays within the remaining limit.
                         </p>
                       </>
                     ) : (

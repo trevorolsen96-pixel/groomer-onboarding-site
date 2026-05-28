@@ -28,6 +28,23 @@ async function getAuthenticatedBusiness(request: Request) {
   return business;
 }
 
+const BASE_SMS_LIMIT: Record<string, number> = {
+  pro: 900,
+  basic: 200,
+};
+
+async function getUsedCreditsThisPeriod(businessId: string): Promise<number> {
+  const { data, error } = await supabaseAdmin.rpc("get_sms_credit_summary", {
+    p_business_id: businessId,
+  });
+
+  if (error) throw new Error("Unable to fetch SMS usage.");
+
+  // RPC returns a single row (or array with one row depending on return type)
+  const row = Array.isArray(data) ? data[0] : data;
+  return row?.used_credits ?? 0;
+}
+
 // POST — add one credit pack
 export async function POST(request: Request) {
   try {
@@ -62,12 +79,12 @@ export async function POST(request: Request) {
     if (existingItem) {
       await stripe.subscriptionItems.update(existingItem.id, {
         quantity: (existingItem.quantity ?? 0) + 1,
-        proration_behavior: "create_prorations",
+        proration_behavior: "none",
       });
     } else {
       await stripe.subscriptions.update(business.payment_subscription_id, {
         items: [{ price: creditPackPriceId, quantity: 1 }],
-        proration_behavior: "create_prorations",
+        proration_behavior: "none",
       });
     }
 
@@ -105,6 +122,30 @@ export async function DELETE(request: Request) {
     const creditPackPriceId = process.env.STRIPE_SMS_CREDIT_PACK_PRICE_ID;
     if (!creditPackPriceId) throw new Error("Missing STRIPE_SMS_CREDIT_PACK_PRICE_ID.");
 
+    const currentPacks = business.sms_credit_packs ?? 0;
+
+    if (currentPacks === 0) {
+      return NextResponse.json(
+        { error: "No credit packs to remove." },
+        { status: 400 }
+      );
+    }
+
+    // Check whether current usage would exceed the limit after removing one pack.
+    // Limit after removal = base plan limit + (currentPacks - 1) × 200
+    const baseLimit = BASE_SMS_LIMIT[business.plan ?? ""] ?? 0;
+    const limitAfterRemoval = baseLimit + (currentPacks - 1) * 200;
+    const usedCredits = await getUsedCreditsThisPeriod(business.id);
+
+    if (usedCredits > limitAfterRemoval) {
+      return NextResponse.json(
+        {
+          error: `You've used ${usedCredits} SMS this period. Removing a pack would lower your limit to ${limitAfterRemoval}, which is below your current usage. The pack will be removed automatically at the end of your billing cycle.`,
+        },
+        { status: 403 }
+      );
+    }
+
     const subscription = await stripe.subscriptions.retrieve(
       business.payment_subscription_id,
       { expand: ["items"] }
@@ -123,16 +164,16 @@ export async function DELETE(request: Request) {
 
     if ((existingItem.quantity ?? 0) <= 1) {
       await stripe.subscriptionItems.del(existingItem.id, {
-        proration_behavior: "create_prorations",
+        proration_behavior: "none",
       });
     } else {
       await stripe.subscriptionItems.update(existingItem.id, {
         quantity: (existingItem.quantity ?? 1) - 1,
-        proration_behavior: "create_prorations",
+        proration_behavior: "none",
       });
     }
 
-    const newCount = Math.max(0, (business.sms_credit_packs ?? 0) - 1);
+    const newCount = Math.max(0, currentPacks - 1);
 
     await supabaseAdmin
       .from("businesses")
