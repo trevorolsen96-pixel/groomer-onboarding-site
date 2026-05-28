@@ -56,11 +56,22 @@ function getCustomerId(subscription: StripeSubscriptionWithPeriods) {
     : subscription.customer.id;
 }
 
+function getPlanFromSubscription(subscription: Stripe.Subscription): string | null {
+  const proPriceId = process.env.STRIPE_PRO_PRICE_ID;
+  const basicPriceId = process.env.STRIPE_BASIC_PRICE_ID;
+  const items = subscription.items.data;
+
+  if (proPriceId && items.some((i) => i.price.id === proPriceId)) return "pro";
+  if (basicPriceId && items.some((i) => i.price.id === basicPriceId)) return "basic";
+  return null;
+}
+
 function buildSubscriptionUpdateData(subscription: Stripe.Subscription) {
   const sub = subscription as StripeSubscriptionWithPeriods;
   const { currentPeriodStart, currentPeriodEnd } = getCurrentPeriod(sub);
   const customerId = getCustomerId(sub);
   const appAccessStatus = getAppAccessStatus(sub);
+  const plan = getPlanFromSubscription(subscription);
 
   return {
     subscription_status: sub.status,
@@ -81,6 +92,7 @@ function buildSubscriptionUpdateData(subscription: Stripe.Subscription) {
         : sub.status === "trialing"
           ? "trialing"
           : sub.status,
+    ...(plan ? { plan } : {}),
   };
 }
 
