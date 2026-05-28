@@ -80,9 +80,8 @@ export default function HomeCtas({
           </h3>
 
           <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-            Book a free 30-minute live demo to explore scheduling, client
-            management, onboarding, reminders, and see how Wagzly can help grow
-            your grooming business.
+            See scheduling, client management, onboarding, and reminders in
+            action — with someone who can answer your questions live.
           </p>
 
           <a

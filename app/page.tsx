@@ -90,37 +90,15 @@ export default function HomePage() {
         </h2>
 
         <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {[
-            [
-              "Smart Scheduling",
-              "Drag, drop, and manage your day with less effort.",
-            ],
-            [
-              "Route Planning",
-              "Know where to go next and stay efficient on the road.",
-            ],
-            [
-              "Client Management",
-              "Keep pet details, customer notes, and service history organized.",
-            ],
-            [
-              "Automated Reminders",
-              "Reduce no-shows with reminders and confirmations.",
-            ],
-            [
-              "Payment Tracking",
-              "Track collected payments, tips, and outstanding balances.",
-            ],
-            [
-              "Designed for Groomers",
-              "Built specifically for mobile grooming businesses.",
-            ],
-          ].map(([title, desc], i) => (
-            <div key={i} className="soft-card p-5">
-              <h3 className="text-lg font-semibold text-[var(--text-primary)]">
+          {features.map(({ title, desc, icon }) => (
+            <div key={title} className="soft-card p-5">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--soft-surface)] text-[var(--rose-primary)]">
+                {icon}
+              </div>
+              <h3 className="mt-4 text-lg font-semibold text-[var(--text-primary)]">
                 {title}
               </h3>
-              <p className="mt-2 text-sm text-[var(--text-secondary)]">
+              <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
                 {desc}
               </p>
             </div>
@@ -250,17 +228,32 @@ export default function HomePage() {
           </p>
 
           <div className="mt-8 grid gap-4 md:grid-cols-3">
-            <ReviewCard
-              quote="Scheduling and client details are finally in one place."
-              name="Mobile grooming owner"
+            <ValueCard
+              icon={
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+              }
+              title="14-day free trial"
+              body="Explore every feature of your plan before you're ever charged. No surprises."
             />
-            <ReviewCard
-              quote="The app feels simple enough to use during a busy grooming day."
-              name="Solo groomer"
+            <ValueCard
+              icon={
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+                  <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0110 0v4" />
+                </svg>
+              }
+              title="Cancel anytime"
+              body="No contracts, no commitments. Cancel from your account page whenever you want."
             />
-            <ReviewCard
-              quote="Wagzly makes the business side feel a lot less chaotic."
-              name="Grooming business owner"
+            <ValueCard
+              icon={
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+                  <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+                </svg>
+              }
+              title="Real support"
+              body="Email us at support@wagzly.com and you'll hear back from a real person."
             />
           </div>
 
@@ -270,7 +263,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section id="download" className="mx-auto max-w-5xl scroll-mt-28 px-6 pb-20 pt-4 text-center">
+      <section id="download" className="mx-auto max-w-5xl scroll-mt-28 px-6 pb-16 pt-4 text-center">
         <div className="soft-card p-8">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--rose-primary)]">
             iOS and Android
@@ -309,20 +302,107 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      <footer className=”mt-8 border-t border-[var(--divider-soft)]”>
+        <div className=”mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-8 text-sm text-[var(--text-secondary)]”>
+          <p>© {new Date().getFullYear()} Wagzly. All rights reserved.</p>
+          <nav className=”flex flex-wrap items-center gap-6”>
+            <Link href=”/privacy” className=”hover:text-[var(--text-primary)]”>
+              Privacy Policy
+            </Link>
+            <Link href=”/terms” className=”hover:text-[var(--text-primary)]”>
+              Terms of Service
+            </Link>
+            <a
+              href=”mailto:support@wagzly.com”
+              className=”hover:text-[var(--text-primary)]”
+            >
+              support@wagzly.com
+            </a>
+          </nav>
+        </div>
+      </footer>
     </main>
   );
 }
 
-function ReviewCard({ quote, name }: { quote: string; name: string }) {
+function ValueCard({
+  icon,
+  title,
+  body,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  body: string;
+}) {
   return (
-    <div className="rounded-3xl bg-[var(--soft-surface)] p-5 text-left">
-      <p className="text-sm font-bold text-[var(--rose-primary)]">★★★★★</p>
-      <p className="mt-3 text-sm leading-6 text-[var(--text-primary)]">
-        “{quote}”
+    <div className=”rounded-3xl bg-[var(--soft-surface)] p-5 text-left”>
+      <div className=”flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-[var(--rose-primary)] shadow-sm”>
+        {icon}
+      </div>
+      <p className=”mt-4 text-base font-bold text-[var(--text-primary)]”>
+        {title}
       </p>
-      <p className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-secondary)]">
-        {name}
+      <p className=”mt-2 text-sm leading-6 text-[var(--text-secondary)]”>
+        {body}
       </p>
     </div>
   );
 }
+
+const features: { title: string; desc: string; icon: React.ReactNode }[] = [
+  {
+    title: “Smart Scheduling”,
+    desc: “Drag, drop, and manage your day with less effort.”,
+    icon: (
+      <svg viewBox=”0 0 24 24” fill=”none” stroke=”currentColor” strokeWidth=”2” strokeLinecap=”round” strokeLinejoin=”round” className=”h-5 w-5”>
+        <rect x=”3” y=”4” width=”18” height=”18” rx=”2” /><path d=”M16 2v4M8 2v4M3 10h18” />
+      </svg>
+    ),
+  },
+  {
+    title: “Route Planning”,
+    desc: “Know where to go next and stay efficient on the road.”,
+    icon: (
+      <svg viewBox=”0 0 24 24” fill=”none” stroke=”currentColor” strokeWidth=”2” strokeLinecap=”round” strokeLinejoin=”round” className=”h-5 w-5”>
+        <path d=”M21 10c0 6-9 13-9 13S3 16 3 10a9 9 0 0118 0z” /><circle cx=”12” cy=”10” r=”3” />
+      </svg>
+    ),
+  },
+  {
+    title: “Client Management”,
+    desc: “Keep pet details, customer notes, and service history organized.”,
+    icon: (
+      <svg viewBox=”0 0 24 24” fill=”none” stroke=”currentColor” strokeWidth=”2” strokeLinecap=”round” strokeLinejoin=”round” className=”h-5 w-5”>
+        <path d=”M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2” /><circle cx=”9” cy=”7” r=”4” /><path d=”M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75” />
+      </svg>
+    ),
+  },
+  {
+    title: “Automated Reminders”,
+    desc: “Reduce no-shows with SMS reminders and appointment confirmations.”,
+    icon: (
+      <svg viewBox=”0 0 24 24” fill=”none” stroke=”currentColor” strokeWidth=”2” strokeLinecap=”round” strokeLinejoin=”round” className=”h-5 w-5”>
+        <path d=”M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9” /><path d=”M13.73 21a2 2 0 01-3.46 0” />
+      </svg>
+    ),
+  },
+  {
+    title: “Payment Tracking”,
+    desc: “Track collected payments, tips, and outstanding balances.”,
+    icon: (
+      <svg viewBox=”0 0 24 24” fill=”none” stroke=”currentColor” strokeWidth=”2” strokeLinecap=”round” strokeLinejoin=”round” className=”h-5 w-5”>
+        <rect x=”2” y=”5” width=”20” height=”14” rx=”2” /><path d=”M2 10h20” />
+      </svg>
+    ),
+  },
+  {
+    title: “Designed for Groomers”,
+    desc: “Built specifically for mobile grooming businesses, not adapted from something generic.”,
+    icon: (
+      <svg viewBox=”0 0 24 24” fill=”none” stroke=”currentColor” strokeWidth=”2” strokeLinecap=”round” strokeLinejoin=”round” className=”h-5 w-5”>
+        <circle cx=”6” cy=”6” r=”3” /><circle cx=”6” cy=”18” r=”3” /><path d=”M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12” />
+      </svg>
+    ),
+  },
+];
