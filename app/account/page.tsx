@@ -36,6 +36,7 @@ type Business = {
   payment_customer_id: string | null;
   payment_subscription_id: string | null;
   plan: string;
+  sms_credit_packs: number | null;
 };
 
 type BusinessSettings = {
@@ -211,6 +212,8 @@ function AccountPageContent() {
   const [loading, setLoading] = useState(true);
   const [signingOut, setSigningOut] = useState(false);
   const [billingLoading, setBillingLoading] = useState(false);
+  const [creditPackLoading, setCreditPackLoading] = useState(false);
+  const [creditPackError, setCreditPackError] = useState("");
   const [error, setError] = useState("");
   const [billingMessage, setBillingMessage] = useState("");
 
@@ -290,7 +293,7 @@ function AccountPageContent() {
         supabaseClient
           .from("businesses")
           .select(
-            "id, name, owner_user_id, subscription_status, app_access_status, trial_starts_at, trial_ends_at, current_period_ends_at, cancel_at_period_end, payment_customer_id, payment_subscription_id, plan"
+            "id, name, owner_user_id, subscription_status, app_access_status, trial_starts_at, trial_ends_at, current_period_ends_at, cancel_at_period_end, payment_customer_id, payment_subscription_id, plan, sms_credit_packs"
           )
           .eq("id", businessId)
           .maybeSingle(),
@@ -424,6 +427,48 @@ function AccountPageContent() {
 
   const canManageBilling =
     Boolean(business?.payment_customer_id) && !shouldShowReactivate;
+
+  async function handleAddCreditPack() {
+    setCreditPackLoading(true);
+    setCreditPackError("");
+    try {
+      const token = await getAccessToken();
+      const response = await fetch("/api/billing/credit-packs", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Unable to add credit pack.");
+      setBusiness((prev) =>
+        prev ? { ...prev, sms_credit_packs: data.sms_credit_packs } : prev
+      );
+    } catch (err) {
+      setCreditPackError(err instanceof Error ? err.message : "Unable to add credit pack.");
+    } finally {
+      setCreditPackLoading(false);
+    }
+  }
+
+  async function handleRemoveCreditPack() {
+    setCreditPackLoading(true);
+    setCreditPackError("");
+    try {
+      const token = await getAccessToken();
+      const response = await fetch("/api/billing/credit-packs", {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Unable to remove credit pack.");
+      setBusiness((prev) =>
+        prev ? { ...prev, sms_credit_packs: data.sms_credit_packs } : prev
+      );
+    } catch (err) {
+      setCreditPackError(err instanceof Error ? err.message : "Unable to remove credit pack.");
+    } finally {
+      setCreditPackLoading(false);
+    }
+  }
 
   if (loading) {
     return <AccountLoading />;
@@ -821,6 +866,98 @@ function AccountPageContent() {
                         Billing is not connected to this account yet.
                       </p>
                     ) : null}
+                  </div>
+                </section>
+
+                {/* SMS Credit Packs */}
+                <section className="soft-card overflow-hidden">
+                  <div className="px-6 py-5">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--rose-primary)]">
+                          SMS Credit Packs
+                        </p>
+                        <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                          Each pack adds 200 SMS/month &middot; $9.99&thinsp;/&thinsp;pack&thinsp;/&thinsp;month
+                        </p>
+                      </div>
+                      {business?.plan !== "pro" ? (
+                        <span className="rounded-full border border-[var(--divider-soft)] bg-[var(--soft-surface)] px-3 py-1 text-xs font-bold text-[var(--text-secondary)]">
+                          Pro only
+                        </span>
+                      ) : null}
+                    </div>
+
+                    {business?.plan === "pro" ? (
+                      <>
+                        <div className="mt-5 flex items-center gap-5">
+                          {/* Stepper */}
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={handleRemoveCreditPack}
+                              disabled={
+                                creditPackLoading ||
+                                (business.sms_credit_packs ?? 0) === 0
+                              }
+                              className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--divider-soft)] bg-white text-lg font-bold text-[var(--text-primary)] transition-opacity disabled:opacity-40"
+                              aria-label="Remove one credit pack"
+                            >
+                              −
+                            </button>
+
+                            <div className="min-w-[52px] text-center">
+                              <p className="text-2xl font-bold text-[var(--text-primary)]">
+                                {business.sms_credit_packs ?? 0}
+                              </p>
+                              <p className="text-xs text-[var(--text-secondary)]">
+                                {(business.sms_credit_packs ?? 0) === 1 ? "pack" : "packs"}
+                              </p>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={handleAddCreditPack}
+                              disabled={creditPackLoading}
+                              className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--rose-primary)] text-lg font-bold text-white transition-opacity disabled:opacity-40"
+                              aria-label="Add one credit pack"
+                            >
+                              +
+                            </button>
+                          </div>
+
+                          {/* Summary */}
+                          <div className="rounded-2xl bg-[var(--soft-surface)] px-4 py-3">
+                            <p className="text-sm font-bold text-[var(--text-primary)]">
+                              +{(business.sms_credit_packs ?? 0) * 200} SMS&thinsp;/&thinsp;month
+                            </p>
+                            {(business.sms_credit_packs ?? 0) > 0 ? (
+                              <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
+                                +${((business.sms_credit_packs ?? 0) * 9.99).toFixed(2)}&thinsp;/&thinsp;month added to your bill
+                              </p>
+                            ) : (
+                              <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
+                                No packs active
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        {creditPackError ? (
+                          <p className="mt-3 text-sm font-semibold text-red-600">
+                            {creditPackError}
+                          </p>
+                        ) : null}
+
+                        <p className="mt-4 text-xs text-[var(--text-secondary)]">
+                          Changes are prorated and applied to your next invoice automatically.
+                        </p>
+                      </>
+                    ) : (
+                      <p className="mt-4 text-sm text-[var(--text-secondary)]">
+                        Upgrade to <strong className="text-[var(--text-primary)]">Wagzly Pro</strong> to add SMS credit packs and increase your messaging limit.
+                      </p>
+                    )}
                   </div>
                 </section>
               </div>

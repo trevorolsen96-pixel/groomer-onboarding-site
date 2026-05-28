@@ -84,6 +84,16 @@ function buildSubscriptionUpdateData(subscription: Stripe.Subscription) {
   };
 }
 
+function getCreditPackCount(subscription: Stripe.Subscription): number {
+  const creditPackPriceId = process.env.STRIPE_SMS_CREDIT_PACK_PRICE_ID;
+  if (!creditPackPriceId) return 0;
+
+  const item = subscription.items.data.find(
+    (i) => i.price.id === creditPackPriceId
+  );
+  return item?.quantity ?? 0;
+}
+
 async function syncSubscription(
   subscription: Stripe.Subscription,
   options?: {
@@ -92,7 +102,10 @@ async function syncSubscription(
 ) {
   const sub = subscription as StripeSubscriptionWithPeriods;
   const customerId = getCustomerId(sub);
-  const updateData = buildSubscriptionUpdateData(subscription);
+  const updateData = {
+    ...buildSubscriptionUpdateData(subscription),
+    sms_credit_packs: getCreditPackCount(subscription),
+  };
 
   if (options?.businessId) {
     await supabaseAdmin
