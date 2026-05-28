@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { stripe } from "../../../../lib/stripe";
 import { supabaseAdmin } from "../../../../lib/supabase-admin";
+import { sendPasswordSetupEmail } from "../../../../lib/email";
 
 type StripeSubscriptionItemWithPeriods = Stripe.SubscriptionItem & {
   current_period_start?: number | null;
@@ -122,30 +123,245 @@ async function syncSubscription(
     .eq("payment_customer_id", customerId);
 }
 
-async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
-  const billingAction = session.metadata?.billing_action ?? null;
-  const businessId = session.metadata?.business_id ?? null;
+async function handleNewSignup(
+  session: Stripe.Checkout.Session,
+  pendingSignupId: string
+) {
+  const { data: pendingSignup, error: pendingError } = await supabaseAdmin
+    .from("pending_business_signups")
+    .select("*")
+    .eq("id", pendingSignupId)
+    .maybeSingle();
 
-  if (billingAction !== "reactivate") {
+  if (pendingError || !pendingSignup) {
+    console.error("Pending signup not found", { pendingSignupId, sessionId: session.id });
     return;
   }
 
-  const subscriptionId =
-    typeof session.subscription === "string" ? session.subscription : null;
+  // Idempotency: already processed
+  if (pendingSignup.status === "completed") {
+    return;
+  }
 
-  if (!businessId || !subscriptionId) {
-    console.error("Missing reactivation checkout data", {
-      businessId,
-      subscriptionId,
-      sessionId: session.id,
-    });
+  const stripeCustomerId =
+    typeof session.customer === "string"
+      ? session.customer
+      : (session.customer as Stripe.Customer | null)?.id ??
+        pendingSignup.stripe_customer_id ??
+        null;
+
+  const subscriptionId =
+    typeof session.subscription === "string"
+      ? session.subscription
+      : (session.subscription as Stripe.Subscription | null)?.id ?? null;
+
+  if (!stripeCustomerId || !subscriptionId) {
+    console.error("Missing Stripe IDs for new signup", { pendingSignupId, sessionId: session.id });
     return;
   }
 
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  const sub = subscription as StripeSubscriptionWithPeriods;
+  const { currentPeriodStart, currentPeriodEnd } = getCurrentPeriod(sub);
 
-  await syncSubscription(subscription, {
-    businessId,
+  const trialStartsAt =
+    toIsoFromUnix(sub.trial_start) ?? new Date().toISOString();
+  const trialEndsAt =
+    toIsoFromUnix(sub.trial_end) ??
+    new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+
+  // --- Create Supabase user (no password — they will set it via the email link) ---
+  let userId: string;
+
+  const { data: authData, error: authError } =
+    await supabaseAdmin.auth.admin.createUser({
+      email: pendingSignup.email,
+      email_confirm: true,
+      user_metadata: {
+        full_name: pendingSignup.full_name,
+        business_name: pendingSignup.business_name,
+      },
+    });
+
+  if (authError) {
+    // If user already exists (webhook fired twice), find the existing user
+    if (authError.message.toLowerCase().includes("already")) {
+      const { data: userList } = await supabaseAdmin.auth.admin.listUsers();
+      const existing = userList?.users.find(
+        (u) => u.email?.toLowerCase() === pendingSignup.email.toLowerCase()
+      );
+      if (!existing) {
+        console.error("Cannot find or create user for new signup", { email: pendingSignup.email });
+        return;
+      }
+      userId = existing.id;
+    } else {
+      console.error("Failed to create user for new signup", { error: authError.message });
+      return;
+    }
+  } else {
+    userId = authData.user.id;
+  }
+
+  // --- Create business (idempotent: check first) ---
+  let businessId: string;
+
+  const { data: existingBusiness } = await supabaseAdmin
+    .from("businesses")
+    .select("id")
+    .eq("owner_user_id", userId)
+    .maybeSingle();
+
+  if (existingBusiness) {
+    businessId = existingBusiness.id;
+  } else {
+    const { data: business, error: businessError } = await supabaseAdmin
+      .from("businesses")
+      .insert({
+        name: pendingSignup.business_name,
+        owner_user_id: userId,
+        subscription_status: "trialing",
+        app_access_status: "trialing",
+        trial_starts_at: trialStartsAt,
+        trial_ends_at: trialEndsAt,
+        current_period_starts_at: toIsoFromUnix(currentPeriodStart),
+        current_period_ends_at: toIsoFromUnix(currentPeriodEnd),
+        cancel_at_period_end: subscription.cancel_at_period_end ?? false,
+        payment_provider: "stripe",
+        payment_customer_id: stripeCustomerId,
+        payment_subscription_id: subscriptionId,
+        last_payment_status: "trialing",
+        plan: pendingSignup.selected_plan ?? "basic",
+      })
+      .select("id")
+      .single();
+
+    if (businessError || !business) {
+      console.error("Failed to create business for new signup", { error: businessError?.message });
+      return;
+    }
+
+    businessId = business.id;
+  }
+
+  // --- Profile ---
+  await supabaseAdmin.from("profiles").upsert(
+    {
+      id: userId,
+      business_id: businessId,
+      full_name: pendingSignup.full_name,
+      role: "admin",
+    },
+    { onConflict: "id" }
+  );
+
+  // --- Business settings ---
+  await supabaseAdmin.from("business_settings").upsert(
+    {
+      business_id: businessId,
+      business_mode: "mobile_grooming",
+      business_name: pendingSignup.business_name,
+      phone: pendingSignup.phone || null,
+      sms_enabled: false,
+      reschedule_sms_enabled: false,
+      default_customer_sms_mode: "enabled",
+      sms_timezone: "America/Los_Angeles",
+      ask_confirmation_day_before: false,
+    },
+    { onConflict: "business_id" }
+  );
+
+  // --- SMS setup ---
+  await supabaseAdmin.from("business_sms_setup").upsert(
+    {
+      business_id: businessId,
+      status: "needs_info",
+    },
+    { onConflict: "business_id" }
+  );
+
+  // --- Generate password setup link ---
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://wagzly.com";
+
+  const { data: linkData, error: linkError } =
+    await supabaseAdmin.auth.admin.generateLink({
+      type: "recovery",
+      email: pendingSignup.email,
+      options: {
+        redirectTo: `${siteUrl}/create-account/set-password`,
+      },
+    });
+
+  if (linkError || !linkData?.properties?.action_link) {
+    console.error("Failed to generate password setup link", {
+      error: linkError?.message,
+      pendingSignupId,
+    });
+    return;
+  }
+
+  // --- Send the email ---
+  try {
+    await sendPasswordSetupEmail({
+      to: pendingSignup.email,
+      name: pendingSignup.full_name,
+      setupUrl: linkData.properties.action_link,
+    });
+  } catch (emailError) {
+    console.error("Failed to send password setup email", {
+      error: emailError instanceof Error ? emailError.message : emailError,
+      pendingSignupId,
+    });
+    // Don't return — mark as completed so we don't retry infinitely.
+    // The resend endpoint can be used to re-send.
+  }
+
+  // --- Mark signup as completed ---
+  await supabaseAdmin
+    .from("pending_business_signups")
+    .update({
+      status: "completed",
+      stripe_customer_id: stripeCustomerId,
+      stripe_subscription_id: subscriptionId,
+      created_business_id: businessId,
+      created_user_id: userId,
+      completed_at: new Date().toISOString(),
+    })
+    .eq("id", pendingSignup.id);
+}
+
+async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
+  const billingAction = session.metadata?.billing_action ?? null;
+  const pendingSignupId = session.metadata?.pending_signup_id ?? null;
+
+  if (billingAction === "reactivate") {
+    const businessId = session.metadata?.business_id ?? null;
+
+    const subscriptionId =
+      typeof session.subscription === "string" ? session.subscription : null;
+
+    if (!businessId || !subscriptionId) {
+      console.error("Missing reactivation checkout data", {
+        businessId,
+        subscriptionId,
+        sessionId: session.id,
+      });
+      return;
+    }
+
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    await syncSubscription(subscription, { businessId });
+    return;
+  }
+
+  if (pendingSignupId) {
+    await handleNewSignup(session, pendingSignupId);
+    return;
+  }
+
+  console.warn("checkout.session.completed: unrecognized session type", {
+    sessionId: session.id,
+    billingAction,
   });
 }
 
