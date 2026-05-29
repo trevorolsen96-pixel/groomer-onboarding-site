@@ -23,6 +23,7 @@ async function telnyxFetch(path: string, options?: RequestInit) {
       data?.errors?.[0]?.detail ??
       data?.errors?.[0]?.title ??
       "Telnyx request failed.";
+    console.error("Telnyx error:", JSON.stringify(data));
     throw new Error(msg);
   }
 
