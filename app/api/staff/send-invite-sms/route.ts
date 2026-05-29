@@ -7,7 +7,11 @@ function cleanText(value: unknown) {
 }
 
 function normalizePhone(value: string) {
-  return value.replace(/[^\d+]/g, "");
+  const digits = value.replace(/\D/g, "");
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  if (value.startsWith("+")) return `+${digits}`;
+  return `+1${digits}`;
 }
 
 export async function POST(request: NextRequest) {
