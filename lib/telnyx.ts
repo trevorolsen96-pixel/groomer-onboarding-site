@@ -81,18 +81,20 @@ export async function purchasePhoneNumber(
 ): Promise<{ id: string; phoneNumber: string }> {
   const messagingProfileId = process.env.TELNYX_MESSAGING_PROFILE_ID;
 
-  const data = await telnyxFetch("/phone_numbers", {
+  const data = await telnyxFetch("/number_orders", {
     method: "POST",
     body: JSON.stringify({
-      phone_number: phoneNumber,
+      phone_numbers: [{ phone_number: phoneNumber }],
       ...(messagingProfileId
         ? { messaging_profile_id: messagingProfileId }
         : {}),
     }),
   });
 
+  const ordered = data.data.phone_numbers?.[0];
+
   return {
-    id: data.data.id as string,
-    phoneNumber: data.data.phone_number as string,
+    id: ordered?.id as string,
+    phoneNumber: ordered?.phone_number as string,
   };
 }
