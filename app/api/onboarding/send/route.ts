@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import twilio from "twilio";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { sendSms } from "@/lib/telnyx";
 
 function cleanText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -8,17 +8,6 @@ function cleanText(value: unknown) {
 
 function normalizePhone(value: string) {
   return value.replace(/[^\d+]/g, "");
-}
-
-function getTwilioClient() {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-
-  if (!accountSid || !authToken) {
-    throw new Error("Twilio environment variables are missing.");
-  }
-
-  return twilio(accountSid, authToken);
 }
 
 function smsSegmentsForText(body: string) {
@@ -38,9 +27,7 @@ async function assertSmsCreditsAvailable({
     p_business_id: businessId,
   });
 
-  if (error) {
-    throw new Error(error.message);
-  }
+  if (error) throw new Error(error.message);
 
   const summary = Array.isArray(data) ? data[0] : data;
   const remainingCredits = Number(summary?.remaining_credits ?? 0);
@@ -48,7 +35,7 @@ async function assertSmsCreditsAvailable({
 
   if (remainingCredits < neededCredits) {
     throw new Error(
-      `sms_credits_exceeded plan=${plan} needed=${neededCredits} remaining=${remainingCredits}`,
+      `sms_credits_exceeded plan=${plan} needed=${neededCredits} remaining=${remainingCredits}`
     );
   }
 }
@@ -78,7 +65,7 @@ export async function POST(request: Request) {
     if (!businessId || !phone || !link) {
       return NextResponse.json(
         { error: "Missing onboarding message details." },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
@@ -101,12 +88,12 @@ export async function POST(request: Request) {
     if (
       smsSetupError ||
       !smsSetup ||
-      smsSetup.status !== "approved" ||
+      !["active", "approved"].includes(smsSetup.status ?? "") ||
       !smsSetup.phone_number
     ) {
       return NextResponse.json(
-        { error: "Text messaging is not approved for this business yet." },
-        { status: 400 },
+        { error: "sms_not_activated" },
+        { status: 400 }
       );
     }
 
@@ -121,10 +108,7 @@ export async function POST(request: Request) {
 
     const messageBody = `${businessName} sent you a secure Wagzly onboarding form. Please complete it here: ${link}`;
 
-    await assertSmsCreditsAvailable({
-      businessId,
-      body: messageBody,
-    });
+    await assertSmsCreditsAvailable({ businessId, body: messageBody });
 
     const fromPhone = normalizePhone(smsSetup.phone_number);
     const toPhone = normalizePhone(phone);
@@ -132,16 +116,14 @@ export async function POST(request: Request) {
     if (!toPhone) {
       return NextResponse.json(
         { error: "Enter a valid phone number." },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
-    const twilioClient = getTwilioClient();
-
-    const sentMessage = await twilioClient.messages.create({
+    const providerMessageId = await sendSms({
       from: fromPhone,
       to: toPhone,
-      body: messageBody,
+      text: messageBody,
     });
 
     const now = new Date().toISOString();
@@ -157,10 +139,7 @@ export async function POST(request: Request) {
       created_at: now,
     });
 
-    return NextResponse.json({
-      ok: true,
-      providerMessageId: sentMessage.sid,
-    });
+    return NextResponse.json({ ok: true, providerMessageId });
   } catch (error) {
     return NextResponse.json(
       {
@@ -169,7 +148,7 @@ export async function POST(request: Request) {
             ? error.message
             : "Unable to send onboarding text.",
       },
-      { status: 400 },
+      { status: 400 }
     );
   }
 }

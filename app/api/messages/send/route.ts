@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import twilio from "twilio";
 import { supabaseAdmin } from "../../../../lib/supabase-admin";
+import { sendSms } from "../../../../lib/telnyx";
 
 function cleanText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -8,17 +8,6 @@ function cleanText(value: unknown) {
 
 function normalizePhone(value: string) {
   return value.replace(/[^\d+]/g, "");
-}
-
-function getTwilioClient() {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-
-  if (!accountSid || !authToken) {
-    throw new Error("Twilio environment variables are missing.");
-  }
-
-  return twilio(accountSid, authToken);
 }
 
 function smsSegmentsForText(body: string) {
@@ -38,15 +27,13 @@ async function assertSmsCreditsAvailable({
     p_business_id: businessId,
   });
 
-  if (error) {
-    throw new Error(error.message);
-  }
+  if (error) throw new Error(error.message);
 
   const summary = Array.isArray(data) ? data[0] : data;
   const remainingCredits = Number(summary?.remaining_credits ?? 0);
   const plan = String(summary?.plan ?? "basic").toLowerCase();
 
-    if (remainingCredits < neededCredits) {
+  if (remainingCredits < neededCredits) {
     throw new Error(
       `sms_credits_exceeded plan=${plan} needed=${neededCredits} remaining=${remainingCredits}`
     );
@@ -102,24 +89,23 @@ export async function POST(request: Request) {
     if (
       smsSetupError ||
       !smsSetup ||
-      smsSetup.status !== "approved" ||
+      !["active", "approved"].includes(smsSetup.status ?? "") ||
       !smsSetup.phone_number
     ) {
       return NextResponse.json(
-        {
-          error: "Text messaging is not approved for this business yet.",
-        },
+        { error: "sms_not_activated" },
         { status: 400 }
       );
     }
 
-    const { data: conversation, error: conversationError } = await supabaseAdmin
-      .from("message_conversations")
-      .select("id, business_id, customer_id, customer_phone")
-      .eq("id", conversationId)
-      .eq("business_id", businessId)
-      .eq("customer_id", customerId)
-      .maybeSingle();
+    const { data: conversation, error: conversationError } =
+      await supabaseAdmin
+        .from("message_conversations")
+        .select("id, business_id, customer_id, customer_phone")
+        .eq("id", conversationId)
+        .eq("business_id", businessId)
+        .eq("customer_id", customerId)
+        .maybeSingle();
 
     if (conversationError || !conversation) {
       return NextResponse.json(
@@ -139,17 +125,12 @@ export async function POST(request: Request) {
 
     const fromPhone = normalizePhone(smsSetup.phone_number);
 
-    await assertSmsCreditsAvailable({
-      businessId,
-      body: messageBody,
-    });
+    await assertSmsCreditsAvailable({ businessId, body: messageBody });
 
-    const twilioClient = getTwilioClient();
-
-    const sentMessage = await twilioClient.messages.create({
+    const providerMessageId = await sendSms({
       from: fromPhone,
       to: toPhone,
-      body: messageBody,
+      text: messageBody,
     });
 
     const now = new Date().toISOString();
@@ -161,16 +142,13 @@ export async function POST(request: Request) {
       direction: "outbound",
       body: messageBody,
       status: "sent",
-      provider: "twilio",
+      provider: "telnyx",
       created_at: now,
     });
 
     await supabaseAdmin
       .from("message_conversations")
-      .update({
-        last_message_body: messageBody,
-        last_message_at: now,
-      })
+      .update({ last_message_body: messageBody, last_message_at: now })
       .eq("id", conversationId);
 
     await supabaseAdmin.from("sms_events").insert({
@@ -184,10 +162,7 @@ export async function POST(request: Request) {
       created_at: now,
     });
 
-    return NextResponse.json({
-      ok: true,
-      providerMessageId: sentMessage.sid,
-    });
+    return NextResponse.json({ ok: true, providerMessageId });
   } catch (error) {
     return NextResponse.json(
       {

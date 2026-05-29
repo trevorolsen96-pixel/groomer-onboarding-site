@@ -1,20 +1,9 @@
 import { NextResponse } from "next/server";
-import twilio from "twilio";
 import { supabaseAdmin } from "../../../../lib/supabase-admin";
+import { searchAvailableNumber, purchasePhoneNumber } from "../../../../lib/telnyx";
 
 function cleanText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function getTwilioClient() {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-
-  if (!accountSid || !authToken) {
-    throw new Error("Twilio environment variables are missing.");
-  }
-
-  return twilio(accountSid, authToken);
 }
 
 async function markSmsSetupFailed(businessId: string, reason: string) {
@@ -82,14 +71,13 @@ export async function POST(request: Request) {
 
     if (
       smsSetup.phone_number &&
-      smsSetup.twilio_phone_number_sid &&
-      ["number_assigned", "pending", "approved"].includes(smsSetup.status)
+      smsSetup.telnyx_phone_number_id &&
+      ["active", "approved"].includes(smsSetup.status ?? "")
     ) {
       return NextResponse.json({
         ok: true,
         phoneNumber: smsSetup.phone_number,
-        phoneNumberSid: smsSetup.twilio_phone_number_sid,
-        status: smsSetup.status,
+        status: "active",
       });
     }
 
@@ -107,7 +95,7 @@ export async function POST(request: Request) {
     const { data: verificationProfile, error: verificationProfileError } =
       await supabaseAdmin
         .from("business_sms_verification_profile")
-        .select("*")
+        .select("dba_name, legal_business_name")
         .eq("business_id", safeBusinessId)
         .maybeSingle();
 
@@ -126,21 +114,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const twilioClient = getTwilioClient();
+    const phoneNumber = await searchAvailableNumber();
 
-    const availableNumbers = await twilioClient
-      .availablePhoneNumbers("US")
-      .tollFree.list({
-        smsEnabled: true,
-        limit: 1,
-      });
-
-    const selectedNumber = availableNumbers[0]?.phoneNumber;
-
-    if (!selectedNumber) {
+    if (!phoneNumber) {
       await markSmsSetupFailed(
         safeBusinessId,
-        "No toll-free SMS numbers were available from Twilio."
+        "No SMS numbers were available."
       );
 
       return NextResponse.json(
@@ -152,25 +131,19 @@ export async function POST(request: Request) {
       );
     }
 
-    const friendlyName = `Wagzly - ${cleanText(
-      verificationProfile.dba_name ||
-        verificationProfile.legal_business_name ||
-        "Business"
-    )}`.slice(0, 64);
-
-    const purchasedNumber = await twilioClient.incomingPhoneNumbers.create({
-      phoneNumber: selectedNumber,
-      friendlyName,
-    });
+    const purchased = await purchasePhoneNumber(phoneNumber);
+    const now = new Date().toISOString();
 
     const { error: updateError } = await supabaseAdmin
       .from("business_sms_setup")
       .update({
-        status: "number_assigned",
-        phone_number: purchasedNumber.phoneNumber,
-        twilio_phone_number_sid: purchasedNumber.sid,
+        status: "active",
+        phone_number: purchased.phoneNumber,
+        telnyx_phone_number_id: purchased.id,
         failure_reason: null,
-        updated_at: new Date().toISOString(),
+        submitted_at: now,
+        approved_at: now,
+        updated_at: now,
       })
       .eq("business_id", safeBusinessId);
 
@@ -189,17 +162,21 @@ export async function POST(request: Request) {
       );
     }
 
+    await supabaseAdmin
+      .from("business_settings")
+      .update({ sms_sender_number: purchased.phoneNumber })
+      .eq("business_id", safeBusinessId);
+
     return NextResponse.json({
       ok: true,
-      phoneNumber: purchasedNumber.phoneNumber,
-      phoneNumberSid: purchasedNumber.sid,
-      status: "number_assigned",
+      phoneNumber: purchased.phoneNumber,
+      status: "active",
     });
   } catch (error) {
     if (businessId) {
       await markSmsSetupFailed(
         businessId,
-        error instanceof Error ? error.message : "Unknown Twilio setup error."
+        error instanceof Error ? error.message : "Unknown activation error."
       );
     }
 

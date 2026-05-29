@@ -5,7 +5,7 @@ import { supabaseAdmin } from "../../../../lib/supabase-admin";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function cleanText(value: FormDataEntryValue | null) {
+function cleanText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
@@ -17,13 +17,6 @@ function normalizePhone(value: string) {
   if (value.startsWith("+")) return value.replace(/[^\d+]/g, "");
 
   return value;
-}
-
-function emptyTwimlResponse() {
-  return new NextResponse("<Response></Response>", {
-    status: 200,
-    headers: { "content-type": "text/xml" },
-  });
 }
 
 async function updateLatestAppointmentConfirmation({
@@ -42,13 +35,8 @@ async function updateLatestAppointmentConfirmation({
 
   let status: string | null = null;
 
-  if (yesValues.has(clean)) {
-    status = "confirmed";
-  }
-
-  if (noValues.has(clean)) {
-    status = "needs_reschedule";
-  }
+  if (yesValues.has(clean)) status = "confirmed";
+  if (noValues.has(clean)) status = "needs_reschedule";
 
   if (!status) return;
 
@@ -88,35 +76,40 @@ async function updateLatestAppointmentConfirmation({
         : "appointment_needs_reschedule",
     message_body: body,
     created_at: now,
-    is_closed: false,
   });
 }
 
 export async function GET() {
-  return emptyTwimlResponse();
+  return NextResponse.json({ ok: true });
 }
 
 export async function POST(request: Request) {
   try {
-    const formData = await request.formData();
+    const json = await request.json();
 
-    const fromPhone = normalizePhone(cleanText(formData.get("From")));
-    const toPhone = normalizePhone(cleanText(formData.get("To")));
-    const body = cleanText(formData.get("Body"));
+    const payload = json?.data?.payload;
+
+    const fromPhone = normalizePhone(
+      cleanText(payload?.from?.phone_number ?? "")
+    );
+    const toPhone = normalizePhone(
+      cleanText(payload?.to?.[0]?.phone_number ?? "")
+    );
+    const body = cleanText(payload?.text ?? "");
 
     if (!fromPhone || !toPhone || !body) {
-      return emptyTwimlResponse();
+      return NextResponse.json({ ok: true });
     }
 
     const { data: smsSetup } = await supabaseAdmin
       .from("business_sms_setup")
       .select("business_id, phone_number, status")
       .eq("phone_number", toPhone)
-      .eq("status", "approved")
+      .in("status", ["active", "approved"])
       .maybeSingle();
 
     if (!smsSetup?.business_id) {
-      return emptyTwimlResponse();
+      return NextResponse.json({ ok: true });
     }
 
     const businessId = smsSetup.business_id;
@@ -144,9 +137,8 @@ export async function POST(request: Request) {
         to_phone: toPhone,
         created_at: now,
       });
-      
 
-      return emptyTwimlResponse();
+      return NextResponse.json({ ok: true });
     }
 
     await updateLatestAppointmentConfirmation({
@@ -198,7 +190,7 @@ export async function POST(request: Request) {
       direction: "inbound",
       body,
       status: "received",
-      provider: "twilio",
+      provider: "telnyx",
       created_at: now,
     });
 
@@ -212,7 +204,7 @@ export async function POST(request: Request) {
       })
       .eq("id", conversationId);
 
-           await supabaseAdmin.from("sms_events").insert({
+    await supabaseAdmin.from("sms_events").insert({
       business_id: businessId,
       customer_id: customer.id,
       direction: "inbound",
@@ -223,13 +215,7 @@ export async function POST(request: Request) {
       created_at: now,
     });
 
-    console.log("About to send inbound SMS push", {
-      hasConversationId: !!conversationId,
-      hasPushUrl: !!process.env.GOOGLE_PUSH_FUNCTION_URL,
-      hasPushSecret: !!process.env.WAGZLY_PUSH_SECRET,
-    });
-
-        try {
+    try {
       const pushUrl = process.env.GOOGLE_PUSH_FUNCTION_URL;
       const pushSecret = process.env.WAGZLY_PUSH_SECRET;
       const serviceAccountEmail = process.env.GCP_SERVICE_ACCOUNT_EMAIL;
@@ -239,27 +225,24 @@ export async function POST(request: Request) {
 
         const stsResponse = await fetch("https://sts.googleapis.com/v1/token", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: new URLSearchParams({
-            grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
+            grant_type:
+              "urn:ietf:params:oauth:grant-type:token-exchange",
             audience:
               "//iam.googleapis.com/projects/443606887092/locations/global/workloadIdentityPools/vercel-pool/providers/vercel-provider",
             scope: "https://www.googleapis.com/auth/cloud-platform",
             requested_token_type:
               "urn:ietf:params:oauth:token-type:access_token",
-            subject_token_type: "urn:ietf:params:oauth:token-type:jwt",
+            subject_token_type:
+              "urn:ietf:params:oauth:token-type:jwt",
             subject_token: vercelToken,
           }),
         });
 
         const stsJson = await stsResponse.json();
 
-        if (!stsResponse.ok) {
-          console.error("Google STS token exchange failed:", stsJson);
-          throw new Error("Google STS token exchange failed");
-        }
+        if (!stsResponse.ok) throw new Error("Google STS token exchange failed");
 
         const iamResponse = await fetch(
           `https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${serviceAccountEmail}:generateIdToken`,
@@ -269,21 +252,15 @@ export async function POST(request: Request) {
               Authorization: `Bearer ${stsJson.access_token}`,
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-              audience: pushUrl,
-              includeEmail: true,
-            }),
+            body: JSON.stringify({ audience: pushUrl, includeEmail: true }),
           }
         );
 
         const iamJson = await iamResponse.json();
 
-        if (!iamResponse.ok) {
-          console.error("Google IAM ID token failed:", iamJson);
-          throw new Error("Google IAM ID token failed");
-        }
+        if (!iamResponse.ok) throw new Error("Google IAM ID token failed");
 
-        const pushResponse = await fetch(pushUrl, {
+        await fetch(pushUrl, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${iamJson.token}`,
@@ -297,21 +274,14 @@ export async function POST(request: Request) {
             messageBody: body,
           }),
         });
-
-        const pushText = await pushResponse.text();
-
-        console.log("Push response:", {
-          status: pushResponse.status,
-          body: pushText,
-        });
       }
     } catch (pushError) {
       console.error("Inbound SMS push notification failed:", pushError);
     }
 
-    return emptyTwimlResponse();
+    return NextResponse.json({ ok: true });
   } catch (error) {
-  console.error("Twilio inbound route failed:", error);
-  return emptyTwimlResponse();
-}
+    console.error("Telnyx inbound route failed:", error);
+    return NextResponse.json({ ok: true });
+  }
 }

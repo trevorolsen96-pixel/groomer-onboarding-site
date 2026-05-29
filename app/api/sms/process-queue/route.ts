@@ -1,17 +1,6 @@
 import { NextResponse } from "next/server";
-import twilio from "twilio";
 import { supabaseAdmin } from "../../../../lib/supabase-admin";
-
-function getTwilioClient() {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-
-  if (!accountSid || !authToken) {
-    throw new Error("Twilio environment variables are missing.");
-  }
-
-  return twilio(accountSid, authToken);
-}
+import { sendSms } from "../../../../lib/telnyx";
 
 function smsSegmentsForText(body: string) {
   return Math.max(1, Math.ceil(body.length / 160));
@@ -30,22 +19,20 @@ async function assertSmsCreditsAvailable({
     p_business_id: businessId,
   });
 
-  if (error) {
-    throw new Error(error.message);
-  }
+  if (error) throw new Error(error.message);
 
   const summary = Array.isArray(data) ? data[0] : data;
-const remainingCredits = Number(summary?.remaining_credits ?? 0);
-const plan = String(summary?.plan ?? "basic").toLowerCase();
+  const remainingCredits = Number(summary?.remaining_credits ?? 0);
+  const plan = String(summary?.plan ?? "basic").toLowerCase();
 
-if (remainingCredits < neededCredits) {
-  throw new Error(
-    `sms_credits_exceeded plan=${plan} needed=${neededCredits} remaining=${remainingCredits}`
-  );
-}
+  if (remainingCredits < neededCredits) {
+    throw new Error(
+      `sms_credits_exceeded plan=${plan} needed=${neededCredits} remaining=${remainingCredits}`
+    );
+  }
 }
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
     const now = new Date().toISOString();
 
@@ -59,7 +46,6 @@ export async function GET(request: Request) {
 
     if (error) throw new Error(error.message);
 
-    const client = getTwilioClient();
     let sentCount = 0;
 
     for (const row of queueRows ?? []) {
@@ -87,7 +73,7 @@ export async function GET(request: Request) {
 
         if (
           !smsSetup ||
-          smsSetup.status !== "approved" ||
+          !["active", "approved"].includes(smsSetup.status ?? "") ||
           !smsSetup.phone_number
         ) {
           await supabaseAdmin
@@ -107,10 +93,10 @@ export async function GET(request: Request) {
           body: messageBody,
         });
 
-        const sent = await client.messages.create({
+        const providerMessageId = await sendSms({
           from: smsSetup.phone_number,
           to: row.to_phone,
-          body: messageBody,
+          text: messageBody,
         });
 
         const nowIso = new Date().toISOString();
@@ -119,7 +105,7 @@ export async function GET(request: Request) {
           .from("sms_outbound_queue")
           .update({
             status: "sent",
-            provider_message_id: sent.sid,
+            provider_message_id: providerMessageId,
             attempt_count: (row.attempt_count ?? 0) + 1,
             updated_at: nowIso,
           })
@@ -182,16 +168,13 @@ export async function GET(request: Request) {
               direction: "outbound",
               body: messageBody,
               status: "sent",
-              provider: "twilio",
+              provider: "telnyx",
               created_at: nowIso,
             });
 
             await supabaseAdmin
               .from("message_conversations")
-              .update({
-                last_message_body: messageBody,
-                last_message_at: nowIso,
-              })
+              .update({ last_message_body: messageBody, last_message_at: nowIso })
               .eq("id", conversationId);
           }
         }
