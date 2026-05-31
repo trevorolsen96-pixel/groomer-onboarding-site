@@ -16,7 +16,10 @@ export async function sendPushToBusinessAsync({
   const pushSecret = process.env.WAGZLY_PUSH_SECRET;
   const serviceAccountEmail = process.env.GCP_SERVICE_ACCOUNT_EMAIL;
 
-  if (!pushUrl || !pushSecret || !serviceAccountEmail) return;
+  if (!pushUrl || !pushSecret || !serviceAccountEmail) {
+    console.log("[push] Skipped — GOOGLE_PUSH_FUNCTION_URL, WAGZLY_PUSH_SECRET, or GCP_SERVICE_ACCOUNT_EMAIL not set");
+    return;
+  }
 
   try {
     // Get OIDC token via Vercel
@@ -69,7 +72,8 @@ export async function sendPushToBusinessAsync({
         data: data ?? {},
       }),
     });
-  } catch (_) {
-    // Push failures are never fatal
+    console.log("[push] Sent successfully to business:", businessId);
+  } catch (err) {
+    console.error("[push] Failed:", err);
   }
 }

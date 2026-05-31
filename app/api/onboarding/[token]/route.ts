@@ -387,9 +387,8 @@ if (requirePetRecords) {
       },
     }).eq("id", requestRow.id);
 
-    // Fire push notification to groomer — non-blocking
     const clientName = `${body.owner_first_name ?? ""} ${body.owner_last_name ?? ""}`.trim();
-    sendPushToBusinessAsync({
+    await sendPushToBusinessAsync({
       businessId: requestRow.business_id,
       title: "New Client Submission",
       body: `${clientName || "A client"} completed the onboarding form.`,

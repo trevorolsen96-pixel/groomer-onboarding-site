@@ -40,8 +40,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Failed to submit request." }, { status: 500 });
   }
 
-  // Fire push notification to groomer — non-blocking
-  sendPushToBusinessAsync({
+  // Send push notification — awaited so it completes before serverless function exits
+  await sendPushToBusinessAsync({
     businessId,
     title: "New Booking Request",
     body: `${clientName ?? "A client"} requested an appointment.`,
