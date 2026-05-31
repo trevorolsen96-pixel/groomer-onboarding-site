@@ -44,24 +44,47 @@ export default function RootLayout({
       <body>
         <div className="min-h-screen">
           <header className="sticky top-0 z-30 border-b border-[var(--divider-soft)] bg-[rgba(251,247,248,0.82)] backdrop-blur">
-            <div className="mx-auto flex h-[82px] w-full max-w-6xl items-center justify-between px-6">
+            <div className="mx-auto flex h-[64px] w-full max-w-6xl items-center justify-between px-4 md:h-[82px] md:px-6">
+              {/* Mobile: small icon — Desktop: full logo */}
               <Link href="/" className="flex items-center">
+                <Image
+                  src="/images/logo/WagzlyApp.png"
+                  alt="Wagzly"
+                  width={36}
+                  height={36}
+                  priority
+                  className="block md:hidden"
+                />
                 <Image
                   src="/images/logo/WagzlyHLarge.png"
                   alt="Wagzly"
-                  width={220}
-                  height={60}
+                  width={200}
+                  height={54}
                   priority
+                  className="hidden md:block"
                 />
               </Link>
 
-              <nav className="flex items-center gap-2 sm:gap-3">
+              <nav className="flex items-center gap-2">
+                {/* Desktop links */}
                 <div className="hidden md:flex items-center gap-1">
                   <Link href="/#features" className="nav-link">Features</Link>
                   <Link href="/#pricing" className="nav-link">Pricing</Link>
                   <Link href="/#download" className="nav-link">Download</Link>
                   <Link href="/book" className="nav-link">Book Online</Link>
                 </div>
+
+                {/* Mobile: Book Online button */}
+                <Link
+                  href="/book"
+                  className="flex items-center gap-1.5 rounded-xl bg-[var(--rose-primary)] px-3 py-2 text-sm font-bold text-white md:hidden"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                    <path d="M21 10c0 6-9 13-9 13S3 16 3 10a9 9 0 0118 0z" /><circle cx="12" cy="10" r="3" />
+                  </svg>
+                  Book Online
+                </Link>
+
                 <AccountMenu />
               </nav>
             </div>
