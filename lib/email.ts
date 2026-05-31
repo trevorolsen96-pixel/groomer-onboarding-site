@@ -1,5 +1,62 @@
 import nodemailer from "nodemailer";
 
+export async function sendBookingOtpEmail({
+  to,
+  code,
+}: {
+  to: string;
+  code: string;
+}): Promise<void> {
+  const transporter = createTransporter();
+  const year = new Date().getFullYear();
+
+  await transporter.sendMail({
+    from: '"Wagzly" <support@wagzly.com>',
+    to,
+    subject: `Your Wagzly booking code: ${code}`,
+    text: [
+      `Your Wagzly verification code is: ${code}`,
+      "",
+      "Enter this code on the booking page to continue. It expires in 10 minutes.",
+      "",
+      "If you didn't request this, you can safely ignore this email.",
+      "",
+      "— The Wagzly Team",
+    ].join("\n"),
+    html: `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your Wagzly booking code</title>
+</head>
+<body style="margin:0;padding:0;background-color:#faf8f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <div style="max-width:520px;margin:40px auto;padding:0 20px 40px;">
+    <div style="background:#ffffff;border-radius:20px;padding:40px 36px;border:1px solid #ede8e4;">
+      <div style="margin-bottom:28px;">
+        <span style="font-size:20px;font-weight:800;color:#2e2430;letter-spacing:-0.3px;">Wagzly</span>
+      </div>
+      <h1 style="margin:0 0 12px;font-size:22px;font-weight:700;color:#2e2430;">Your booking code</h1>
+      <p style="margin:0 0 24px;color:#7a6b75;font-size:15px;line-height:1.65;">
+        Enter the code below to continue booking your grooming appointment.
+      </p>
+      <div style="background:#f6eef1;border-radius:16px;padding:24px;text-align:center;margin-bottom:24px;">
+        <span style="font-size:38px;font-weight:800;letter-spacing:0.18em;color:#2e2430;">${code}</span>
+      </div>
+      <p style="margin:0;color:#b0a0aa;font-size:13px;line-height:1.55;">
+        This code expires in <strong>10 minutes</strong>. If you didn't request this, you can safely ignore this email.
+      </p>
+    </div>
+    <p style="text-align:center;color:#c4b8bf;font-size:12px;margin-top:20px;">
+      © ${year} Wagzly &nbsp;·&nbsp;
+      <a href="https://wagzly.com" style="color:#c4b8bf;text-decoration:none;">wagzly.com</a>
+    </p>
+  </div>
+</body>
+</html>`,
+  });
+}
+
 function createTransporter() {
   const appPassword = process.env.GMAIL_APP_PASSWORD;
 
