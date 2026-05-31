@@ -66,9 +66,12 @@ export async function sendPushToBusinessAsync({
       },
       body: JSON.stringify({
         businessId,
-        title,
-        body,
-        data: data ?? {},
+        // Match the field names the Cloud Function already understands
+        customerName: title,
+        messageBody: body,
+        conversationId: null,
+        // Pass our routing data too
+        ...data,
       }),
     });
     console.log("[push] Sent successfully to business:", businessId);

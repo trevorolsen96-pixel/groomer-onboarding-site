@@ -40,8 +40,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Failed to submit request." }, { status: 500 });
   }
 
-  // Fire push in background — don't await so it never blocks the response
-  void sendPushToBusinessAsync({
+  await sendPushToBusinessAsync({
     businessId,
     title: "New Booking Request",
     body: `${clientName ?? "A client"} requested an appointment.`,

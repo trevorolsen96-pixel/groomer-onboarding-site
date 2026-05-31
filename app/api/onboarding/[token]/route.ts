@@ -388,7 +388,7 @@ if (requirePetRecords) {
     }).eq("id", requestRow.id);
 
     const clientName = `${body.owner_first_name ?? ""} ${body.owner_last_name ?? ""}`.trim();
-    void sendPushToBusinessAsync({
+    await sendPushToBusinessAsync({
       businessId: requestRow.business_id,
       title: "New Client Submission",
       body: `${clientName || "A client"} completed the onboarding form.`,
