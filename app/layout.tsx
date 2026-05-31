@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
+import AccountMenu from "../components/AccountMenu";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -55,18 +56,13 @@ export default function RootLayout({
               </Link>
 
               <nav className="flex items-center gap-2 sm:gap-3">
-                <Link href="/" className="nav-link">
+                <Link href="/" className="nav-link hidden sm:inline-flex">
                   Home
                 </Link>
                 <Link href="/book" className="nav-link hidden sm:inline-flex">
                   Book Online
                 </Link>
-                <Link
-                  href="/create-account"
-                  className="inline-flex items-center justify-center rounded-xl bg-[var(--rose-primary)] px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-[var(--rose-primary-dark)]"
-                >
-                  Start Free Trial
-                </Link>
+                <AccountMenu />
               </nav>
             </div>
           </header>

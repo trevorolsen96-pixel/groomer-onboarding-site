@@ -29,12 +29,6 @@ export default function HomePage() {
           <Link href="/book" className="hover:text-[var(--text-primary)]">
             Book Online
           </Link>
-          <Link
-            href="/create-account"
-            className="flex items-center rounded-xl bg-[var(--rose-primary)] px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-[var(--rose-primary-dark)]"
-          >
-            Start Free Trial
-          </Link>
         </nav>
 
         <AccountMenu />
