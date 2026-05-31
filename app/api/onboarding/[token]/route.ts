@@ -110,7 +110,7 @@ export async function GET(
 
     const { data: requestRow, error: requestError } = await supabaseAdmin
       .from("onboarding_requests")
-      .select("id, token, status, business_id")
+      .select("id, token, status, business_id, client_email")
       .eq("token", cleanToken)
       .single();
 
@@ -178,6 +178,7 @@ export async function GET(
       business_name: settingsRow.business_name ?? "Your Groomer",
       logo_url: settingsRow.logo_url ?? null,
       status: requestRow.status,
+      client_email: requestRow.client_email ?? null,
       agreements: agreementsRows ?? [],
       questions: questionsRows ?? [],
       require_pet_records_onboarding:

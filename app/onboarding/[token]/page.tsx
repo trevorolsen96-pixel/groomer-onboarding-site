@@ -89,6 +89,7 @@ export default function OnboardingTokenPage() {
   const [loadError, setLoadError] = useState("");
   const [businessName, setBusinessName] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [lockedEmail, setLockedEmail] = useState<string | null>(null);
 
   const [agreements, setAgreements] = useState<Agreement[]>([]);
   const [agreementAcceptances, setAgreementAcceptances] = useState<
@@ -137,6 +138,10 @@ const [petRecords, setPetRecords] = useState<PetRecordUpload[]>([]);
 
         setBusinessName(result.business_name);
         setLogoUrl(result.logo_url);
+        if (result.client_email) {
+          setLockedEmail(result.client_email);
+          setForm((prev) => ({ ...prev, email: result.client_email }));
+        }
         setAgreements(result.agreements ?? []);
         setQuestions(loadedQuestions);
         setRequirePetRecords(result.require_pet_records_onboarding ?? false);
@@ -590,7 +595,20 @@ const response = await fetch(`/api/onboarding/${token}`, {
               <input placeholder="First name" value={form.owner_first_name} onChange={(e) => updateOwnerField("owner_first_name", e.target.value)} required />
               <input placeholder="Last name" value={form.owner_last_name} onChange={(e) => updateOwnerField("owner_last_name", e.target.value)} required />
               <input placeholder="Phone" value={form.phone} onChange={(e) => updateOwnerField("phone", e.target.value)} required />
-              <input placeholder="Email" type="email" value={form.email} onChange={(e) => updateOwnerField("email", e.target.value)} required />
+              <div className="relative">
+                <input
+                  placeholder="Email"
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => !lockedEmail && updateOwnerField("email", e.target.value)}
+                  readOnly={!!lockedEmail}
+                  required
+                  className={lockedEmail ? "bg-[var(--soft-surface)] text-[var(--text-secondary)] cursor-default" : ""}
+                />
+                {lockedEmail && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-green-600">✓ Verified</span>
+                )}
+              </div>
               <input className="sm:col-span-2" placeholder="Address line 1" value={form.address_line_1} onChange={(e) => updateOwnerField("address_line_1", e.target.value)} required />
               <input className="sm:col-span-2" placeholder="Address line 2 (optional)" value={form.address_line_2} onChange={(e) => updateOwnerField("address_line_2", e.target.value)} />
               <input placeholder="City" value={form.city} onChange={(e) => updateOwnerField("city", e.target.value)} required />
