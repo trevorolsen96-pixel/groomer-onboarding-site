@@ -159,28 +159,42 @@ export default function CreateAccountPage() {
           </div>
         </div>
 
-        <section className="mt-8 grid gap-10 lg:grid-cols-[0.9fr_1.1fr]">
-          <div>
-            <div className="rounded-3xl bg-white/70 p-5 shadow-sm">
-              <p className="font-bold text-[var(--text-primary)]">
+        <section className="mt-8 flex justify-center">
+          <form onSubmit={handleCreateAccount} className="soft-card w-full max-w-lg space-y-4 p-7">
+            <div>
+              <p className="mb-3 text-sm font-semibold text-[var(--text-primary)]">
                 Selected plan
               </p>
-              <p className="mt-2 text-2xl font-bold text-[var(--rose-primary)]">
-                Wagzly {selectedPlan === "basic" ? "Basic" : "Pro"}
-              </p>
-              <p className="mt-1 text-sm text-[var(--text-secondary)]">
+              <div className="flex rounded-2xl bg-[var(--soft-surface)] p-1">
+                <button
+                  type="button"
+                  onClick={() => setSelectedPlan("basic")}
+                  className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-bold transition ${
+                    selectedPlan === "basic"
+                      ? "bg-white shadow text-[var(--rose-primary)]"
+                      : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                  }`}
+                >
+                  Basic — $39.99/mo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPlan("pro")}
+                  className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-bold transition ${
+                    selectedPlan === "pro"
+                      ? "bg-white shadow text-[var(--rose-primary)]"
+                      : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                  }`}
+                >
+                  Pro — $89.99/mo
+                </button>
+              </div>
+              <p className="mt-2 text-center text-xs text-[var(--text-secondary)]">
                 14 days free, then{" "}
-                {selectedPlan === "basic" ? "$39.99/month" : "$89.99/month"}.
+                {selectedPlan === "basic" ? "$39.99" : "$89.99"}/month.
+                Cancel anytime.
               </p>
             </div>
-
-            <p className="mt-5 text-sm leading-6 text-[var(--text-secondary)]">
-              Staff accounts should not sign up here. Staff members must use
-              their invite link.
-            </p>
-          </div>
-
-          <form onSubmit={handleCreateAccount} className="soft-card space-y-4 p-7">
             <div>
               <label className="text-sm font-semibold text-[var(--text-primary)]">
                 Full name
@@ -284,6 +298,10 @@ export default function CreateAccountPage() {
               <Link href="/login" className="font-semibold text-[var(--rose-primary)]">
                 Log in
               </Link>
+            </p>
+            <p className="text-center text-xs text-[var(--text-secondary)]">
+              Staff accounts should not sign up here. Staff members must use their{" "}
+              invite link.
             </p>
           </form>
         </section>
