@@ -22,18 +22,18 @@ export default function HomePage() {
           <span className="text-xl font-bold text-[var(--text-primary)]">Wagzly</span>
         </Link>
 
-        <nav className="hidden items-center gap-7 text-sm font-semibold text-[var(--text-secondary)] md:flex">
+        <nav className="hidden items-center gap-6 text-sm font-semibold text-[var(--text-secondary)] md:flex">
           <a href="#features" className="hover:text-[var(--text-primary)]">Features</a>
           <a href="#pricing" className="hover:text-[var(--text-primary)]">Pricing</a>
           <a href="#download" className="hover:text-[var(--text-primary)]">Download</a>
+          <Link href="/book" className="hover:text-[var(--text-primary)]">
+            Book Online
+          </Link>
           <Link
-            href="/book"
-            className="flex items-center gap-2 rounded-xl bg-[var(--rose-primary)] px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-[var(--rose-primary-dark)]"
+            href="/create-account"
+            className="flex items-center rounded-xl bg-[var(--rose-primary)] px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-[var(--rose-primary-dark)]"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-              <path d="M21 10c0 6-9 13-9 13S3 16 3 10a9 9 0 0118 0z" /><circle cx="12" cy="10" r="3" />
-            </svg>
-            Find a Groomer
+            Start Free Trial
           </Link>
         </nav>
 

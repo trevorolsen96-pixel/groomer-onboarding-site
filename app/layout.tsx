@@ -7,11 +7,11 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://www.wagzly.com"),
   title: "Wagzly",
   description:
-    "Wagzly provides beautiful client onboarding for mobile grooming businesses.",
+    "Wagzly is mobile grooming software for groomers — and the easiest way for pet owners to find and book a local mobile groomer.",
   openGraph: {
     title: "Wagzly",
     description:
-      "Wagzly provides beautiful client onboarding for mobile grooming businesses.",
+      "Wagzly is mobile grooming software for groomers — and the easiest way for pet owners to find and book a local mobile groomer.",
     url: "https://www.wagzly.com",
     siteName: "Wagzly",
     images: [
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Wagzly",
     description:
-      "Wagzly provides beautiful client onboarding for mobile grooming businesses.",
+      "Wagzly is mobile grooming software for groomers — and the easiest way for pet owners to find and book a local mobile groomer.",
     images: ["/images/logo/WagzlyHLarge.png"],
   },
 };
@@ -58,11 +58,14 @@ export default function RootLayout({
                 <Link href="/" className="nav-link">
                   Home
                 </Link>
-                <Link href="/terms" className="nav-link">
-                  Terms
+                <Link href="/book" className="nav-link hidden sm:inline-flex">
+                  Book Online
                 </Link>
-                <Link href="/privacy" className="nav-link">
-                  Privacy
+                <Link
+                  href="/create-account"
+                  className="inline-flex items-center justify-center rounded-xl bg-[var(--rose-primary)] px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-[var(--rose-primary-dark)]"
+                >
+                  Start Free Trial
                 </Link>
               </nav>
             </div>
