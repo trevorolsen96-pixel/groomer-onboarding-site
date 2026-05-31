@@ -1,3 +1,4 @@
+import { getVercelOidcToken } from "@vercel/oidc";
 import { supabaseAdmin } from "./supabase-admin";
 
 // Reuses the same OIDC + GCP Cloud Function approach as the messages route
@@ -22,8 +23,6 @@ export async function sendPushToBusinessAsync({
   }
 
   try {
-    // Get OIDC token via Vercel
-    const { getVercelOidcToken } = await import("@vercel/functions/oidc");
     const vercelToken = await getVercelOidcToken();
 
     const stsResponse = await fetch("https://sts.googleapis.com/v1/token", {
