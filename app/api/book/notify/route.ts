@@ -20,9 +20,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Request not found." }, { status: 404 });
   }
 
-  const phone = request.client_phone as string | null;
-  if (!phone) {
+  const rawPhone = request.client_phone as string | null;
+  if (!rawPhone) {
+    console.log(`[book/notify] skipped — no client_phone on request ${requestId}`);
     return NextResponse.json({ ok: true, skipped: "no_phone" });
+  }
+
+  const phone = _toE164(rawPhone);
+  if (!phone) {
+    console.log(`[book/notify] skipped — could not normalize phone "${rawPhone}" to E.164`);
+    return NextResponse.json({ ok: true, skipped: "bad_phone_format" });
   }
 
   // Load the groomer's SMS sender number and business name
@@ -34,6 +41,7 @@ export async function POST(req: NextRequest) {
 
   const from = settings?.sms_sender_number as string | null;
   if (!from) {
+    console.log(`[book/notify] skipped — no sms_sender_number for business ${request.business_id}`);
     return NextResponse.json({ ok: true, skipped: "no_sender_number" });
   }
 
@@ -61,6 +69,13 @@ export async function POST(req: NextRequest) {
     // Don't fail the whole request if SMS fails
     return NextResponse.json({ ok: true, smsFailed: true });
   }
+}
+
+function _toE164(phone: string): string | null {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  return null;
 }
 
 function _formatDate(date: string): string {
