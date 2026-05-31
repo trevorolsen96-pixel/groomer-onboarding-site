@@ -1,6 +1,5 @@
 import Image from "next/image";
 import Link from "next/link";
-import AccountMenu from "../components/AccountMenu";
 import HomeCtas from "../components/HomeCtas";
 
 const demoBookingUrl = "https://calendar.app.google/wwNEKQs1KnJEaxbz6";
@@ -8,31 +7,6 @@ const demoBookingUrl = "https://calendar.app.google/wwNEKQs1KnJEaxbz6";
 export default function HomePage() {
   return (
     <main className="site-shell">
-
-      {/* ── Header ── */}
-      <header className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-6">
-        <Link href="/" className="flex items-center gap-3">
-          <Image
-            src="/images/logo/WagzlyApp.png"
-            alt="Wagzly"
-            width={44}
-            height={44}
-            priority
-          />
-          <span className="text-xl font-bold text-[var(--text-primary)]">Wagzly</span>
-        </Link>
-
-        <nav className="hidden items-center gap-6 text-sm font-semibold text-[var(--text-secondary)] md:flex">
-          <a href="#features" className="hover:text-[var(--text-primary)]">Features</a>
-          <a href="#pricing" className="hover:text-[var(--text-primary)]">Pricing</a>
-          <a href="#download" className="hover:text-[var(--text-primary)]">Download</a>
-          <Link href="/book" className="hover:text-[var(--text-primary)]">
-            Book Online
-          </Link>
-        </nav>
-
-        <AccountMenu />
-      </header>
 
       {/* ── Hero ── */}
       <section className="mx-auto max-w-6xl px-6 pb-12 pt-8 lg:pb-20 lg:pt-12">

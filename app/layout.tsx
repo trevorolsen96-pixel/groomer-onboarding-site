@@ -56,12 +56,10 @@ export default function RootLayout({
               </Link>
 
               <nav className="flex items-center gap-2 sm:gap-3">
-                <Link href="/" className="nav-link hidden sm:inline-flex">
-                  Home
-                </Link>
-                <Link href="/book" className="nav-link hidden sm:inline-flex">
-                  Book Online
-                </Link>
+                <Link href="/#features" className="nav-link hidden md:inline-flex">Features</Link>
+                <Link href="/#pricing" className="nav-link hidden md:inline-flex">Pricing</Link>
+                <Link href="/#download" className="nav-link hidden md:inline-flex">Download</Link>
+                <Link href="/book" className="nav-link hidden sm:inline-flex">Book Online</Link>
                 <AccountMenu />
               </nav>
             </div>
