@@ -267,7 +267,7 @@ export async function POST(request: Request) {
       .eq("business_id", businessId)
       .maybeSingle();
 
-    if (!smsSetup || smsSetup.status !== "approved" || !smsSetup.phone_number) {
+    if (!smsSetup || !["approved", "active"].includes(smsSetup.status ?? "") || !smsSetup.phone_number) {
       return NextResponse.json(
         { error: "Text messaging is not approved for this business yet." },
         { status: 400 }
