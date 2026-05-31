@@ -1,0 +1,85 @@
+import { NextRequest, NextResponse } from "next/server";
+import { supabaseAdmin } from "@/lib/supabase-admin";
+import { sendSms } from "@/lib/telnyx";
+
+export async function POST(req: NextRequest) {
+  const { requestId, status } = await req.json();
+
+  if (!requestId || !status) {
+    return NextResponse.json({ error: "requestId and status are required." }, { status: 400 });
+  }
+
+  // Load the booking request
+  const { data: request, error: reqError } = await supabaseAdmin
+    .from("booking_requests")
+    .select("client_phone, client_name, requested_date, requested_time, rescheduled_date, rescheduled_time, business_id, groomer_note")
+    .eq("id", requestId)
+    .maybeSingle();
+
+  if (reqError || !request) {
+    return NextResponse.json({ error: "Request not found." }, { status: 404 });
+  }
+
+  const phone = request.client_phone as string | null;
+  if (!phone) {
+    return NextResponse.json({ ok: true, skipped: "no_phone" });
+  }
+
+  // Load the groomer's SMS sender number and business name
+  const { data: settings } = await supabaseAdmin
+    .from("business_settings")
+    .select("sms_sender_number, business_name")
+    .eq("business_id", request.business_id)
+    .maybeSingle();
+
+  const from = settings?.sms_sender_number as string | null;
+  if (!from) {
+    return NextResponse.json({ ok: true, skipped: "no_sender_number" });
+  }
+
+  const businessName = (settings?.business_name as string | null) ?? "Your groomer";
+  const firstName = ((request.client_name as string | null) ?? "").split(" ")[0] || "there";
+
+  const confirmedDate = (request.rescheduled_date ?? request.requested_date) as string;
+  const confirmedTime = (request.rescheduled_time ?? request.requested_time) as string | null;
+  const dateStr = _formatDate(confirmedDate);
+  const timeStr = confirmedTime ? ` at ${_formatTime(confirmedTime)}` : "";
+
+  let text: string;
+
+  if (status === "approved") {
+    text = `Hi ${firstName}! Your grooming appointment with ${businessName} has been confirmed for ${dateStr}${timeStr}. We look forward to seeing your pup! Reply STOP to opt out.`;
+  } else {
+    const noteStr = request.groomer_note ? ` Note from your groomer: "${request.groomer_note}"` : "";
+    text = `Hi ${firstName}, unfortunately ${businessName} is unable to accommodate your grooming request for ${dateStr}.${noteStr} Please reach out to schedule a different time. Reply STOP to opt out.`;
+  }
+
+  try {
+    await sendSms({ from, to: phone, text });
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("SMS send failed:", err);
+    // Don't fail the whole request if SMS fails
+    return NextResponse.json({ ok: true, smsFailed: true });
+  }
+}
+
+function _formatDate(date: string): string {
+  try {
+    const d = new Date(date + "T12:00:00");
+    return d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  } catch {
+    return date;
+  }
+}
+
+function _formatTime(time: string): string {
+  try {
+    const [h, m] = time.split(":").map(Number);
+    const ampm = h < 12 ? "AM" : "PM";
+    const hour = h % 12 === 0 ? 12 : h % 12;
+    return `${hour}:${m.toString().padStart(2, "0")} ${ampm}`;
+  } catch {
+    return time;
+  }
+}
