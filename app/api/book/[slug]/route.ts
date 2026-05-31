@@ -23,7 +23,7 @@ export async function GET(
 
   // Load their active services (category = 'service' only, no add-ons)
   const { data: services } = await supabaseAdmin
-    .from("service_items")
+    .from("services")
     .select("id, name, description, duration_minutes, base_price")
     .eq("business_id", settings.business_id)
     .eq("is_active", true)
