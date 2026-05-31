@@ -22,30 +22,41 @@ export default function AccountMenu() {
     let mounted = true;
 
     async function loadSession() {
-      const { data } = await supabaseClient.auth.getSession();
-      if (!mounted) return;
+      try {
+        const { data } = await supabaseClient.auth.getSession();
+        if (!mounted) return;
 
-      const user = data.session?.user ?? null;
-      setEmail(user?.email ?? null);
+        const user = data.session?.user ?? null;
+        setEmail(user?.email ?? null);
 
-      if (user) {
-        await loadBusiness(user.id);
+        if (user) {
+          try {
+            await loadBusiness(user.id);
+          } catch (_) {
+            // business load failed — still show logged-in state
+          }
+        }
+      } catch (_) {
+        // session load failed
+      } finally {
+        if (mounted) setLoading(false);
       }
-
-      setLoading(false);
     }
 
     loadSession();
 
     const { data: { subscription } } = supabaseClient.auth.onAuthStateChange(
       async (_event, session) => {
-        setEmail(session?.user.email ?? null);
-        if (session?.user) {
-          await loadBusiness(session.user.id);
-        } else {
-          setBusiness(null);
+        try {
+          setEmail(session?.user?.email ?? null);
+          if (session?.user) {
+            try { await loadBusiness(session.user.id); } catch (_) {}
+          } else {
+            setBusiness(null);
+          }
+        } finally {
+          setLoading(false);
         }
-        setLoading(false);
       }
     );
 
