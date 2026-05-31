@@ -57,6 +57,7 @@ type BrandingResponse = {
   business_name: string;
   logo_url: string | null;
   status: string;
+  client_email: string | null;
   agreements: Agreement[];
   questions: OnboardingQuestion[];
   require_pet_records_onboarding: boolean;
