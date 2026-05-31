@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { sendPushToBusinessAsync } from "@/lib/push-notification";
 
 export async function POST(req: NextRequest) {
   const {
@@ -38,6 +39,14 @@ export async function POST(req: NextRequest) {
   if (error) {
     return NextResponse.json({ error: "Failed to submit request." }, { status: 500 });
   }
+
+  // Fire push notification to groomer — non-blocking
+  sendPushToBusinessAsync({
+    businessId,
+    title: "New Booking Request",
+    body: `${clientName ?? "A client"} requested an appointment.`,
+    data: { route: "booking_requests", type: "booking_request" },
+  });
 
   return NextResponse.json({ ok: true });
 }

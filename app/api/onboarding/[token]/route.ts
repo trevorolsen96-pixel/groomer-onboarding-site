@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { sendPushToBusinessAsync } from "@/lib/push-notification";
 
 type PetPayload = {
   pet_name: string;
@@ -385,6 +386,15 @@ if (requirePetRecords) {
         _customer_notes: customerNotes,
       },
     }).eq("id", requestRow.id);
+
+    // Fire push notification to groomer — non-blocking
+    const clientName = `${body.owner_first_name ?? ""} ${body.owner_last_name ?? ""}`.trim();
+    sendPushToBusinessAsync({
+      businessId: requestRow.business_id,
+      title: "New Client Submission",
+      body: `${clientName || "A client"} completed the onboarding form.`,
+      data: { route: "booking_requests", type: "onboarding_submission" },
+    });
 
     return NextResponse.json({ ok: true });
   } catch (error) {
