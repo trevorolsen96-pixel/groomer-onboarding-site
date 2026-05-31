@@ -26,6 +26,15 @@ export default function HomePage() {
           <a href="#features" className="hover:text-[var(--text-primary)]">Features</a>
           <a href="#pricing" className="hover:text-[var(--text-primary)]">Pricing</a>
           <a href="#download" className="hover:text-[var(--text-primary)]">Download</a>
+          <Link
+            href="/book"
+            className="flex items-center gap-2 rounded-xl bg-[var(--rose-primary)] px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-[var(--rose-primary-dark)]"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+              <path d="M21 10c0 6-9 13-9 13S3 16 3 10a9 9 0 0118 0z" /><circle cx="12" cy="10" r="3" />
+            </svg>
+            Find a Groomer
+          </Link>
         </nav>
 
         <AccountMenu />
@@ -74,6 +83,61 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* ── Find a Groomer CTA ── */}
+      <div className="bg-[var(--soft-surface)]">
+        <section className="mx-auto max-w-6xl px-6 py-14">
+          <div className="soft-card overflow-hidden p-0">
+            <div className="grid items-center gap-0 lg:grid-cols-2">
+              <div className="p-8 lg:p-12">
+                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--rose-primary)]">
+                  For pet owners
+                </p>
+                <h2 className="mt-3 text-3xl font-bold leading-tight text-[var(--text-primary)]">
+                  Find a mobile groomer near you
+                </h2>
+                <p className="mt-4 text-[var(--text-secondary)] leading-7">
+                  Browse Wagzly-powered groomers in your area, view their services, and request an appointment — all online.
+                </p>
+                <div className="mt-7 flex flex-wrap gap-4">
+                  <Link
+                    href="/book"
+                    className="primary-button inline-flex items-center gap-2"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+                      <path d="M21 10c0 6-9 13-9 13S3 16 3 10a9 9 0 0118 0z" /><circle cx="12" cy="10" r="3" />
+                    </svg>
+                    Find a Groomer
+                  </Link>
+                </div>
+                <div className="mt-6 flex flex-wrap gap-5">
+                  {[
+                    "Search by zip code",
+                    "Book online 24/7",
+                    "Request your preferred time",
+                  ].map((item) => (
+                    <div key={item} className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+                      <span className="font-bold text-[var(--rose-primary)]">✓</span>
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center justify-center bg-[var(--soft-surface)] p-10 lg:h-full">
+                <div className="text-center">
+                  <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-3xl bg-white shadow-md">
+                    <span className="text-5xl">🐾</span>
+                  </div>
+                  <p className="mt-5 text-xl font-bold text-[var(--text-primary)]">Your dog deserves the best</p>
+                  <p className="mt-2 text-sm text-[var(--text-secondary)]">
+                    Mobile groomers come to you — no travel stress for your pet.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
 
       {/* ── Features ── */}
       <div className="bg-[var(--soft-surface)]">
