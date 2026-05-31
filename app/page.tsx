@@ -26,7 +26,7 @@ export default function HomePage() {
               Mobile Grooming Software
             </p>
 
-            <h1 className="mt-4 text-5xl font-bold leading-tight text-[var(--text-primary)]">
+            <h1 className="mt-4 text-3xl font-bold leading-tight text-[var(--text-primary)] sm:text-4xl lg:text-5xl">
               Run your grooming business without the chaos
             </h1>
 
@@ -140,42 +140,42 @@ export default function HomePage() {
           A clean, focused experience built for busy grooming days.
         </p>
 
-        <div className="mt-14 flex items-end justify-center gap-6 lg:gap-10">
-          <div className="hidden sm:flex sm:flex-col sm:items-center sm:gap-3" style={{transform: "rotate(-5deg) translateY(20px)"}}>
+        {/* Mobile: horizontal scroll carousel */}
+        <div className="mt-14 sm:hidden">
+          <div className="flex snap-x snap-mandatory gap-6 overflow-x-auto pb-4 px-6" style={{scrollbarWidth: "none"}}>
+            {[
+              { src: "/images/app/screen-clients.png", label: "Clients & Pets", alt: "Clients and Pets screen" },
+              { src: "/images/app/screen-dashboard.png", label: "Dashboard", alt: "Dashboard screen", featured: true },
+              { src: "/images/app/screen-schedule.png", label: "Schedule", alt: "Schedule screen" },
+            ].map((screen) => (
+              <div key={screen.src} className="flex shrink-0 snap-center flex-col items-center gap-3">
+                <div className={`w-52 overflow-hidden rounded-[2.5rem] border-[5px] border-gray-900 bg-gray-900 ${screen.featured ? "shadow-2xl ring-4 ring-[var(--rose-primary)]/20" : "shadow-xl"}`}>
+                  <Image src={screen.src} alt={screen.alt} width={706} height={1494} className="block w-full" />
+                </div>
+                <p className={`text-sm font-semibold ${screen.featured ? "text-[var(--rose-primary)]" : "text-[var(--text-secondary)]"}`}>{screen.label}</p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-1 text-center text-xs text-[var(--text-secondary)]">← swipe to explore →</p>
+        </div>
+
+        {/* Desktop: tilted layout */}
+        <div className="mt-14 hidden items-end justify-center gap-6 lg:gap-10 sm:flex">
+          <div className="flex flex-col items-center gap-3" style={{transform: "rotate(-5deg) translateY(20px)"}}>
             <div className="w-44 overflow-hidden rounded-[2.5rem] border-[5px] border-gray-900 bg-gray-900 shadow-xl">
-              <Image
-                src="/images/app/screen-clients.png"
-                alt="Clients and Pets screen"
-                width={706}
-                height={1494}
-                className="block w-full"
-              />
+              <Image src="/images/app/screen-clients.png" alt="Clients and Pets screen" width={706} height={1494} className="block w-full" />
             </div>
             <p className="text-sm font-semibold text-[var(--text-secondary)]">Clients &amp; Pets</p>
           </div>
-
           <div className="flex flex-col items-center gap-3">
             <div className="w-52 overflow-hidden rounded-[2.5rem] border-[5px] border-gray-900 bg-gray-900 shadow-2xl ring-4 ring-[var(--rose-primary)]/20">
-              <Image
-                src="/images/app/screen-dashboard.png"
-                alt="Dashboard screen"
-                width={706}
-                height={1494}
-                className="block w-full"
-              />
+              <Image src="/images/app/screen-dashboard.png" alt="Dashboard screen" width={706} height={1494} className="block w-full" />
             </div>
             <p className="text-sm font-semibold text-[var(--rose-primary)]">Dashboard</p>
           </div>
-
-          <div className="hidden sm:flex sm:flex-col sm:items-center sm:gap-3" style={{transform: "rotate(5deg) translateY(20px)"}}>
+          <div className="flex flex-col items-center gap-3" style={{transform: "rotate(5deg) translateY(20px)"}}>
             <div className="w-44 overflow-hidden rounded-[2.5rem] border-[5px] border-gray-900 bg-gray-900 shadow-xl">
-              <Image
-                src="/images/app/screen-schedule.png"
-                alt="Schedule screen"
-                width={706}
-                height={1494}
-                className="block w-full"
-              />
+              <Image src="/images/app/screen-schedule.png" alt="Schedule screen" width={706} height={1494} className="block w-full" />
             </div>
             <p className="text-sm font-semibold text-[var(--text-secondary)]">Schedule</p>
           </div>

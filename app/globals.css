@@ -22,11 +22,13 @@
 html {
   min-height: 100%;
   background: var(--cream-background);
+  overflow-x: hidden;
 }
 
 body {
   min-height: 100%;
   margin: 0;
+  overflow-x: hidden;
   background: var(--cream-background);
   color: var(--text-primary);
   font-family:
