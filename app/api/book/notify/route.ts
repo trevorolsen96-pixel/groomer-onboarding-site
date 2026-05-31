@@ -3,10 +3,38 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sendSms } from "@/lib/telnyx";
 
 export async function POST(req: NextRequest) {
-  const { requestId, status } = await req.json();
+  const { requestId, status, clientPhone, businessId: directBusinessId } = await req.json();
 
   if (!requestId || !status) {
     return NextResponse.json({ error: "requestId and status are required." }, { status: 400 });
+  }
+
+  // Handle onboarding accepted — uses onboarding_requests table
+  if (status === "onboarding_accepted") {
+    if (!clientPhone || !directBusinessId) {
+      return NextResponse.json({ ok: true, skipped: "no_phone_or_business" });
+    }
+    const phone = _toE164(clientPhone);
+    if (!phone) return NextResponse.json({ ok: true, skipped: "bad_phone_format" });
+
+    const { data: settings } = await supabaseAdmin
+      .from("business_settings")
+      .select("sms_sender_number, business_name")
+      .eq("business_id", directBusinessId)
+      .maybeSingle();
+
+    const from = settings?.sms_sender_number as string | null;
+    if (!from) return NextResponse.json({ ok: true, skipped: "no_sender_number" });
+
+    const businessName = (settings?.business_name as string | null) ?? "Your groomer";
+    const text = `Welcome to ${businessName}! Your profile is set up and you're ready to book. We look forward to seeing your pup!`;
+
+    try {
+      await sendSms({ from, to: phone, text });
+    } catch (err) {
+      console.error("SMS send failed:", err);
+    }
+    return NextResponse.json({ ok: true });
   }
 
   // Load the booking request
