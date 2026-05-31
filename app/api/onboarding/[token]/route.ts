@@ -240,7 +240,7 @@ if (contentType.includes("multipart/form-data")) {
 
     const { data: requestRow, error: requestError } = await supabaseAdmin
       .from("onboarding_requests")
-      .select("id, status, business_id")
+      .select("id, status, business_id, source")
       .eq("token", cleanToken)
       .single();
 
@@ -373,6 +373,21 @@ if (requirePetRecords) {
     const customerNotes = `Onboarding form submitted. Email: ${body.email
       .trim()
       .toLowerCase()}. SMS opt-in: Yes`;
+
+    // For booking-sourced onboarding, store snapshot for groomer approval
+    if ((requestRow.source as string | null) === "booking") {
+      await supabaseAdmin.from("onboarding_requests").update({
+        status: "pending_approval",
+        submission_snapshot: {
+          ...body,
+          _customer_name: customerName,
+          _customer_address: customerAddress,
+          _customer_notes: customerNotes,
+        },
+      }).eq("id", requestRow.id);
+
+      return NextResponse.json({ ok: true });
+    }
 
     const { data: customerRow, error: customerError } = await supabaseAdmin
       .from("customers")

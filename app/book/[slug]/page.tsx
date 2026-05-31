@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 
 type Service = {
@@ -25,6 +26,18 @@ type GroomerProfile = {
   services: Service[];
 };
 
+type BusinessHour = {
+  dayOfWeek: number; // 1=Mon...7=Sun
+  isOpen: boolean;
+  startTime: string | null;
+  endTime: string | null;
+};
+
+type Availability = {
+  hours: BusinessHour[];
+  closedDates: string[];
+};
+
 type Step = "email" | "code" | "booking" | "done";
 
 export default function GroomerBookingPage({
@@ -32,6 +45,7 @@ export default function GroomerBookingPage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
+  const router = useRouter();
   const [slug, setSlug] = useState<string | null>(null);
   const [groomer, setGroomer] = useState<GroomerProfile | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -54,6 +68,7 @@ export default function GroomerBookingPage({
   const [requestedTime, setRequestedTime] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [availability, setAvailability] = useState<Availability | null>(null);
 
   useEffect(() => {
     params.then((p) => setSlug(p.slug));
@@ -71,6 +86,13 @@ export default function GroomerBookingPage({
         }
       })
       .catch(() => setLoadError("Failed to load groomer page."));
+
+    fetch(`/api/book/${slug}/availability`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data.error) setAvailability(data);
+      })
+      .catch(() => {});
   }, [slug]);
 
   async function handleSendOtp(e: FormEvent) {
@@ -119,9 +141,21 @@ export default function GroomerBookingPage({
       setClientName(data.customer.name ?? "");
       setClientPhone(data.customer.phone ?? "");
       setExistingPets(data.pets ?? []);
+      setStep("booking");
+    } else {
+      // New client — redirect to groomer's onboarding form
+      const tokenRes = await fetch("/api/book/onboarding-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessId: groomer!.businessId, clientEmail: email }),
+      });
+      const tokenData = await tokenRes.json();
+      if (!tokenRes.ok || !tokenData.token) {
+        setOtpError("Failed to start onboarding. Please try again.");
+        return;
+      }
+      router.push(`/onboarding/${tokenData.token}`);
     }
-
-    setStep("booking");
   }
 
   function togglePet(id: string) {
@@ -427,32 +461,13 @@ export default function GroomerBookingPage({
             </div>
 
             {/* Date + time */}
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="text-sm font-semibold text-[var(--text-primary)]">
-                  Preferred date
-                </label>
-                <input
-                  type="date"
-                  value={requestedDate}
-                  onChange={(e) => setRequestedDate(e.target.value)}
-                  min={new Date().toISOString().split("T")[0]}
-                  required
-                  className="mt-2"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-semibold text-[var(--text-primary)]">
-                  Preferred time (optional)
-                </label>
-                <input
-                  type="time"
-                  value={requestedTime}
-                  onChange={(e) => setRequestedTime(e.target.value)}
-                  className="mt-2"
-                />
-              </div>
-            </div>
+            <DateTimePicker
+              availability={availability}
+              selectedDate={requestedDate}
+              selectedTime={requestedTime}
+              onDateChange={(d) => { setRequestedDate(d); setRequestedTime(""); }}
+              onTimeChange={setRequestedTime}
+            />
 
             {submitError ? (
               <p className="error-banner px-4 py-3 text-sm font-semibold">{submitError}</p>
@@ -487,5 +502,152 @@ export default function GroomerBookingPage({
 
       </section>
     </main>
+  );
+}
+
+// ── Date/time picker with business hours awareness ─────────────────
+
+function DateTimePicker({
+  availability,
+  selectedDate,
+  selectedTime,
+  onDateChange,
+  onTimeChange,
+}: {
+  availability: Availability | null;
+  selectedDate: string;
+  selectedTime: string;
+  onDateChange: (d: string) => void;
+  onTimeChange: (t: string) => void;
+}) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // JS getDay(): 0=Sun,1=Mon...6=Sat → map to Flutter convention 1=Mon...7=Sun
+  function jsToFlutterDay(jsDay: number): number {
+    return jsDay === 0 ? 7 : jsDay;
+  }
+
+  function isDateAvailable(dateStr: string): boolean {
+    if (!availability) return true;
+    const d = new Date(dateStr + "T12:00:00");
+    if (d < today) return false;
+    // Check if it's a closed holiday
+    if (availability.closedDates.includes(dateStr)) return false;
+    // Check business hours for that day
+    const flutterDay = jsToFlutterDay(d.getDay());
+    const hour = availability.hours.find((h) => h.dayOfWeek === flutterDay);
+    return hour?.isOpen === true;
+  }
+
+  function getHoursForDate(dateStr: string): { start: string; end: string } | null {
+    if (!availability || !dateStr) return null;
+    const d = new Date(dateStr + "T12:00:00");
+    const flutterDay = jsToFlutterDay(d.getDay());
+    const hour = availability.hours.find((h) => h.dayOfWeek === flutterDay);
+    if (!hour?.isOpen || !hour.startTime || !hour.endTime) return null;
+    return { start: hour.startTime, end: hour.endTime };
+  }
+
+  function generateTimeSlots(start: string, end: string): string[] {
+    const slots: string[] = [];
+    const [startH, startM] = start.split(":").map(Number);
+    const [endH, endM] = end.split(":").map(Number);
+    let h = startH;
+    let m = startM;
+    const endTotal = endH * 60 + endM;
+    while (h * 60 + m <= endTotal) {
+      slots.push(`${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`);
+      m += 30;
+      if (m >= 60) { h += 1; m -= 60; }
+    }
+    return slots;
+  }
+
+  function formatTime(t: string): string {
+    const [h, m] = t.split(":").map(Number);
+    const ampm = h < 12 ? "AM" : "PM";
+    const hour = h % 12 === 0 ? 12 : h % 12;
+    return `${hour}:${m.toString().padStart(2, "0")} ${ampm}`;
+  }
+
+  // Build next 60 days, filter to available ones
+  const availableDates: string[] = [];
+  for (let i = 0; i < 60; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    const str = d.toISOString().split("T")[0];
+    if (isDateAvailable(str)) availableDates.push(str);
+  }
+
+  function formatDateLabel(str: string): string {
+    const d = new Date(str + "T12:00:00");
+    return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  }
+
+  const hours = selectedDate ? getHoursForDate(selectedDate) : null;
+  const timeSlots = hours ? generateTimeSlots(hours.start, hours.end) : [];
+  const closedReason = selectedDate && availability
+    ? (() => {
+        const d = new Date(selectedDate + "T12:00:00");
+        const flutterDay = jsToFlutterDay(d.getDay());
+        const hour = availability.hours.find((h) => h.dayOfWeek === flutterDay);
+        if (availability.closedDates.includes(selectedDate)) return "closed (holiday)";
+        if (!hour?.isOpen) return "closed that day";
+        return null;
+      })()
+    : null;
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="text-sm font-semibold text-[var(--text-primary)]">
+          Preferred date
+        </label>
+        <select
+          value={selectedDate}
+          onChange={(e) => onDateChange(e.target.value)}
+          required
+          className="mt-2"
+        >
+          <option value="">Select a date</option>
+          {availableDates.map((d) => (
+            <option key={d} value={d}>{formatDateLabel(d)}</option>
+          ))}
+        </select>
+        {availableDates.length === 0 && availability ? (
+          <p className="mt-2 text-xs text-[var(--rose-primary)] font-semibold">
+            No available dates in the next 60 days. Please contact the groomer directly.
+          </p>
+        ) : null}
+      </div>
+
+      {selectedDate && !closedReason ? (
+        <div>
+          <label className="text-sm font-semibold text-[var(--text-primary)]">
+            Preferred time
+          </label>
+          {timeSlots.length > 0 ? (
+            <select
+              value={selectedTime}
+              onChange={(e) => onTimeChange(e.target.value)}
+              className="mt-2"
+            >
+              <option value="">Select a time</option>
+              {timeSlots.map((t) => (
+                <option key={t} value={t}>{formatTime(t)}</option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type="time"
+              value={selectedTime}
+              onChange={(e) => onTimeChange(e.target.value)}
+              className="mt-2"
+            />
+          )}
+        </div>
+      ) : null}
+    </div>
   );
 }
