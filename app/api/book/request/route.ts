@@ -40,8 +40,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Failed to submit request." }, { status: 500 });
   }
 
-  // Send push notification — awaited so it completes before serverless function exits
-  await sendPushToBusinessAsync({
+  // Fire push in background — don't await so it never blocks the response
+  void sendPushToBusinessAsync({
     businessId,
     title: "New Booking Request",
     body: `${clientName ?? "A client"} requested an appointment.`,
