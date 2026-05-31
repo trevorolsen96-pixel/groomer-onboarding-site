@@ -18,76 +18,57 @@ export default function AccountMenu() {
   const [signingOut, setSigningOut] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
+  // Step 1: resolve auth state immediately
   useEffect(() => {
-    let mounted = true;
-
-    async function loadSession() {
-      try {
-        const { data } = await supabaseClient.auth.getSession();
-        if (!mounted) return;
-
-        const user = data.session?.user ?? null;
-        setEmail(user?.email ?? null);
-
-        if (user) {
-          try {
-            await loadBusiness(user.id);
-          } catch (_) {
-            // business load failed — still show logged-in state
-          }
-        }
-      } catch (_) {
-        // session load failed
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    }
-
-    loadSession();
+    supabaseClient.auth.getSession().then(({ data }) => {
+      const user = data.session?.user ?? null;
+      setEmail(user?.email ?? null);
+      setLoading(false);
+      if (user) loadBusiness(user.id);
+    }).catch(() => setLoading(false));
 
     const { data: { subscription } } = supabaseClient.auth.onAuthStateChange(
-      async (_event, session) => {
-        try {
-          setEmail(session?.user?.email ?? null);
-          if (session?.user) {
-            try { await loadBusiness(session.user.id); } catch (_) {}
-          } else {
-            setBusiness(null);
-          }
-        } finally {
-          setLoading(false);
-        }
+      (_event, session) => {
+        const user = session?.user ?? null;
+        setEmail(user?.email ?? null);
+        setLoading(false);
+        if (user) loadBusiness(user.id);
+        else setBusiness(null);
       }
     );
 
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
+  // Step 2: load business info in background (non-blocking)
   async function loadBusiness(userId: string) {
-    const { data: profile } = await supabaseClient
-      .from("profiles")
-      .select("business_id")
-      .eq("id", userId)
-      .maybeSingle();
+    try {
+      const { data: profile } = await supabaseClient
+        .from("profiles")
+        .select("business_id")
+        .eq("id", userId)
+        .maybeSingle();
 
-    if (!profile?.business_id) return;
+      if (!profile?.business_id) return;
 
-    const { data: settings } = await supabaseClient
-      .from("business_settings")
-      .select("business_name, logo_url")
-      .eq("business_id", profile.business_id)
-      .maybeSingle();
+      const { data: settings } = await supabaseClient
+        .from("business_settings")
+        .select("business_name, logo_url")
+        .eq("business_id", profile.business_id)
+        .maybeSingle();
 
-    setBusiness({
-      name: settings?.business_name ?? null,
-      logoUrl: settings?.logo_url ?? null,
-    });
+      if (settings) {
+        setBusiness({
+          name: settings.business_name ?? null,
+          logoUrl: settings.logo_url ?? null,
+        });
+      }
+    } catch (_) {
+      // business info is optional — don't break auth state
+    }
   }
 
-  // Close dropdown when clicking outside
+  // Close dropdown on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
@@ -126,10 +107,10 @@ export default function AccountMenu() {
 
   // Logged in
   const displayName = business?.name ?? email;
-  const initials = (business?.name ?? email)
+  const initials = displayName
     .split(" ")
     .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? "")
+    .map((w: string) => w[0]?.toUpperCase() ?? "")
     .join("");
 
   return (
@@ -139,7 +120,6 @@ export default function AccountMenu() {
         onClick={() => setOpen((o) => !o)}
         className="flex items-center gap-2.5 rounded-xl border border-[var(--divider-soft)] bg-white px-3 py-1.5 shadow-sm hover:bg-[var(--soft-surface)] transition"
       >
-        {/* Logo / avatar */}
         <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[var(--soft-surface)]">
           {business?.logoUrl ? (
             <Image
@@ -156,12 +136,10 @@ export default function AccountMenu() {
           )}
         </div>
 
-        {/* Name */}
         <span className="hidden max-w-[160px] truncate text-sm font-semibold text-[var(--text-primary)] sm:block">
           {displayName}
         </span>
 
-        {/* Chevron */}
         <svg
           className={`h-4 w-4 shrink-0 text-[var(--text-secondary)] transition-transform ${open ? "rotate-180" : ""}`}
           viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
@@ -171,14 +149,12 @@ export default function AccountMenu() {
         </svg>
       </button>
 
-      {/* Dropdown */}
       {open && (
         <div className="absolute right-0 top-full z-50 mt-2 w-52 overflow-hidden rounded-2xl border border-[var(--divider-soft)] bg-white shadow-lg">
           <div className="border-b border-[var(--divider-soft)] px-4 py-3">
             <p className="text-xs font-semibold text-[var(--text-secondary)]">Signed in as</p>
             <p className="mt-0.5 truncate text-sm font-bold text-[var(--text-primary)]">{email}</p>
           </div>
-
           <div className="p-1.5">
             <Link
               href="/account"
@@ -190,7 +166,6 @@ export default function AccountMenu() {
               </svg>
               My Account
             </Link>
-
             <button
               type="button"
               onClick={handleLogout}
