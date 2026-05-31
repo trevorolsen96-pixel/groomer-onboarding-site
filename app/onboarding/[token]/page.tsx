@@ -141,7 +141,7 @@ const [petRecords, setPetRecords] = useState<PetRecordUpload[]>([]);
         setLogoUrl(result.logo_url);
         if (result.client_email) {
           setLockedEmail(result.client_email);
-          setForm((prev) => ({ ...prev, email: result.client_email }));
+          setForm((prev) => ({ ...prev, email: result.client_email! }));
         }
         setAgreements(result.agreements ?? []);
         setQuestions(loadedQuestions);
