@@ -48,10 +48,9 @@ export async function POST(req: NextRequest) {
   let text: string;
 
   if (status === "approved") {
-    text = `Hi ${firstName}! Your grooming appointment with ${businessName} has been confirmed for ${dateStr}${timeStr}. We look forward to seeing your pup! Reply STOP to opt out.`;
+    text = `Hi ${firstName}! Your grooming appt with ${businessName} is confirmed for ${dateStr}${timeStr}. See you then!`;
   } else {
-    const noteStr = request.groomer_note ? ` Note from your groomer: "${request.groomer_note}"` : "";
-    text = `Hi ${firstName}, unfortunately ${businessName} is unable to accommodate your grooming request for ${dateStr}.${noteStr} Please reach out to schedule a different time. Reply STOP to opt out.`;
+    text = `Hi ${firstName}, ${businessName} can't confirm your grooming request for ${dateStr}. Please reach out to reschedule.`;
   }
 
   try {
@@ -67,7 +66,7 @@ export async function POST(req: NextRequest) {
 function _formatDate(date: string): string {
   try {
     const d = new Date(date + "T12:00:00");
-    return d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+    return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
   } catch {
     return date;
   }
