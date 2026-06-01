@@ -23,7 +23,7 @@ function fmt(amount: number) {
 }
 
 export default function PayPage({ paymentLinkId, businessName, customerName, serviceName, amountDue }: Props) {
-  const [selectedPreset, setSelectedPreset] = useState<number | "custom">(0);
+  const [selectedPreset, setSelectedPreset] = useState<number | "custom">(0.15);
   const [customTip, setCustomTip] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
