@@ -115,7 +115,9 @@ export default function HomePage() {
           </h2>
 
           <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+
             {features.map(({ title, desc, icon }) => (
+
               <div key={title} className="rounded-3xl bg-white p-5 shadow-sm">
                 <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--soft-surface)] text-[var(--rose-primary)]">
                   {icon}
@@ -124,6 +126,15 @@ export default function HomePage() {
                 <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">{desc}</p>
               </div>
             ))}
+          </div>
+
+          <div className="mt-10 text-center">
+            <Link href="/features" className="secondary-button inline-flex items-center gap-2">
+              See all features
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
           </div>
         </section>
       </div>
@@ -287,9 +298,15 @@ export default function HomePage() {
           </table>
         </div>
 
-        <div className="mt-8 flex justify-center">
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
           <Link href="/create-account" className="primary-button">
             Start your 14-day trial
+          </Link>
+          <Link href="/pricing" className="secondary-button inline-flex items-center gap-2">
+            Full pricing details
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
           </Link>
         </div>
       </section>
