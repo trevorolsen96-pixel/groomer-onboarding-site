@@ -289,7 +289,7 @@ function MoeGoImportFlow({ accessToken, onBack }: { accessToken: string; onBack:
               <ol className="space-y-5">
                 <li className="flex items-start gap-3">
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--rose-primary)]/10 text-xs font-bold text-[var(--rose-primary)]">1</span>
-                  <p className="text-sm leading-6 text-[var(--text-secondary)]">Log in to MoeGo at <strong>app.moego.pet</strong> in your web browser (not the mobile app).</p>
+                  <p className="text-sm leading-6 text-[var(--text-secondary)]">Log in to MoeGo at <strong>go.moego.pet</strong> in your web browser (not the mobile app).</p>
                 </li>
                 <li className="flex items-start gap-3">
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--rose-primary)]/10 text-xs font-bold text-[var(--rose-primary)]">2</span>
