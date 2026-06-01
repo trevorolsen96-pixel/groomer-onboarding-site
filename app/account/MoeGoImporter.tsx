@@ -41,35 +41,57 @@ function parsePets(raw: string): Pet[] {
   return pets;
 }
 
-function parseCSV(text: string): ParsedRow[] {
-  const lines = text.split(/\r?\n/).filter((l) => l.trim());
-  if (lines.length < 2) return [];
+// Parses CSV text into records, correctly handling quoted fields with embedded newlines.
+function parseCSVRecords(text: string): string[][] {
+  const records: string[][] = [];
+  let fields: string[] = [];
+  let current = "";
+  let inQuotes = false;
 
-  // Parse a single CSV line respecting quoted fields
-  function parseLine(line: string): string[] {
-    const fields: string[] = [];
-    let current = "";
-    let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (ch === '"') {
-        inQuotes = !inQuotes;
-      } else if (ch === "," && !inQuotes) {
-        fields.push(current.trim());
-        current = "";
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const next = text[i + 1];
+
+    if (ch === '"') {
+      if (inQuotes && next === '"') {
+        current += '"';
+        i++;
       } else {
-        current += ch;
+        inQuotes = !inQuotes;
       }
+    } else if (ch === "," && !inQuotes) {
+      fields.push(current.trim());
+      current = "";
+    } else if (!inQuotes && (ch === "\n" || (ch === "\r" && next === "\n"))) {
+      if (ch === "\r") i++;
+      fields.push(current.trim());
+      current = "";
+      if (fields.some((f) => f)) records.push(fields);
+      fields = [];
+    } else if (!inQuotes && ch === "\r") {
+      fields.push(current.trim());
+      current = "";
+      if (fields.some((f) => f)) records.push(fields);
+      fields = [];
+    } else {
+      current += ch;
     }
-    fields.push(current.trim());
-    return fields;
   }
 
-  // Build header index map
-  const headers = parseLine(lines[0]).map((h) => h.toLowerCase().replace(/\s+/g, " ").trim());
-  function col(name: string): number {
-    return headers.findIndex((h) => h === name);
-  }
+  // Flush last record
+  fields.push(current.trim());
+  if (fields.some((f) => f)) records.push(fields);
+
+  return records;
+}
+
+function parseCSV(text: string): ParsedRow[] {
+  const records = parseCSVRecords(text);
+  if (records.length < 2) return [];
+
+  // Build header index map from first record
+  const headers = records[0].map((h) => h.toLowerCase().replace(/\s+/g, " ").trim());
+  const col = (name: string) => headers.findIndex((h) => h === name);
 
   const iFirstName = col("first name");
   const iLastName = col("last name");
@@ -82,10 +104,13 @@ function parseCSV(text: string): ParsedRow[] {
   const iPets = col("pet(breed)");
   const iCreateDate = col("create date");
 
+  // If we can't find key columns this probably isn't a MoeGo export
+  if (iFirstName === -1 && iLastName === -1) return [];
+
   const rows: ParsedRow[] = [];
 
-  for (let i = 1; i < lines.length; i++) {
-    const f = parseLine(lines[i]);
+  for (let i = 1; i < records.length; i++) {
+    const f = records[i];
     const get = (idx: number) => (idx >= 0 ? f[idx]?.trim() ?? "" : "");
 
     const firstName = get(iFirstName);
