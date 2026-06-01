@@ -116,21 +116,39 @@ export default function MoeGoImporter({ accessToken }: { accessToken: string }) 
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState("");
+  const [dragging, setDragging] = useState(false);
 
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  function readFile(file: File) {
     setFileName(file.name);
     setResult(null);
     setError("");
-
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
-      const rows = parseCSV(text);
-      setPreview(rows);
+      setPreview(parseCSV(text));
     };
     reader.readAsText(file);
+  }
+
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) readFile(file);
+  }
+
+  function handleDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) readFile(file);
+  }
+
+  function handleDragOver(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setDragging(true);
+  }
+
+  function handleDragLeave() {
+    setDragging(false);
   }
 
   async function handleImport() {
@@ -189,27 +207,39 @@ export default function MoeGoImporter({ accessToken }: { accessToken: string }) 
         </p>
 
         {!result ? (
-          <div className="mt-6">
-            <label className="block text-sm font-semibold text-[var(--text-primary)]">
-              Select MoeGo export CSV
-            </label>
-            <div className="mt-2 flex items-center gap-4">
-              <label className="secondary-button cursor-pointer">
-                Choose file
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept=".csv"
-                  className="sr-only"
-                  onChange={handleFile}
-                />
-              </label>
-              {fileName ? (
-                <span className="text-sm text-[var(--text-secondary)]">{fileName}</span>
-              ) : (
-                <span className="text-sm text-[var(--text-secondary)]">No file selected</span>
-              )}
-            </div>
+          <div
+            className={`mt-6 flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
+              dragging
+                ? "border-[var(--rose-primary)] bg-[var(--rose-primary)]/5"
+                : "border-[var(--divider-soft)] bg-[var(--soft-surface)] hover:border-[var(--rose-primary)] hover:bg-[var(--rose-primary)]/5"
+            }`}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onClick={() => fileRef.current?.click()}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              className={`h-10 w-10 transition-colors ${dragging ? "text-[var(--rose-primary)]" : "text-[var(--text-secondary)]"}`}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V6a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <p className="mt-3 text-sm font-bold text-[var(--text-primary)]">
+              {fileName ? fileName : "Drop your MoeGo CSV here"}
+            </p>
+            <p className="mt-1 text-xs text-[var(--text-secondary)]">
+              or <span className="font-semibold text-[var(--rose-primary)]">click to browse</span>
+            </p>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".csv"
+              className="sr-only"
+              onChange={handleFile}
+            />
           </div>
         ) : null}
       </section>
