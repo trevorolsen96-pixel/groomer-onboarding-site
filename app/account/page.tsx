@@ -1001,10 +1001,10 @@ function AccountPageContent() {
                   smsEnabled={settings?.sms_enabled ?? false}
                 />
 
-                <AccountCard title="Dedicated Texting Number">
+                <AccountCard title="Wagzly Phone Number">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <Info label="Messaging status" value={smsStatusTitle(smsSetup?.status)} />
-                    <Info label="Dedicated number" value={smsSetup?.phone_number} />
+                    <Info label="Wagzly phone number" value={smsSetup?.phone_number} />
                     <Info label="Submitted" value={formatDate(smsSetup?.submitted_at ?? null)} />
                     <Info label="Approved" value={formatDate(smsSetup?.approved_at ?? null)} />
                   </div>
@@ -1476,7 +1476,7 @@ function MessagingStatusCard({
       <div className="mt-6 grid gap-4 sm:grid-cols-3">
         <Info label="SMS enabled" value={smsEnabled ? "Yes" : "No"} />
         <Info label="Verification" value={prettyStatus(status)} />
-        <Info label="Texting number" value={smsSetup?.phone_number} />
+        <Info label="Wagzly phone number" value={smsSetup?.phone_number} />
       </div>
 
       {onSetupClick ? (
