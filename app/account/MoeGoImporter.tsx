@@ -23,11 +23,11 @@ type ImportResult = {
   skipped: { name: string; reason: string }[];
 };
 
-// Parses "Rockey(Malti Poo (h)),Toby(Husky)" into [{name, breed}]
+type Software = "moego" | null;
+
 function parsePets(raw: string): Pet[] {
   if (!raw?.trim()) return [];
   const pets: Pet[] = [];
-  // Split on commas that are NOT inside parentheses
   const parts = raw.split(/,(?![^(]*\))/);
   for (const part of parts) {
     const trimmed = part.trim();
@@ -41,7 +41,6 @@ function parsePets(raw: string): Pet[] {
   return pets;
 }
 
-// Parses CSV text into records, correctly handling quoted fields with embedded newlines.
 function parseCSVRecords(text: string): string[][] {
   const records: string[][] = [];
   let fields: string[] = [];
@@ -78,7 +77,6 @@ function parseCSVRecords(text: string): string[][] {
     }
   }
 
-  // Flush last record
   fields.push(current.trim());
   if (fields.some((f) => f)) records.push(fields);
 
@@ -89,7 +87,6 @@ function parseCSV(text: string): ParsedRow[] {
   const records = parseCSVRecords(text);
   if (records.length < 2) return [];
 
-  // Build header index map from first record
   const headers = records[0].map((h) => h.toLowerCase().replace(/\s+/g, " ").trim());
   const col = (name: string) => headers.findIndex((h) => h === name);
 
@@ -104,7 +101,6 @@ function parseCSV(text: string): ParsedRow[] {
   const iPets = col("pet(breed)");
   const iCreateDate = col("create date");
 
-  // If we can't find key columns this probably isn't a MoeGo export
   if (iFirstName === -1 && iLastName === -1) return [];
 
   const rows: ParsedRow[] = [];
@@ -134,7 +130,7 @@ function parseCSV(text: string): ParsedRow[] {
   return rows;
 }
 
-export default function MoeGoImporter({ accessToken }: { accessToken: string }) {
+function MoeGoImportFlow({ accessToken, onBack }: { accessToken: string; onBack: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<ParsedRow[] | null>(null);
   const [fileName, setFileName] = useState("");
@@ -216,18 +212,30 @@ export default function MoeGoImporter({ accessToken }: { accessToken: string }) 
 
   return (
     <div className="space-y-6">
-
       {/* Header card */}
       <section className="soft-card p-6">
+        <button
+          type="button"
+          onClick={result ? handleReset : onBack}
+          className="mb-4 inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+          {result ? "Import another file" : "Back to software selection"}
+        </button>
+
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--rose-primary)]">
-          Data Import
+          Import from MoeGo
         </p>
         <h2 className="mt-2 text-2xl font-bold text-[var(--text-primary)]">
-          Import from MoeGo
+          Clients &amp; Pets
         </h2>
         <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
           Upload a MoeGo client export CSV to import your clients and pets into Wagzly.
-          Duplicate clients (matched by phone number) will be identified and reported — not duplicated.
+          This importer brings in <strong>client profiles and pet information only</strong> — grooming history
+          and notes are not included in this import.
+          Duplicate clients (matched by phone number) will be reported, not duplicated.
           Both active and inactive clients will be imported.
         </p>
 
@@ -324,7 +332,7 @@ export default function MoeGoImporter({ accessToken }: { accessToken: string }) 
                       {[row.firstName, row.lastName].filter(Boolean).join(" ")}
                     </td>
                     <td className="px-4 py-3 text-[var(--text-secondary)]">
-                      {row.primaryPhone || <span className="text-[var(--text-secondary)] opacity-50">—</span>}
+                      {row.primaryPhone || <span className="opacity-50">—</span>}
                     </td>
                     <td className="px-4 py-3 text-[var(--text-secondary)]">
                       {row.address ? (
@@ -379,7 +387,6 @@ export default function MoeGoImporter({ accessToken }: { accessToken: string }) 
             </h3>
           </div>
 
-          {/* Summary tiles */}
           <div className="grid grid-cols-3 divide-x divide-[var(--divider-soft)] border-b border-[var(--divider-soft)]">
             <div className="px-6 py-5">
               <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[var(--text-secondary)]">Imported</p>
@@ -400,7 +407,6 @@ export default function MoeGoImporter({ accessToken }: { accessToken: string }) 
             </div>
           </div>
 
-          {/* Duplicates list */}
           {result.duplicates.length > 0 ? (
             <div className="px-6 py-5">
               <p className="text-sm font-bold text-[var(--text-primary)]">
@@ -438,7 +444,6 @@ export default function MoeGoImporter({ accessToken }: { accessToken: string }) 
             </div>
           ) : null}
 
-          {/* Skipped list */}
           {result.skipped.length > 0 ? (
             <div className="px-6 pb-5">
               <p className="text-sm font-bold text-[var(--text-primary)]">Skipped rows</p>
@@ -458,12 +463,87 @@ export default function MoeGoImporter({ accessToken }: { accessToken: string }) 
           ) : null}
 
           <div className="border-t border-[var(--divider-soft)] px-6 py-4">
-            <button type="button" className="secondary-button" onClick={handleReset}>
-              Import another file
+            <button type="button" className="secondary-button" onClick={onBack}>
+              Back to software selection
             </button>
           </div>
         </section>
       ) : null}
+    </div>
+  );
+}
+
+export default function MoeGoImporter({ accessToken }: { accessToken: string }) {
+  const [selected, setSelected] = useState<Software>(null);
+
+  if (selected === "moego") {
+    return <MoeGoImportFlow accessToken={accessToken} onBack={() => setSelected(null)} />;
+  }
+
+  return (
+    <div className="space-y-6">
+      <section className="soft-card p-6">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--rose-primary)]">
+          Data Import
+        </p>
+        <h2 className="mt-2 text-2xl font-bold text-[var(--text-primary)]">
+          Import your data
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
+          Select the software you are migrating from. Wagzly will guide you through importing
+          your clients and pets. More import types will be added over time.
+        </p>
+      </section>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        {/* MoeGo — available */}
+        <button
+          type="button"
+          onClick={() => setSelected("moego")}
+          className="soft-card group flex flex-col gap-4 p-6 text-left transition-shadow hover:shadow-md"
+        >
+          <div className="flex items-start justify-between">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--rose-primary)]/10">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-6 w-6 text-[var(--rose-primary)]">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+              </svg>
+            </div>
+            <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-bold text-green-700">
+              Available
+            </span>
+          </div>
+          <div>
+            <p className="text-base font-bold text-[var(--text-primary)] group-hover:text-[var(--rose-primary)] transition-colors">
+              Import from MoeGo
+            </p>
+            <p className="mt-1 text-sm text-[var(--text-secondary)]">
+              Clients &amp; pets from a MoeGo CSV export
+            </p>
+          </div>
+        </button>
+
+        {/* GroomMore — coming soon */}
+        <div className="soft-card flex flex-col gap-4 p-6 opacity-60">
+          <div className="flex items-start justify-between">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--soft-surface)]">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-6 w-6 text-[var(--text-secondary)]">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+              </svg>
+            </div>
+            <span className="inline-flex items-center rounded-full bg-[var(--soft-surface)] px-2.5 py-0.5 text-xs font-bold text-[var(--text-secondary)]">
+              Coming soon
+            </span>
+          </div>
+          <div>
+            <p className="text-base font-bold text-[var(--text-primary)]">
+              Import from GroomMore
+            </p>
+            <p className="mt-1 text-sm text-[var(--text-secondary)]">
+              Clients &amp; pets from a GroomMore export
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
