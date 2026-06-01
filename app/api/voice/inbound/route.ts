@@ -61,12 +61,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Forward the call — caller ID shows the Wagzly number so groomer
-    // knows it's a business call coming through Wagzly
+    const normalizedFrom = from ? normalizePhone(from) : normalizedTo;
+
+    // Show the real caller's number so the groomer sees who is calling.
+    // The whisper URL plays "Wagzly business call" only to the groomer
+    // before the call connects so they know it came through Wagzly.
+    const whisperUrl = `https://www.wagzly.com/api/voice/whisper`;
+
     const texml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Dial callerId="${normalizedTo}" answerOnBridge="true" timeout="30">
-    <Number>${forwardTo}</Number>
+  <Dial callerId="${normalizedFrom}" answerOnBridge="true" timeout="30">
+    <Number url="${whisperUrl}">${forwardTo}</Number>
   </Dial>
 </Response>`;
 
