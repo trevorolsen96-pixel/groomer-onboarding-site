@@ -6,12 +6,14 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseClient } from "../../lib/supabase-client";
 import MoeGoImporter from "./MoeGoImporter";
+import StripeConnectSection from "./StripeConnectSection";
 
 type Tab =
   | "overview"
   | "billing"
   | "business"
   | "messaging"
+  | "payments"
   | "staff"
   | "security"
   | "support"
@@ -60,6 +62,15 @@ type BusinessSmsSetup = {
   approved_at: string | null;
 };
 
+type PaymentStatus = {
+  connected: boolean;
+  charges_enabled: boolean;
+  payouts_enabled: boolean;
+  details_submitted: boolean;
+  payments_enabled: boolean;
+  status: string;
+};
+
 const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
   {
     key: "overview",
@@ -98,6 +109,16 @@ const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0">
         <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+      </svg>
+    ),
+  },
+  {
+    key: "payments",
+    label: "Payments",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0">
+        <rect x="2" y="5" width="20" height="14" rx="3" />
+        <path d="M2 10h20" />
       </svg>
     ),
   },
@@ -215,8 +236,10 @@ function AccountPageContent() {
   const [business, setBusiness] = useState<Business | null>(null);
   const [settings, setSettings] = useState<BusinessSettings | null>(null);
   const [smsSetup, setSmsSetup] = useState<BusinessSmsSetup | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | null>(null);
   const [staffCount, setStaffCount] = useState(0);
   const [pendingInviteCount, setPendingInviteCount] = useState(0);
+  const [justConnected, setJustConnected] = useState(false);
 
   const isTrialing = business?.subscription_status === "trialing";
 
@@ -244,6 +267,13 @@ function AccountPageContent() {
     if (billing === "cancelled") {
       setBillingMessage("Billing setup was cancelled. No changes were made.");
       router.replace("/account?tab=billing", { scroll: false });
+    }
+
+    const stripe = searchParams.get("stripe");
+    if (stripe === "connected" || stripe === "refresh") {
+      setActiveTab("payments");
+      setJustConnected(true);
+      router.replace("/account?tab=payments", { scroll: false });
     }
   }, [router, searchParams]);
 
@@ -282,6 +312,7 @@ function AccountPageContent() {
         businessResult,
         settingsResult,
         smsSetupResult,
+        paymentSettingsResult,
         staffResult,
         inviteResult,
       ] = await Promise.all([
@@ -306,6 +337,12 @@ function AccountPageContent() {
           .select(
             "business_id, status, phone_number, telnyx_phone_number_id, failure_reason, submitted_at, approved_at"
           )
+          .eq("business_id", businessId)
+          .maybeSingle(),
+
+        supabaseClient
+          .from("business_payment_settings")
+          .select("stripe_connected_account_id, charges_enabled, payouts_enabled, details_submitted, payments_enabled, status")
           .eq("business_id", businessId)
           .maybeSingle(),
 
@@ -343,6 +380,19 @@ function AccountPageContent() {
       setSmsSetup(smsSetupResult.data);
       setStaffCount(staffResult.count ?? 0);
       setPendingInviteCount(inviteResult.count ?? 0);
+
+      const ps = paymentSettingsResult.data;
+      if (ps) {
+        setPaymentStatus({
+          connected: Boolean(ps.stripe_connected_account_id),
+          charges_enabled: ps.charges_enabled ?? false,
+          payouts_enabled: ps.payouts_enabled ?? false,
+          details_submitted: ps.details_submitted ?? false,
+          payments_enabled: ps.payments_enabled ?? false,
+          status: ps.status ?? "not_connected",
+        });
+      }
+
       setLoading(false);
     }
 
@@ -1017,6 +1067,16 @@ function AccountPageContent() {
                   </div>
                 </AccountCard>
               </div>
+            ) : null}
+
+            {/* ── PAYMENTS ── */}
+            {activeTab === "payments" ? (
+              <StripeConnectSection
+                accessToken={accessToken}
+                isPro={business?.plan === "pro"}
+                initialStatus={paymentStatus}
+                justConnected={justConnected}
+              />
             ) : null}
 
             {/* ── STAFF ── */}

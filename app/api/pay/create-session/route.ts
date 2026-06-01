@@ -81,13 +81,17 @@ export async function POST(request: Request) {
     stripeBody.set("payment_intent_data[metadata][payment_link_id]", paymentLinkId);
     stripeBody.set("payment_intent_data[metadata][tip_amount]", String(tipAmount));
 
+    const stripeHeaders: Record<string, string> = {
+      Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    };
+    if (link.stripe_connected_account_id) {
+      stripeHeaders["Stripe-Account"] = link.stripe_connected_account_id;
+    }
+
     const stripeRes = await fetch("https://api.stripe.com/v1/checkout/sessions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
-        "Stripe-Account": link.stripe_connected_account_id,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
+      headers: stripeHeaders,
       body: stripeBody,
     });
 
