@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 type PaymentStatus = {
   connected: boolean;
@@ -28,9 +28,34 @@ export default function StripeConnectSection({
   const [connecting, setConnecting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
-  const [successMessage, setSuccessMessage] = useState(
-    justConnected ? "Stripe account connected! Your payment status has been refreshed." : ""
-  );
+  const [successMessage, setSuccessMessage] = useState("");
+
+  // Auto-refresh when returning from Stripe onboarding
+  useEffect(() => {
+    if (!justConnected) return;
+    async function autoRefresh() {
+      setRefreshing(true);
+      try {
+        const res = await fetch("/api/stripe-connect/refresh", {
+          method: "POST",
+          headers: { authorization: `Bearer ${accessToken}` },
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setStatus(data);
+          setSuccessMessage(
+            data.payments_enabled
+              ? "Stripe setup complete! Payments are now active."
+              : "Stripe account connected! Finish the remaining steps to enable payments."
+          );
+        }
+      } finally {
+        setRefreshing(false);
+      }
+    }
+    autoRefresh();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [justConnected]);
 
   async function handleConnect() {
     setConnecting(true);
