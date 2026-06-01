@@ -70,21 +70,6 @@ function formatDateOnly(value: Date, timezone: string) {
   return `${get("month")}/${get("day")}/${get("year")}`;
 }
 
-function formatAppointmentTime(
-  value: Date,
-  timezone: string,
-  windowEnabled: boolean,
-  windowMinutes: number
-): string {
-  if (!windowEnabled || windowMinutes <= 0) {
-    return formatDateTime(value, timezone);
-  }
-  const endTime = new Date(value.getTime() + windowMinutes * 60 * 1000);
-  const date = formatDateOnly(value, timezone);
-  const start = formatTimeOnly(value, timezone);
-  const end = formatTimeOnly(endTime, timezone);
-  return `${date} between ${start} – ${end}`;
-}
 
 async function deletePendingAppointmentReminders({
   businessId,
@@ -143,7 +128,10 @@ async function upsertAppointmentReminder({
   customerName,
   businessName,
   toPhone,
-  appointmentDate,
+  appointmentDateTime,
+  businessTimezone,
+  arrivalWindowEnabled,
+  arrivalWindowMinutes,
 }: {
   businessId: string;
   customerId: string;
@@ -152,8 +140,10 @@ async function upsertAppointmentReminder({
   customerName: string;
   businessName: string;
   toPhone: string;
-  appointmentDate: string;
-  // appointmentDate is already formatted with window applied
+  appointmentDateTime: Date;
+  businessTimezone: string;
+  arrivalWindowEnabled: boolean;
+  arrivalWindowMinutes: number;
 }) {
   const { data: selectedRule } = await supabaseAdmin
     .from("business_sms_reminder_rules")
@@ -177,10 +167,23 @@ async function upsertAppointmentReminder({
     return "past_due_removed";
   }
 
-  const message =
-    `Hi ${customerName}, this is ${businessName}. ` +
-    `Your grooming appt is ${appointmentDate}. ` +
-    `Reply YES to confirm or NO to reschedule.`;
+  let message: string;
+  if (arrivalWindowEnabled && arrivalWindowMinutes > 0) {
+    const endTime = new Date(appointmentDateTime.getTime() + arrivalWindowMinutes * 60 * 1000);
+    const date = formatDateOnly(appointmentDateTime, businessTimezone);
+    const start = formatTimeOnly(appointmentDateTime, businessTimezone);
+    const end = formatTimeOnly(endTime, businessTimezone);
+    message =
+      `Hi ${customerName}, this is ${businessName}. ` +
+      `Appt: ${date}, arrival ${start}-${end}. ` +
+      `Reply YES to confirm or NO to reschedule.`;
+  } else {
+    const appointmentDate = formatDateTime(appointmentDateTime, businessTimezone);
+    message =
+      `Hi ${customerName}, this is ${businessName}. ` +
+      `Your grooming appt is ${appointmentDate}. ` +
+      `Reply YES to confirm or NO to reschedule.`;
+  }
 
     const { error: queueError } = await supabaseAdmin
     .from("sms_outbound_queue")
@@ -393,12 +396,6 @@ export async function POST(request: Request) {
     const customerName = firstNameOnly(cleanText(customer.name));
     const arrivalWindowEnabled = settings?.arrival_window_enabled === true;
     const arrivalWindowMinutes = Number(settings?.arrival_window_minutes ?? 60);
-    const appointmentDate = formatAppointmentTime(
-      appointmentDateTime,
-      businessTimezone,
-      arrivalWindowEnabled,
-      arrivalWindowMinutes
-    );
 
     if (action === "schedule_reminder") {
       const reminderStatus = await upsertAppointmentReminder({
@@ -409,7 +406,10 @@ export async function POST(request: Request) {
         customerName,
         businessName,
         toPhone,
-        appointmentDate,
+        appointmentDateTime,
+        businessTimezone,
+        arrivalWindowEnabled,
+        arrivalWindowMinutes,
       });
 
       if (reminderStatus === "no_rule") {
@@ -446,10 +446,23 @@ export async function POST(request: Request) {
     }
 
     if (action === "reschedule") {
-      const message =
-        `Hi ${customerName}, this is ${businessName}. ` +
-        `Your grooming appt is now ${appointmentDate}. ` +
-        `Reply YES to confirm or NO to reschedule.`;
+      let message: string;
+      if (arrivalWindowEnabled && arrivalWindowMinutes > 0) {
+        const endTime = new Date(appointmentDateTime.getTime() + arrivalWindowMinutes * 60 * 1000);
+        const date = formatDateOnly(appointmentDateTime, businessTimezone);
+        const start = formatTimeOnly(appointmentDateTime, businessTimezone);
+        const end = formatTimeOnly(endTime, businessTimezone);
+        message =
+          `Hi ${customerName}, this is ${businessName}. ` +
+          `Updated appt: ${date}, arrival ${start}-${end}. ` +
+          `Reply YES to confirm or NO to reschedule.`;
+      } else {
+        const appointmentDate = formatDateTime(appointmentDateTime, businessTimezone);
+        message =
+          `Hi ${customerName}, this is ${businessName}. ` +
+          `Your grooming appt is now ${appointmentDate}. ` +
+          `Reply YES to confirm or NO to reschedule.`;
+      }
 
       const segments = calculateSmsSegments(message);
 
@@ -482,7 +495,10 @@ export async function POST(request: Request) {
         customerName,
         businessName,
         toPhone,
-        appointmentDate,
+        appointmentDateTime,
+        businessTimezone,
+        arrivalWindowEnabled,
+        arrivalWindowMinutes,
       });
 
       return NextResponse.json({
