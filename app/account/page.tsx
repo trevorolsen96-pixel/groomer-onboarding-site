@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseClient } from "../../lib/supabase-client";
+import MoeGoImporter from "./MoeGoImporter";
 
 type Tab =
   | "overview"
@@ -13,7 +14,8 @@ type Tab =
   | "messaging"
   | "staff"
   | "security"
-  | "support";
+  | "support"
+  | "import";
 
 type Profile = {
   id: string;
@@ -129,6 +131,17 @@ const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
       </svg>
     ),
   },
+  {
+    key: "import",
+    label: "Import",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0">
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+        <polyline points="17 8 12 3 7 8" />
+        <line x1="12" y1="3" x2="12" y2="15" />
+      </svg>
+    ),
+  },
 ];
 
 function formatDate(value: string | null) {
@@ -197,6 +210,7 @@ function AccountPageContent() {
   const [error, setError] = useState("");
   const [billingMessage, setBillingMessage] = useState("");
 
+  const [accessToken, setAccessToken] = useState("");
   const [profile, setProfile] = useState<Profile | null>(null);
   const [business, setBusiness] = useState<Business | null>(null);
   const [settings, setSettings] = useState<BusinessSettings | null>(null);
@@ -245,6 +259,7 @@ function AccountPageContent() {
         return;
       }
 
+      setAccessToken(sessionData.session.access_token);
       const userId = sessionData.session.user.id;
 
       const { data: profileData, error: profileError } = await supabaseClient
@@ -1149,6 +1164,12 @@ function AccountPageContent() {
                 </section>
               </div>
             ) : null}
+
+            {/* ── IMPORT ── */}
+            {activeTab === "import" ? (
+              <MoeGoImporter accessToken={accessToken} />
+            ) : null}
+
           </div>
         </div>
       </section>
