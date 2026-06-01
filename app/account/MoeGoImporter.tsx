@@ -115,7 +115,7 @@ function parseCSV(text: string): ParseCSVResult {
   const iPets = col("pet(breed)");
   const iCreateDate = col("create date");
 
-  if (iFirstName === -1 && iLastName === -1) return [];
+  if (iFirstName === -1 && iLastName === -1) return { rows: [], validationError: null };
 
   const rows: ParsedRow[] = [];
 
