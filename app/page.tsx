@@ -275,6 +275,7 @@ export default function HomePage() {
                 ["Payment links", "—", "🐾"],
                 ["Expenses / finance tools", "—", "🐾"],
                 ["Message pack add-ons", "—", "🐾"],
+                ["Data import (MoeGo & more)", "🐾", "🐾"],
               ].map(([feature, basic, pro]) => (
                 <tr key={feature} className="border-t border-black/5">
                   <td className="px-4 py-3 font-semibold text-[var(--text-primary)]">{feature}</td>

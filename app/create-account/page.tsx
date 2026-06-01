@@ -17,6 +17,7 @@ const comparisonRows = [
   ["Payment links", "—", "paw"],
   ["Expenses / finance tools", "—", "paw"],
   ["Message pack add-ons", "—", "paw"],
+  ["Data import (MoeGo & more)", "paw", "paw"],
 ];
 
 export default function CreateAccountPage() {
