@@ -88,7 +88,7 @@ export default function PayPage({ paymentLinkId, businessName, logoUrl, customer
             Payment request
           </p>
           <h1 className="mt-2 text-xl font-bold text-[var(--text-primary)]">{businessName}</h1>
-          <p className="mt-1 text-sm text-[var(--text-secondary)]">{serviceName} · {customerName}</p>
+          <p className="mt-1 text-sm text-[var(--text-secondary)]">{customerName}</p>
           <p className="mt-4 text-4xl font-bold text-[var(--text-primary)]">{fmt(amountDue)}</p>
           <p className="mt-1 text-xs text-[var(--text-secondary)]">Balance due</p>
         </div>
