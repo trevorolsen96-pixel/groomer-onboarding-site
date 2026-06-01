@@ -139,7 +139,7 @@ export async function POST(request: Request) {
             is_active: true,
             flags: [],
             care_reminder_enabled: false,
-            care_reminder_interval_weeks: 0,
+            care_reminder_interval_weeks: 4,
             care_reminder_include_siblings: false,
             created_at: now,
           });
