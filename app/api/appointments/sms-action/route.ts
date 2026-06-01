@@ -509,6 +509,7 @@ export async function POST(request: Request) {
     }
 
     if (action === "cancellation") {
+      const appointmentDate = formatDateTime(appointmentDateTime, businessTimezone);
       const message =
         `Hi ${customerName}, this is ${businessName}. ` +
         `Your grooming appt on ${appointmentDate} has been cancelled. ` +
