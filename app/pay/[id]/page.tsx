@@ -13,7 +13,16 @@ export default async function PaymentPage({ params }: { params: { id: string } }
     .eq("id", id)
     .maybeSingle();
 
-  if (error || !link) notFound();
+  if (error) {
+    console.error("payment_link query error:", JSON.stringify(error));
+    return (
+      <main className="flex min-h-screen items-center justify-center p-8">
+        <p className="text-sm text-red-600">Unable to load payment: {error.message}</p>
+      </main>
+    );
+  }
+
+  if (!link) notFound();
 
   if (link.status === "paid") {
     return (
