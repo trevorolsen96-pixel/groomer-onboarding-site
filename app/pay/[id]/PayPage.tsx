@@ -6,6 +6,7 @@ import Image from "next/image";
 type Props = {
   paymentLinkId: string;
   businessName: string;
+  logoUrl: string | null;
   customerName: string;
   serviceName: string;
   amountDue: number;
@@ -22,7 +23,7 @@ function fmt(amount: number) {
   return amount.toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
 
-export default function PayPage({ paymentLinkId, businessName, customerName, serviceName, amountDue }: Props) {
+export default function PayPage({ paymentLinkId, businessName, logoUrl, customerName, serviceName, amountDue }: Props) {
   const [selectedPreset, setSelectedPreset] = useState<number | "custom">(0.15);
   const [customTip, setCustomTip] = useState("");
   const [loading, setLoading] = useState(false);
@@ -61,9 +62,24 @@ export default function PayPage({ paymentLinkId, businessName, customerName, ser
     <main className="flex min-h-screen flex-col items-center justify-center bg-[var(--soft-surface)] px-4 py-12">
       <div className="w-full max-w-md space-y-5">
 
-        {/* Header */}
+        {/* Header — business logo or initials avatar */}
         <div className="text-center">
-          <Image src="/images/logo/WagzlyHLarge.png" alt="Wagzly" width={160} height={44} className="mx-auto" />
+          {logoUrl ? (
+            <Image
+              src={logoUrl}
+              alt={businessName}
+              width={80}
+              height={80}
+              className="mx-auto h-20 w-20 rounded-full object-cover shadow-md"
+              unoptimized
+            />
+          ) : (
+            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-[var(--rose-primary)] shadow-md">
+              <span className="text-2xl font-bold text-white">
+                {businessName.trim().charAt(0).toUpperCase()}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Business & appointment card */}

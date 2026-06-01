@@ -40,9 +40,13 @@ export default async function PaymentPage({ params }: { params: Promise<{ id: st
     );
   }
 
-  // Load business and appointment info
-  const [{ data: business }, { data: appointment }] = await Promise.all([
-    supabaseAdmin.from("businesses").select("name").eq("id", link.business_id).maybeSingle(),
+  // Load business settings and appointment info
+  const [{ data: businessSettings }, { data: appointment }] = await Promise.all([
+    supabaseAdmin
+      .from("business_settings")
+      .select("business_name, logo_url")
+      .eq("business_id", link.business_id)
+      .maybeSingle(),
     supabaseAdmin
       .from("appointments")
       .select("customer_id, service_type")
@@ -60,7 +64,8 @@ export default async function PaymentPage({ params }: { params: Promise<{ id: st
     if (customer?.name) customerName = customer.name;
   }
 
-  const businessName = business?.name ?? "Your Groomer";
+  const businessName = businessSettings?.business_name ?? "Your Groomer";
+  const logoUrl = businessSettings?.logo_url ?? null;
   const serviceName = appointment?.service_type ?? "Grooming appointment";
   const amountDue = Number(link.amount ?? 0);
 
@@ -68,6 +73,7 @@ export default async function PaymentPage({ params }: { params: Promise<{ id: st
     <PayPage
       paymentLinkId={link.id}
       businessName={businessName}
+      logoUrl={logoUrl}
       customerName={customerName}
       serviceName={serviceName}
       amountDue={amountDue}
