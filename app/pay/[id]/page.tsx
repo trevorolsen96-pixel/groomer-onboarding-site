@@ -4,8 +4,8 @@ import PayPage from "./PayPage";
 
 export const dynamic = "force-dynamic";
 
-export default async function PaymentPage({ params }: { params: { id: string } }) {
-  const { id } = params;
+export default async function PaymentPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
 
   const { data: link, error } = await supabaseAdmin
     .from("appointment_payment_links")
