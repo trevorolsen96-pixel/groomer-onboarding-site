@@ -64,22 +64,14 @@ export default function PayPage({ paymentLinkId, businessName, logoUrl, customer
 
         {/* Header — business logo or initials avatar */}
         <div className="text-center">
-          {logoUrl ? (
-            <Image
-              src={logoUrl}
-              alt={businessName}
-              width={80}
-              height={80}
-              className="mx-auto h-20 w-20 rounded-full object-cover shadow-md"
-              unoptimized
-            />
-          ) : (
-            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-[var(--rose-primary)] shadow-md">
-              <span className="text-2xl font-bold text-white">
-                {businessName.trim().charAt(0).toUpperCase()}
-              </span>
-            </div>
-          )}
+          <Image
+            src={logoUrl ?? "/images/logo/WagzlyHLarge.png"}
+            alt={logoUrl ? businessName : "Wagzly"}
+            width={logoUrl ? 80 : 160}
+            height={logoUrl ? 80 : 44}
+            className={logoUrl ? "mx-auto h-20 w-20 rounded-full object-cover shadow-md" : "mx-auto"}
+            unoptimized={!!logoUrl}
+          />
         </div>
 
         {/* Business & appointment card */}
