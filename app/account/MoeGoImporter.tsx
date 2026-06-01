@@ -149,6 +149,8 @@ function MoeGoImportFlow({ accessToken, onBack }: { accessToken: string; onBack:
   const [preview, setPreview] = useState<ParsedRow[] | null>(null);
   const [fileName, setFileName] = useState("");
   const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
+  const [importTotal, setImportTotal] = useState(0);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState("");
   const [dragging, setDragging] = useState(false);
@@ -199,19 +201,41 @@ function MoeGoImportFlow({ accessToken, onBack }: { accessToken: string; onBack:
     setImporting(true);
     setError("");
 
-    try {
-      const response = await fetch("/api/import/moego", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ rows: preview }),
-      });
+    const BATCH_SIZE = 50;
+    const batches: ParsedRow[][] = [];
+    for (let i = 0; i < preview.length; i += BATCH_SIZE) {
+      batches.push(preview.slice(i, i + BATCH_SIZE));
+    }
 
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "Import failed.");
-      setResult(data);
+    setImportTotal(preview.length);
+    setImportProgress(0);
+
+    const accumulated: ImportResult = { imported: [], duplicates: [], skipped: [] };
+    let processed = 0;
+
+    try {
+      for (const batch of batches) {
+        const response = await fetch("/api/import/moego", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({ rows: batch }),
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error ?? "Import failed.");
+
+        accumulated.imported.push(...data.imported);
+        accumulated.duplicates.push(...data.duplicates);
+        accumulated.skipped.push(...data.skipped);
+
+        processed += batch.length;
+        setImportProgress(processed);
+      }
+
+      setResult(accumulated);
       setPreview(null);
       setFileName("");
       if (fileRef.current) fileRef.current.value = "";
@@ -378,19 +402,33 @@ function MoeGoImportFlow({ accessToken, onBack }: { accessToken: string; onBack:
                 Review before importing. This cannot be undone.
               </p>
             </div>
-            <div className="flex gap-3">
-              <button type="button" className="secondary-button" onClick={handleReset}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="primary-button"
-                onClick={handleImport}
-                disabled={importing}
-              >
-                {importing ? "Importing..." : `Import ${preview.length} clients`}
-              </button>
-            </div>
+            {importing ? (
+              <div className="flex min-w-[220px] flex-col gap-1.5">
+                <div className="flex items-center justify-between text-xs font-semibold text-[var(--text-secondary)]">
+                  <span>Importing...</span>
+                  <span>{importProgress} / {importTotal}</span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--soft-surface)]">
+                  <div
+                    className="h-full rounded-full bg-[var(--rose-primary)] transition-all duration-300"
+                    style={{ width: importTotal > 0 ? `${Math.round((importProgress / importTotal) * 100)}%` : "0%" }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="flex gap-3">
+                <button type="button" className="secondary-button" onClick={handleReset}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={handleImport}
+                >
+                  {`Import ${preview.length} clients`}
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="overflow-x-auto">
