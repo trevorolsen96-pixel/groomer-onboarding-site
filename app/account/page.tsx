@@ -670,11 +670,6 @@ function AccountPageContent() {
                       value={staffCount.toString()}
                     />
                     <StatTile
-                      label="SMS"
-                      value={smsStatusShort(smsSetup?.status)}
-                      statusColor={smsStatusColor(smsSetup?.status)}
-                    />
-                    <StatTile
                       label="Billing period ends"
                       value={
                         business?.current_period_ends_at
