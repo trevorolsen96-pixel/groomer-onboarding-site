@@ -286,21 +286,36 @@ function MoeGoImportFlow({ accessToken, onBack }: { accessToken: string; onBack:
 
           {instructionsOpen && (
             <div className="border-t border-[var(--divider-soft)] px-5 pb-5 pt-4">
-              <ol className="space-y-3">
-                {[
-                  { step: "1", text: <>Log in to MoeGo at <strong>app.moego.pet</strong> in your web browser (not the mobile app).</> },
-                  { step: "2", text: <>In the left sidebar, expand <strong>Customer Center</strong> and click <strong>Clients &amp; Pets</strong>.</> },
-                  { step: "3", text: <>Click the <strong>checkbox</strong> at the top of the client list to select all clients.</> },
-                  { step: "4", text: <>Click the <strong>Options</strong> dropdown at the top of the page and select <strong>Export clients</strong>.</> },
-                  { step: "5", text: <>A CSV file will download to your computer. <strong>Drag it into the upload area below</strong>, or click to browse for it.</> },
-                ].map(({ step, text }) => (
-                  <li key={step} className="flex items-start gap-3">
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--rose-primary)]/10 text-xs font-bold text-[var(--rose-primary)]">
-                      {step}
-                    </span>
-                    <p className="text-sm leading-6 text-[var(--text-secondary)]">{text}</p>
-                  </li>
-                ))}
+              <ol className="space-y-5">
+                <li className="flex items-start gap-3">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--rose-primary)]/10 text-xs font-bold text-[var(--rose-primary)]">1</span>
+                  <p className="text-sm leading-6 text-[var(--text-secondary)]">Log in to MoeGo at <strong>app.moego.pet</strong> in your web browser (not the mobile app).</p>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--rose-primary)]/10 text-xs font-bold text-[var(--rose-primary)]">2</span>
+                  <div className="space-y-2">
+                    <p className="text-sm leading-6 text-[var(--text-secondary)]">In the left sidebar, expand <strong>Customer Center</strong> and click <strong>Clients &amp; Pets</strong>.</p>
+                    <img src="/moego-step1.png" alt="Customer Center sidebar showing Clients & Pets" className="rounded-xl border border-[var(--divider-soft)] max-w-[220px]" />
+                  </div>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--rose-primary)]/10 text-xs font-bold text-[var(--rose-primary)]">3</span>
+                  <div className="space-y-2">
+                    <p className="text-sm leading-6 text-[var(--text-secondary)]">Click the <strong>checkbox</strong> at the top of the client list to select all clients.</p>
+                    <img src="/moego-step2.png" alt="Checkbox to select all clients" className="rounded-xl border border-[var(--divider-soft)] max-w-[320px]" />
+                  </div>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--rose-primary)]/10 text-xs font-bold text-[var(--rose-primary)]">4</span>
+                  <div className="space-y-2">
+                    <p className="text-sm leading-6 text-[var(--text-secondary)]">Click the <strong>Options</strong> dropdown at the top of the page and select <strong>Export clients</strong>.</p>
+                    <img src="/moego-step3.png" alt="Options dropdown with Export clients highlighted" className="rounded-xl border border-[var(--divider-soft)] max-w-[200px]" />
+                  </div>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--rose-primary)]/10 text-xs font-bold text-[var(--rose-primary)]">5</span>
+                  <p className="text-sm leading-6 text-[var(--text-secondary)]">A CSV file will download to your computer. <strong>Drag it into the upload area below</strong>, or click to browse for it.</p>
+                </li>
               </ol>
             </div>
           )}
