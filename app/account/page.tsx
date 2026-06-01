@@ -53,8 +53,7 @@ type BusinessSmsSetup = {
   business_id: string;
   status: string;
   phone_number: string | null;
-  twilio_phone_number_sid: string | null;
-  twilio_verification_sid: string | null;
+  telnyx_phone_number_id: string | null;
   failure_reason: string | null;
   submitted_at: string | null;
   approved_at: string | null;
@@ -309,7 +308,7 @@ function AccountPageContent() {
         supabaseClient
           .from("business_sms_setup")
           .select(
-            "business_id, status, phone_number, twilio_phone_number_sid, twilio_verification_sid, failure_reason, submitted_at, approved_at"
+            "business_id, status, phone_number, telnyx_phone_number_id, failure_reason, submitted_at, approved_at"
           )
           .eq("business_id", businessId)
           .maybeSingle(),
