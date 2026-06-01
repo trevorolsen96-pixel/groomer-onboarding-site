@@ -25,6 +25,15 @@ type ImportResult = {
 
 type Software = "moego" | null;
 
+const REQUIRED_MOEGO_COLUMNS = ["first name", "last name", "primary contact", "pet(breed)", "status"];
+
+function validateMoeGoHeaders(headers: string[]): string | null {
+  const normalized = headers.map((h) => h.toLowerCase().replace(/\s+/g, " ").trim());
+  const missing = REQUIRED_MOEGO_COLUMNS.filter((col) => !normalized.includes(col));
+  if (missing.length > 0) return `This doesn't look like a MoeGo client export. Make sure you export from Clients & Pets → Options → Export clients, not from another section.`;
+  return null;
+}
+
 function parsePets(raw: string): Pet[] {
   if (!raw?.trim()) return [];
   const pets: Pet[] = [];
@@ -83,11 +92,16 @@ function parseCSVRecords(text: string): string[][] {
   return records;
 }
 
-function parseCSV(text: string): ParsedRow[] {
+type ParseCSVResult = { rows: ParsedRow[]; validationError: string | null };
+
+function parseCSV(text: string): ParseCSVResult {
   const records = parseCSVRecords(text);
-  if (records.length < 2) return [];
+  if (records.length < 2) return { rows: [], validationError: null };
 
   const headers = records[0].map((h) => h.toLowerCase().replace(/\s+/g, " ").trim());
+  const validationError = validateMoeGoHeaders(headers);
+  if (validationError) return { rows: [], validationError };
+
   const col = (name: string) => headers.findIndex((h) => h === name);
 
   const iFirstName = col("first name");
@@ -127,7 +141,7 @@ function parseCSV(text: string): ParsedRow[] {
     });
   }
 
-  return rows;
+  return { rows, validationError: null };
 }
 
 function MoeGoImportFlow({ accessToken, onBack }: { accessToken: string; onBack: () => void }) {
@@ -138,6 +152,7 @@ function MoeGoImportFlow({ accessToken, onBack }: { accessToken: string; onBack:
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState("");
   const [dragging, setDragging] = useState(false);
+  const [instructionsOpen, setInstructionsOpen] = useState(false);
 
   function readFile(file: File) {
     setFileName(file.name);
@@ -146,7 +161,14 @@ function MoeGoImportFlow({ accessToken, onBack }: { accessToken: string; onBack:
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
-      setPreview(parseCSV(text));
+      const { rows, validationError } = parseCSV(text);
+      if (validationError) {
+        setError(validationError);
+        setPreview(null);
+        if (fileRef.current) fileRef.current.value = "";
+        return;
+      }
+      setPreview(rows);
     };
     reader.readAsText(file);
   }
@@ -234,10 +256,55 @@ function MoeGoImportFlow({ accessToken, onBack }: { accessToken: string; onBack:
         <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
           Upload a MoeGo client export CSV to import your clients and pets into Wagzly.
           This importer brings in <strong>client profiles and pet information only</strong> — grooming history
-          and notes are not included in this import.
-          Duplicate clients (matched by phone number) will be reported, not duplicated.
+          and notes are not included. Duplicate clients are matched by phone number and reported, not duplicated.
           Both active and inactive clients will be imported.
         </p>
+
+        {/* How to export instructions */}
+        <div className="mt-5 rounded-2xl border border-[var(--divider-soft)] bg-[var(--soft-surface)] overflow-hidden">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between px-5 py-4 text-left"
+            onClick={() => setInstructionsOpen((o) => !o)}
+          >
+            <span className="flex items-center gap-2 text-sm font-bold text-[var(--text-primary)]">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4 text-[var(--rose-primary)]">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+              </svg>
+              How to export your clients from MoeGo
+            </span>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              className={`h-4 w-4 text-[var(--text-secondary)] transition-transform ${instructionsOpen ? "rotate-180" : ""}`}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {instructionsOpen && (
+            <div className="border-t border-[var(--divider-soft)] px-5 pb-5 pt-4">
+              <ol className="space-y-3">
+                {[
+                  { step: "1", text: <>Log in to MoeGo at <strong>app.moego.pet</strong> in your web browser (not the mobile app).</> },
+                  { step: "2", text: <>In the left sidebar, expand <strong>Customer Center</strong> and click <strong>Clients &amp; Pets</strong>.</> },
+                  { step: "3", text: <>Click the <strong>checkbox</strong> at the top of the client list to select all clients.</> },
+                  { step: "4", text: <>Click the <strong>Options</strong> dropdown at the top of the page and select <strong>Export clients</strong>.</> },
+                  { step: "5", text: <>A CSV file will download to your computer. <strong>Drag it into the upload area below</strong>, or click to browse for it.</> },
+                ].map(({ step, text }) => (
+                  <li key={step} className="flex items-start gap-3">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--rose-primary)]/10 text-xs font-bold text-[var(--rose-primary)]">
+                      {step}
+                    </span>
+                    <p className="text-sm leading-6 text-[var(--text-secondary)]">{text}</p>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+        </div>
 
         {!result ? (
           <div
