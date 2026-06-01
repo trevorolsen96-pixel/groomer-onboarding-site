@@ -43,6 +43,49 @@ function formatDateTime(value: Date, timezone: string) {
   )} ${get("dayPeriod")}`;
 }
 
+function formatTimeOnly(value: Date, timezone: string) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone || "America/Los_Angeles",
+    hour: "numeric",
+    minute: "2-digit",
+  }).formatToParts(value);
+
+  const get = (type: string) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+
+  return `${get("hour")}:${get("minute")} ${get("dayPeriod")}`;
+}
+
+function formatDateOnly(value: Date, timezone: string) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone || "America/Los_Angeles",
+    year: "2-digit",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(value);
+
+  const get = (type: string) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+
+  return `${get("month")}/${get("day")}/${get("year")}`;
+}
+
+function formatAppointmentTime(
+  value: Date,
+  timezone: string,
+  windowEnabled: boolean,
+  windowMinutes: number
+): string {
+  if (!windowEnabled || windowMinutes <= 0) {
+    return formatDateTime(value, timezone);
+  }
+  const endTime = new Date(value.getTime() + windowMinutes * 60 * 1000);
+  const date = formatDateOnly(value, timezone);
+  const start = formatTimeOnly(value, timezone);
+  const end = formatTimeOnly(endTime, timezone);
+  return `${date} between ${start} – ${end}`;
+}
+
 async function deletePendingAppointmentReminders({
   businessId,
   appointmentId,
@@ -110,6 +153,7 @@ async function upsertAppointmentReminder({
   businessName: string;
   toPhone: string;
   appointmentDate: string;
+  // appointmentDate is already formatted with window applied
 }) {
   const { data: selectedRule } = await supabaseAdmin
     .from("business_sms_reminder_rules")
@@ -279,7 +323,7 @@ export async function POST(request: Request) {
 
     const { data: settings } = await supabaseAdmin
       .from("business_settings")
-      .select("business_name, sms_enabled, reschedule_sms_enabled")
+      .select("business_name, sms_enabled, reschedule_sms_enabled, arrival_window_enabled, arrival_window_minutes")
       .eq("business_id", businessId)
       .maybeSingle();
 
@@ -347,9 +391,13 @@ export async function POST(request: Request) {
     const businessName =
       cleanText(settings?.business_name) || "your grooming business";
     const customerName = firstNameOnly(cleanText(customer.name));
-    const appointmentDate = formatDateTime(
+    const arrivalWindowEnabled = settings?.arrival_window_enabled === true;
+    const arrivalWindowMinutes = Number(settings?.arrival_window_minutes ?? 60);
+    const appointmentDate = formatAppointmentTime(
       appointmentDateTime,
-      businessTimezone
+      businessTimezone,
+      arrivalWindowEnabled,
+      arrivalWindowMinutes
     );
 
     if (action === "schedule_reminder") {
