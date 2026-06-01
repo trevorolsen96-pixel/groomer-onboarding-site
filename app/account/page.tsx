@@ -175,24 +175,6 @@ function smsStatusTitle(status?: string | null) {
   }
 }
 
-function smsStatusDescription(status?: string | null) {
-  switch (status) {
-    case "needs_info":
-      return "Complete your business texting setup so Wagzly can request a dedicated toll-free texting number for your business.";
-    case "ready_to_submit":
-      return "Your information has been saved and is ready to submit for toll-free verification.";
-    case "pending":
-      return "Your dedicated Wagzly texting number is being verified. SMS features stay disabled until approval is complete.";
-    case "approved":
-      return "Your dedicated texting number is approved. Wagzly messaging can now be used for client texts, reminders, onboarding links, and scheduling updates.";
-    case "failed":
-      return "Your toll-free verification needs attention. Review the issue below or contact Wagzly support.";
-    case "disabled":
-      return "Text messaging is currently disabled for this business.";
-    default:
-      return "Complete your business texting setup to enable dedicated client messaging.";
-  }
-}
 
 export default function AccountPage() {
   return (
@@ -760,11 +742,19 @@ function AccountPageContent() {
                   />
                 </div>
 
-                <MessagingStatusCard
-                  smsSetup={smsSetup}
-                  smsEnabled={settings?.sms_enabled ?? false}
-                  onSetupClick={() => setActiveTab("messaging")}
-                />
+                <section className="soft-card p-6">
+                  <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--rose-primary)]">
+                    Messaging
+                  </p>
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <StatTile
+                      label="Status"
+                      value={smsSetup?.status === "approved" ? "Active" : "Inactive"}
+                      statusColor={smsSetup?.status === "approved" ? "green" : "neutral"}
+                    />
+                    <StatTile label="Wagzly phone number" value={smsSetup?.phone_number ?? "Not set"} small />
+                  </div>
+                </section>
 
                 <DownloadAppCard />
               </div>
@@ -996,40 +986,25 @@ function AccountPageContent() {
             {/* ── MESSAGING ── */}
             {activeTab === "messaging" ? (
               <div className="space-y-6">
-                <MessagingStatusCard
-                  smsSetup={smsSetup}
-                  smsEnabled={settings?.sms_enabled ?? false}
-                />
-
-                <AccountCard title="Wagzly Phone Number">
+                <AccountCard title="Messaging">
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <Info label="Messaging status" value={smsStatusTitle(smsSetup?.status)} />
+                    <Info
+                      label="Status"
+                      value={smsSetup?.status === "approved" ? "Active" : "Inactive"}
+                    />
                     <Info label="Wagzly phone number" value={smsSetup?.phone_number} />
-                    <Info label="Submitted" value={formatDate(smsSetup?.submitted_at ?? null)} />
-                    <Info label="Approved" value={formatDate(smsSetup?.approved_at ?? null)} />
                   </div>
-
-                  {smsSetup?.failure_reason ? (
-                    <div className="mt-5 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-semibold text-red-700">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mt-0.5 h-4 w-4 shrink-0">
-                        <circle cx="12" cy="12" r="10" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01" />
-                      </svg>
-                      {smsSetup.failure_reason}
-                    </div>
-                  ) : null}
-
-                  <div className="mt-6 rounded-2xl bg-[var(--soft-surface)] p-5">
-                      <p className="text-sm font-bold text-[var(--text-primary)]">
-                        Need help with messaging?
-                      </p>
-                      <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-                        Contact Wagzly support at{" "}
-                        <a href="mailto:support@wagzly.com" className="font-semibold text-[var(--rose-primary)] hover:underline">
-                          support@wagzly.com
-                        </a>{" "}
-                        if you have questions about your dedicated texting number.
-                      </p>
-                    </div>
+                  <div className="mt-6 flex items-start gap-3 rounded-2xl bg-[var(--soft-surface)] px-4 py-4">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mt-0.5 h-4 w-4 shrink-0 text-[var(--rose-primary)]">
+                      <circle cx="12" cy="12" r="10" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01" />
+                    </svg>
+                    <p className="text-sm leading-6 text-[var(--text-secondary)]">
+                      Messaging is managed through the <strong className="text-[var(--text-primary)]">Wagzly app</strong>. Contact{" "}
+                      <a href="mailto:support@wagzly.com" className="font-semibold text-[var(--rose-primary)] hover:underline">support@wagzly.com</a>{" "}
+                      if you have questions about your phone number.
+                    </p>
+                  </div>
                 </AccountCard>
               </div>
             ) : null}
@@ -1411,86 +1386,6 @@ function PlanBadge({ plan }: { plan?: string | null }) {
   );
 }
 
-function MessagingStatusCard({
-  smsSetup,
-  smsEnabled,
-  onSetupClick,
-}: {
-  smsSetup: BusinessSmsSetup | null;
-  smsEnabled: boolean;
-  onSetupClick?: () => void;
-}) {
-  const status = smsSetup?.status ?? "needs_info";
-  const isApproved = status === "approved";
-  const isFailed = status === "failed";
-  const isPending = status === "pending";
-
-  const borderColor = isApproved
-    ? "border-green-200"
-    : isFailed
-    ? "border-red-200"
-    : isPending
-    ? "border-yellow-200"
-    : "border-[var(--soft-border)]";
-
-  return (
-    <section className={`soft-card border p-6 ${borderColor}`}>
-      <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--rose-primary)]">
-        Text messaging
-      </p>
-
-      <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
-        <h2 className="text-2xl font-bold text-[var(--text-primary)]">
-          {smsStatusTitle(status)}
-        </h2>
-        <span
-          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${
-            isApproved
-              ? "bg-green-100 text-green-700"
-              : isFailed
-              ? "bg-red-100 text-red-700"
-              : isPending
-              ? "bg-amber-100 text-amber-700"
-              : "bg-[var(--soft-surface)] text-[var(--text-secondary)]"
-          }`}
-        >
-          <span
-            className={`h-1.5 w-1.5 rounded-full ${
-              isApproved
-                ? "bg-green-500"
-                : isFailed
-                ? "bg-red-500"
-                : isPending
-                ? "bg-amber-500"
-                : "bg-[var(--text-secondary)]"
-            }`}
-          />
-          {prettyStatus(status)}
-        </span>
-      </div>
-
-      <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">
-        {smsStatusDescription(status)}
-      </p>
-
-      <div className="mt-6 grid gap-4 sm:grid-cols-3">
-        <Info label="SMS enabled" value={smsEnabled ? "Yes" : "No"} />
-        <Info label="Verification" value={prettyStatus(status)} />
-        <Info label="Wagzly phone number" value={smsSetup?.phone_number} />
-      </div>
-
-      {onSetupClick ? (
-        <button
-          type="button"
-          className="primary-button mt-6"
-          onClick={onSetupClick}
-        >
-          View messaging setup
-        </button>
-      ) : null}
-    </section>
-  );
-}
 
 function DownloadAppCard() {
   return (
