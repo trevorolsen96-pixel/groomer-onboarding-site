@@ -5,6 +5,7 @@ import { useState, useMemo } from "react";
 type UserRow = {
   id: string;
   name: string;
+  email: string;
   plan: string;
   createdAt: string;
   smsActive: boolean;
@@ -13,6 +14,9 @@ type UserRow = {
   lastActive: string | null;
   neverSetup: boolean;
   inactive: boolean;
+  subStatus: string;
+  churned: boolean;
+  cancelingAt: string | null;
 };
 
 function formatDate(dateStr: string): string {
@@ -27,7 +31,7 @@ export default function UserTable({ rows }: { rows: UserRow[] }) {
   const [search, setSearch] = useState("");
   const [filterPlan, setFilterPlan] = useState<"all" | "pro" | "basic">("all");
   const [filterSms, setFilterSms] = useState<"all" | "active" | "inactive">("all");
-  const [filterFlag, setFilterFlag] = useState<"all" | "never_setup" | "inactive">("all");
+  const [filterFlag, setFilterFlag] = useState<"all" | "never_setup" | "inactive" | "churned">("all");
   const [sortBy, setSortBy] = useState<"createdAt" | "lastActive" | "apptCount" | "payCount">("createdAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
@@ -65,6 +69,8 @@ export default function UserTable({ rows }: { rows: UserRow[] }) {
       result = result.filter((r) => r.neverSetup);
     } else if (filterFlag === "inactive") {
       result = result.filter((r) => r.inactive && !r.neverSetup);
+    } else if (filterFlag === "churned") {
+      result = result.filter((r) => r.churned);
     }
 
     // Sort
@@ -133,7 +139,7 @@ export default function UserTable({ rows }: { rows: UserRow[] }) {
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-[#30363d] text-[#8b949e]">
-              <th className="text-left px-4 py-3 font-normal">Business</th>
+              <th className="text-left px-4 py-3 font-normal">Business / Email</th>
               <th
                 className="text-left px-4 py-3 font-normal cursor-pointer hover:text-[#e6edf3] select-none"
                 onClick={() => setFilterPlan(p => p === "all" ? "pro" : p === "pro" ? "basic" : "all")}
@@ -141,6 +147,7 @@ export default function UserTable({ rows }: { rows: UserRow[] }) {
               >
                 Plan {filterPlan !== "all" && <span className="text-[#58a6ff]">({filterPlan})</span>}
               </th>
+              <th className="text-left px-4 py-3 font-normal">Subscription</th>
               <th
                 className="text-left px-4 py-3 font-normal cursor-pointer hover:text-[#e6edf3] select-none"
                 onClick={() => toggleSort("createdAt")}
@@ -174,17 +181,17 @@ export default function UserTable({ rows }: { rows: UserRow[] }) {
               </th>
               <th
                 className="text-left px-4 py-3 font-normal cursor-pointer hover:text-[#e6edf3] select-none"
-                onClick={() => setFilterFlag(f => f === "all" ? "never_setup" : f === "never_setup" ? "inactive" : "all")}
-                title="Click to filter by flag"
+                onClick={() => setFilterFlag(f => f === "all" ? "never_setup" : f === "never_setup" ? "inactive" : f === "inactive" ? "churned" : "all")}
+                title="Click to filter: never setup → inactive → churned → all"
               >
-                Flags {filterFlag !== "all" && <span className="text-[#f85149]">({filterFlag.replace("_", " ")})</span>}
+                Flags {filterFlag !== "all" && <span className="text-[#f85149]">({filterFlag.replace(/_/g, " ")})</span>}
               </th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-[#484f58]">
+                <td colSpan={9} className="px-4 py-8 text-center text-[#484f58]">
                   No results
                 </td>
               </tr>
@@ -196,9 +203,8 @@ export default function UserTable({ rows }: { rows: UserRow[] }) {
                 >
                   <td className="px-4 py-2.5">
                     <div className="text-[#e6edf3] font-medium">{row.name}</div>
-                    <div className="text-[#484f58] text-[10px] mt-0.5">
-                      {row.id.slice(0, 8)}...
-                    </div>
+                    <div className="text-[#8b949e] text-[10px] mt-0.5">{row.email}</div>
+                    <div className="text-[#484f58] text-[10px]">{row.id.slice(0, 8)}...</div>
                   </td>
                   <td className="px-4 py-2.5">
                     <span
@@ -210,6 +216,25 @@ export default function UserTable({ rows }: { rows: UserRow[] }) {
                     >
                       {row.plan}
                     </span>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    {row.churned ? (
+                      <span className="text-[10px] font-bold text-[#f85149]">CHURNED</span>
+                    ) : row.cancelingAt ? (
+                      <div>
+                        <span className="text-[10px] font-bold text-[#d29922]">CANCELING</span>
+                        <div className="text-[#484f58] text-[10px]">{formatDate(row.cancelingAt)}</div>
+                      </div>
+                    ) : (
+                      <span className={`text-[10px] font-bold ${
+                        row.subStatus === "active" ? "text-[#3fb950]" :
+                        row.subStatus === "trialing" ? "text-[#58a6ff]" :
+                        row.subStatus === "past_due" ? "text-[#d29922]" :
+                        "text-[#484f58]"
+                      }`}>
+                        {row.subStatus.toUpperCase().replace(/_/g, " ")}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-2.5 text-[#8b949e]">
                     {formatDate(row.createdAt)}
@@ -239,9 +264,14 @@ export default function UserTable({ rows }: { rows: UserRow[] }) {
                           Never Setup
                         </span>
                       )}
-                      {row.inactive && !row.neverSetup && (
+                      {row.inactive && !row.neverSetup && !row.churned && (
                         <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#d2992220] text-[#d29922] uppercase">
                           Inactive
+                        </span>
+                      )}
+                      {row.churned && (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#f8514920] text-[#f85149] uppercase">
+                          Churned
                         </span>
                       )}
                     </div>

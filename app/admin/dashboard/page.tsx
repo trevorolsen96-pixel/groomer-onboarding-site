@@ -9,6 +9,10 @@ type Business = {
   id: string;
   plan: string;
   created_at: string;
+  owner_user_id: string | null;
+  subscription_status: string | null;
+  cancel_at_period_end: boolean | null;
+  current_period_ends_at: string | null;
 };
 
 type StripeSub = {
@@ -72,10 +76,11 @@ export default async function AdminDashboardPage() {
     { data: appointments },
     { data: payments },
     stripeData,
+    authUsers,
   ] = await Promise.all([
     supabaseAdmin
       .from("businesses")
-      .select("id, plan, created_at")
+      .select("id, plan, created_at, owner_user_id, subscription_status, cancel_at_period_end, current_period_ends_at")
       .order("created_at", { ascending: false }),
     supabaseAdmin.from("business_settings").select("business_id, business_name"),
     supabaseAdmin.from("business_sms_setup").select("business_id, status"),
@@ -88,7 +93,13 @@ export default async function AdminDashboardPage() {
       .select("business_id, created_at")
       .order("created_at", { ascending: false }),
     fetchStripeData(),
+    supabaseAdmin.auth.admin.listUsers({ perPage: 1000 }),
   ]);
+
+  // Email lookup by user ID
+  const emailByUserId = new Map<string, string>(
+    (authUsers?.data?.users ?? []).map((u) => [u.id, u.email ?? ""])
+  );
 
   // Build lookup maps
   const settingsByBiz = new Map(
@@ -126,6 +137,9 @@ export default async function AdminDashboardPage() {
   const smsActive = (smsSetups ?? []).filter((s) =>
     ["active", "approved"].includes(s.status ?? "")
   ).length;
+  const churned = allBiz.filter((b) =>
+    ["canceled", "incomplete_expired"].includes(b.subscription_status ?? "")
+  ).length;
 
   // Build user rows
   const userRows = allBiz.map((biz) => {
@@ -148,9 +162,20 @@ export default async function AdminDashboardPage() {
       ? lastActive < thirtyDaysAgo
       : daysSince(biz.created_at) > 30;
 
+    const email = biz.owner_user_id
+      ? (emailByUserId.get(biz.owner_user_id) ?? "—")
+      : "—";
+
+    const subStatus = biz.subscription_status ?? "unknown";
+    const churned = subStatus === "canceled" || subStatus === "incomplete_expired";
+    const cancelingAt = biz.cancel_at_period_end && biz.current_period_ends_at
+      ? biz.current_period_ends_at
+      : null;
+
     return {
       id: biz.id,
       name: settings?.business_name ?? "—",
+      email,
       plan: biz.plan ?? "basic",
       createdAt: biz.created_at,
       smsActive: ["active", "approved"].includes(sms?.status ?? ""),
@@ -159,6 +184,9 @@ export default async function AdminDashboardPage() {
       lastActive,
       neverSetup,
       inactive,
+      subStatus,
+      churned,
+      cancelingAt,
     };
   });
 
@@ -182,7 +210,7 @@ export default async function AdminDashboardPage() {
         {/* Business overview */}
         <div className="mb-6">
           <div className="text-[#8b949e] text-xs uppercase tracking-wider mb-3">Businesses</div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
             {[
               { label: "Total", value: totalBusinesses, color: "text-[#e6edf3]" },
               { label: "New This Week", value: newThisWeek, color: "text-[#3fb950]" },
@@ -190,6 +218,7 @@ export default async function AdminDashboardPage() {
               { label: "Pro Plan", value: proPlan, color: "text-[#58a6ff]" },
               { label: "Basic Plan", value: basicPlan, color: "text-[#8b949e]" },
               { label: "SMS Active", value: smsActive, color: "text-[#d29922]" },
+              { label: "Churned", value: churned, color: churned > 0 ? "text-[#f85149]" : "text-[#484f58]" },
             ].map((stat) => (
               <div key={stat.label} className="bg-[#161b22] border border-[#30363d] rounded p-4">
                 <div className={`text-3xl font-bold ${stat.color}`}>{stat.value}</div>
