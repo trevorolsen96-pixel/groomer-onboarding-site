@@ -114,8 +114,8 @@ export default function UserTable({ rows }: { rows: UserRow[] }) {
 
   return (
     <div>
-      {/* Controls */}
-      <div className="flex flex-wrap gap-2 mb-3">
+      {/* Search + count */}
+      <div className="flex items-center gap-3 mb-3">
         <input
           type="text"
           value={search}
@@ -123,34 +123,7 @@ export default function UserTable({ rows }: { rows: UserRow[] }) {
           placeholder="Search name or ID..."
           className="bg-[#0f1117] border border-[#30363d] rounded px-3 py-1.5 text-[#e6edf3] text-xs font-mono placeholder-[#484f58] focus:outline-none focus:border-[#3fb950] w-52"
         />
-        <select
-          value={filterPlan}
-          onChange={(e) => setFilterPlan(e.target.value as typeof filterPlan)}
-          className="bg-[#0f1117] border border-[#30363d] rounded px-3 py-1.5 text-[#8b949e] text-xs font-mono focus:outline-none focus:border-[#3fb950]"
-        >
-          <option value="all">All plans</option>
-          <option value="pro">Pro only</option>
-          <option value="basic">Basic only</option>
-        </select>
-        <select
-          value={filterSms}
-          onChange={(e) => setFilterSms(e.target.value as typeof filterSms)}
-          className="bg-[#0f1117] border border-[#30363d] rounded px-3 py-1.5 text-[#8b949e] text-xs font-mono focus:outline-none focus:border-[#3fb950]"
-        >
-          <option value="all">All SMS</option>
-          <option value="active">SMS active</option>
-          <option value="inactive">SMS inactive</option>
-        </select>
-        <select
-          value={filterFlag}
-          onChange={(e) => setFilterFlag(e.target.value as typeof filterFlag)}
-          className="bg-[#0f1117] border border-[#30363d] rounded px-3 py-1.5 text-[#8b949e] text-xs font-mono focus:outline-none focus:border-[#3fb950]"
-        >
-          <option value="all">All flags</option>
-          <option value="never_setup">Never setup</option>
-          <option value="inactive">Inactive 30d+</option>
-        </select>
-        <div className="text-[#484f58] text-xs self-center ml-auto">
+        <div className="text-[#484f58] text-xs ml-auto">
           {filtered.length} of {rows.length}
         </div>
       </div>
@@ -161,33 +134,51 @@ export default function UserTable({ rows }: { rows: UserRow[] }) {
           <thead>
             <tr className="border-b border-[#30363d] text-[#8b949e]">
               <th className="text-left px-4 py-3 font-normal">Business</th>
-              <th className="text-left px-4 py-3 font-normal">Plan</th>
               <th
-                className="text-left px-4 py-3 font-normal cursor-pointer hover:text-[#e6edf3]"
+                className="text-left px-4 py-3 font-normal cursor-pointer hover:text-[#e6edf3] select-none"
+                onClick={() => setFilterPlan(p => p === "all" ? "pro" : p === "pro" ? "basic" : "all")}
+                title="Click to filter by plan"
+              >
+                Plan {filterPlan !== "all" && <span className="text-[#58a6ff]">({filterPlan})</span>}
+              </th>
+              <th
+                className="text-left px-4 py-3 font-normal cursor-pointer hover:text-[#e6edf3] select-none"
                 onClick={() => toggleSort("createdAt")}
               >
                 Signed Up <SortIcon col="createdAt" />
               </th>
-              <th className="text-left px-4 py-3 font-normal">SMS</th>
               <th
-                className="text-right px-4 py-3 font-normal cursor-pointer hover:text-[#e6edf3]"
+                className="text-left px-4 py-3 font-normal cursor-pointer hover:text-[#e6edf3] select-none"
+                onClick={() => setFilterSms(s => s === "all" ? "active" : s === "active" ? "inactive" : "all")}
+                title="Click to filter by SMS"
+              >
+                SMS {filterSms !== "all" && <span className="text-[#d29922]">({filterSms})</span>}
+              </th>
+              <th
+                className="text-right px-4 py-3 font-normal cursor-pointer hover:text-[#e6edf3] select-none"
                 onClick={() => toggleSort("apptCount")}
               >
                 Appts <SortIcon col="apptCount" />
               </th>
               <th
-                className="text-right px-4 py-3 font-normal cursor-pointer hover:text-[#e6edf3]"
+                className="text-right px-4 py-3 font-normal cursor-pointer hover:text-[#e6edf3] select-none"
                 onClick={() => toggleSort("payCount")}
               >
                 Payments <SortIcon col="payCount" />
               </th>
               <th
-                className="text-left px-4 py-3 font-normal cursor-pointer hover:text-[#e6edf3]"
+                className="text-left px-4 py-3 font-normal cursor-pointer hover:text-[#e6edf3] select-none"
                 onClick={() => toggleSort("lastActive")}
               >
                 Last Active <SortIcon col="lastActive" />
               </th>
-              <th className="text-left px-4 py-3 font-normal">Flags</th>
+              <th
+                className="text-left px-4 py-3 font-normal cursor-pointer hover:text-[#e6edf3] select-none"
+                onClick={() => setFilterFlag(f => f === "all" ? "never_setup" : f === "never_setup" ? "inactive" : "all")}
+                title="Click to filter by flag"
+              >
+                Flags {filterFlag !== "all" && <span className="text-[#f85149]">({filterFlag.replace("_", " ")})</span>}
+              </th>
             </tr>
           </thead>
           <tbody>
