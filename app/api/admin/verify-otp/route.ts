@@ -1,14 +1,38 @@
 import { NextResponse } from "next/server";
+import crypto from "crypto";
 import { signSession } from "../../../../lib/admin-auth";
 
-// In-memory OTP store shared via module-level Map
-// We re-declare it here since we can't import from a route file
-const otpStore = new Map<string, { otp: string; exp: number }>();
+function verifyOtpCookie(
+  cookie: string | undefined,
+  submittedOtp: string
+): boolean {
+  if (!cookie) return false;
+  try {
+    const secret = process.env.ADMIN_SESSION_SECRET ?? "";
+    const [data, sig] = cookie.split(".");
+    if (!data || !sig) return false;
 
-// Export so send-otp can use the same store
-// NOTE: In production serverless, both routes share the same module instance
-// within a single cold start. This works fine for Vercel.
-export { otpStore };
+    const expected = crypto
+      .createHmac("sha256", secret)
+      .update(data)
+      .digest("base64url");
+
+    if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
+      return false;
+    }
+
+    const payload = JSON.parse(
+      Buffer.from(data, "base64url").toString("utf8")
+    ) as { otp: string; exp: number };
+
+    if (Date.now() > payload.exp) return false;
+    if (payload.otp !== submittedOtp.trim()) return false;
+
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export async function POST(req: Request) {
   try {
@@ -24,14 +48,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid code." }, { status: 401 });
     }
 
-    const stored = otpStore.get(adminEmail.toLowerCase());
+    // Read OTP cookie from request
+    const cookieHeader = req.headers.get("cookie") ?? "";
+    const otpCookie = cookieHeader
+      .split(";")
+      .find((c) => c.trim().startsWith("admin_otp_token="))
+      ?.split("=")
+      .slice(1)
+      .join("=")
+      .trim();
 
-    if (!stored || stored.otp !== otp.trim() || Date.now() > stored.exp) {
+    if (!verifyOtpCookie(otpCookie, otp)) {
       return NextResponse.json({ error: "Invalid or expired code." }, { status: 401 });
     }
-
-    // Clear OTP after use
-    otpStore.delete(adminEmail.toLowerCase());
 
     const token = signSession({
       admin: true,
@@ -39,11 +68,22 @@ export async function POST(req: Request) {
     });
 
     const response = NextResponse.json({ ok: true });
+
+    // Set admin session cookie
     response.cookies.set("admin_session", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
       maxAge: 60 * 60 * 24,
+      path: "/",
+    });
+
+    // Clear OTP cookie
+    response.cookies.set("admin_otp_token", "", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 0,
       path: "/",
     });
 
