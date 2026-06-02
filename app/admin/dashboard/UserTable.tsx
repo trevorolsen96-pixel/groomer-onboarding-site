@@ -204,7 +204,7 @@ export default function UserTable({ rows }: { rows: UserRow[] }) {
                   <td className="px-4 py-2.5">
                     <div className="text-[#e6edf3] font-medium">{row.name}</div>
                     <div className="text-[#8b949e] text-[10px] mt-0.5">{row.email}</div>
-                    <div className="text-[#484f58] text-[10px]">{row.id.slice(0, 8)}...</div>
+                    <div className="text-[#484f58] text-[10px] font-mono select-all">{row.id}</div>
                   </td>
                   <td className="px-4 py-2.5">
                     <span
