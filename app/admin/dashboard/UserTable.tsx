@@ -17,6 +17,7 @@ type UserRow = {
   subStatus: string;
   churned: boolean;
   cancelingAt: string | null;
+  nextBillingAt: string | null;
 };
 
 function formatDate(dateStr: string): string {
@@ -148,6 +149,7 @@ export default function UserTable({ rows }: { rows: UserRow[] }) {
                 Plan {filterPlan !== "all" && <span className="text-[#58a6ff]">({filterPlan})</span>}
               </th>
               <th className="text-left px-4 py-3 font-normal">Subscription</th>
+              <th className="text-left px-4 py-3 font-normal">Next Billing</th>
               <th
                 className="text-left px-4 py-3 font-normal cursor-pointer hover:text-[#e6edf3] select-none"
                 onClick={() => toggleSort("createdAt")}
@@ -191,7 +193,7 @@ export default function UserTable({ rows }: { rows: UserRow[] }) {
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-[#484f58]">
+                <td colSpan={10} className="px-4 py-8 text-center text-[#484f58]">
                   No results
                 </td>
               </tr>
@@ -235,6 +237,9 @@ export default function UserTable({ rows }: { rows: UserRow[] }) {
                         {row.subStatus.toUpperCase().replace(/_/g, " ")}
                       </span>
                     )}
+                  </td>
+                  <td className="px-4 py-2.5 text-[#8b949e]">
+                    {row.nextBillingAt ? formatDate(row.nextBillingAt) : "—"}
                   </td>
                   <td className="px-4 py-2.5 text-[#8b949e]">
                     {formatDate(row.createdAt)}

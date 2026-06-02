@@ -13,6 +13,7 @@ type Business = {
   subscription_status: string | null;
   cancel_at_period_end: boolean | null;
   current_period_ends_at: string | null;
+  trial_ends_at: string | null;
 };
 
 type StripeSub = {
@@ -80,7 +81,7 @@ export default async function AdminDashboardPage() {
   ] = await Promise.all([
     supabaseAdmin
       .from("businesses")
-      .select("id, plan, created_at, owner_user_id, subscription_status, cancel_at_period_end, current_period_ends_at")
+      .select("id, plan, created_at, owner_user_id, subscription_status, cancel_at_period_end, current_period_ends_at, trial_ends_at")
       .order("created_at", { ascending: false }),
     supabaseAdmin.from("business_settings").select("business_id, business_name"),
     supabaseAdmin.from("business_sms_setup").select("business_id, status"),
@@ -172,6 +173,14 @@ export default async function AdminDashboardPage() {
       ? biz.current_period_ends_at
       : null;
 
+    // Next billing date: for trialing use trial_ends_at, otherwise current_period_ends_at
+    // Skip if it's the sentinel far-future date (2099) used for manual/lifetime accounts
+    const rawNextBilling = subStatus === "trialing"
+      ? (biz.trial_ends_at ?? biz.current_period_ends_at)
+      : biz.current_period_ends_at;
+    const isSentinel = rawNextBilling && new Date(rawNextBilling).getFullYear() >= 2099;
+    const nextBillingAt = isSentinel ? null : rawNextBilling;
+
     return {
       id: biz.id,
       name: settings?.business_name ?? "—",
@@ -187,6 +196,7 @@ export default async function AdminDashboardPage() {
       subStatus,
       churned,
       cancelingAt,
+      nextBillingAt: nextBillingAt ?? null,
     };
   });
 
