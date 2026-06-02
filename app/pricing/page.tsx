@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Pricing | Wagzly",
+  title: "Pricing | Mobile Grooming Software Plans",
   description:
-    "Simple, transparent pricing for mobile grooming software. Wagzly Basic starts at $39.99/mo. Wagzly Pro at $89.99/mo. Both plans include a 14-day free trial.",
+    "Simple, transparent pricing for mobile grooming software. Wagzly Basic starts at $39.99/mo. Wagzly Pro at $89.99/mo. Both plans include a 14-day free trial. No contracts.",
 };
 
 const basicFeatures = [

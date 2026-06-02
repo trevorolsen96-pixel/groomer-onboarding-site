@@ -6,13 +6,26 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.wagzly.com"),
-  title: "Wagzly",
+  title: {
+    default: "Wagzly | Mobile Grooming Software for Groomers",
+    template: "%s | Wagzly",
+  },
   description:
-    "Wagzly is mobile grooming software for groomers — and the easiest way for pet owners to find and book a local mobile groomer.",
+    "Wagzly is all-in-one mobile grooming software — scheduling, client management, online payments, automated reminders, and more. The easiest way to run your mobile grooming business.",
+  keywords: [
+    "mobile grooming software",
+    "grooming business software",
+    "pet grooming scheduling",
+    "grooming app",
+    "MoeGo alternative",
+    "grooming CRM",
+    "mobile pet groomer app",
+    "grooming appointment software",
+  ],
   openGraph: {
-    title: "Wagzly",
+    title: "Wagzly | Mobile Grooming Software for Groomers",
     description:
-      "Wagzly is mobile grooming software for groomers — and the easiest way for pet owners to find and book a local mobile groomer.",
+      "Wagzly is all-in-one mobile grooming software — scheduling, client management, online payments, automated reminders, and more.",
     url: "https://www.wagzly.com",
     siteName: "Wagzly",
     images: [
@@ -27,9 +40,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Wagzly",
+    title: "Wagzly | Mobile Grooming Software for Groomers",
     description:
-      "Wagzly is mobile grooming software for groomers — and the easiest way for pet owners to find and book a local mobile groomer.",
+      "Wagzly is all-in-one mobile grooming software — scheduling, client management, online payments, automated reminders, and more.",
     images: ["/images/logo/WagzlyHLarge.png"],
   },
 };
@@ -41,6 +54,24 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "Organization",
+              name: "Wagzly",
+              url: "https://www.wagzly.com",
+              logo: "https://www.wagzly.com/images/logo/WagzlyHLarge.png",
+              description:
+                "Wagzly is all-in-one mobile grooming software — scheduling, client management, online payments, automated reminders, and more.",
+              applicationCategory: "BusinessApplication",
+              sameAs: [],
+            }),
+          }}
+        />
+      </head>
       <body>
         <div className="min-h-screen">
           <header className="sticky top-0 z-30 border-b border-[var(--divider-soft)] bg-[rgba(251,247,248,0.82)] backdrop-blur">

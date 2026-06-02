@@ -3,9 +3,9 @@ import Link from "next/link";
 import Image from "next/image";
 
 export const metadata: Metadata = {
-  title: "Features | Wagzly",
+  title: "Features | Mobile Grooming Software",
   description:
-    "Explore everything Wagzly offers — smart scheduling, route planning, client & pet management, automated reminders, payment tracking, and more. Built specifically for mobile groomers.",
+    "Explore everything Wagzly offers — smart scheduling, route planning, client & pet management, automated SMS reminders, online payments, and more. Built specifically for mobile groomers.",
 };
 
 export default function FeaturesPage() {
