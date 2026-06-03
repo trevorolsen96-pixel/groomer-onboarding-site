@@ -366,8 +366,8 @@ export async function POST(request: Request) {
     const isPastAppointment = appointmentDateTime.getTime() <= Date.now();
 
     // For reminders and reschedules, skip if the appointment is in the past
-    // Cancellations should still send regardless of appointment time
-    if (isPastAppointment && action !== "cancellation") {
+    // Cancellations and review requests should still send regardless of appointment time
+    if (isPastAppointment && action !== "cancellation" && action !== "send_review_request") {
       await deletePendingAppointmentReminders({ businessId, appointmentId });
 
       return NextResponse.json({
