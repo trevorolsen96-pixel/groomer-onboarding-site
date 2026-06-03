@@ -5,7 +5,8 @@ type SmsAction =
   | "schedule_reminder"
   | "reschedule"
   | "cancellation"
-  | "cancel_reminder_only";
+  | "cancel_reminder_only"
+  | "send_review_request";
 
 function cleanText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -326,7 +327,7 @@ export async function POST(request: Request) {
 
     const { data: settings } = await supabaseAdmin
       .from("business_settings")
-      .select("business_name, sms_enabled, reschedule_sms_enabled, arrival_window_enabled, arrival_window_minutes")
+      .select("business_name, sms_enabled, reschedule_sms_enabled, arrival_window_enabled, arrival_window_minutes, review_link")
       .eq("business_id", businessId)
       .maybeSingle();
 
@@ -535,6 +536,35 @@ export async function POST(request: Request) {
         status: "queued",
         reminderStatus: "cancelled",
       });
+    }
+
+    if (action === "send_review_request") {
+      const reviewLink = cleanText(settings?.review_link);
+
+      if (!reviewLink) {
+        return NextResponse.json(
+          { error: "No review link set for this business." },
+          { status: 400 }
+        );
+      }
+
+      const message =
+        `Hi ${customerName}! Thanks for choosing ${businessName} today 🐾 ` +
+        `We'd love your feedback — ${reviewLink}. See you next time!`;
+
+      const segments = calculateSmsSegments(message);
+      await assertSmsCreditsAvailable(businessId, segments);
+
+      await queueImmediateSms({
+        businessId,
+        customerId: customer.id,
+        appointmentId,
+        messageType: "review_request",
+        toPhone,
+        message,
+      });
+
+      return NextResponse.json({ ok: true, status: "queued" });
     }
 
     return NextResponse.json(
