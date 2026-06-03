@@ -129,16 +129,18 @@ export default function PayPage({ paymentLinkId, businessName, logoUrl, customer
           </button>
 
           {selectedPreset === "custom" && (
-            <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-[var(--text-secondary)]">$</span>
+            <div className="flex items-center rounded-2xl border-2 border-[var(--rose-primary)] bg-white px-4 py-3 gap-1">
+              <span className="font-bold text-[var(--text-secondary)] select-none">$</span>
               <input
-                type="number"
-                min="0"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 placeholder="0.00"
                 value={customTip}
-                onChange={(e) => setCustomTip(e.target.value)}
-                className="w-full rounded-2xl border-2 border-[var(--rose-primary)] bg-white py-3 pl-8 pr-4 text-sm font-bold text-[var(--text-primary)] outline-none"
+                onChange={(e) => {
+                  const val = e.target.value.replace(/[^0-9.]/g, "");
+                  setCustomTip(val);
+                }}
+                className="flex-1 bg-transparent text-sm font-bold text-[var(--text-primary)] outline-none"
                 autoFocus
               />
             </div>
