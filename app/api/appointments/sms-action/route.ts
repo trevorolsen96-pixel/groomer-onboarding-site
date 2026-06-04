@@ -177,13 +177,13 @@ async function upsertAppointmentReminder({
     const end = formatTimeOnly(endTime, businessTimezone);
     message =
       `Hi ${customerName}, this is ${businessName}. ` +
-      `Appt: ${date}, arrival ${start}-${end}. ` +
+      `${petPossessive} appt: ${date}, arrival ${start}-${end}. ` +
       `Reply YES to confirm or NO to cancel.`;
   } else {
     const appointmentDate = formatDateTime(appointmentDateTime, businessTimezone);
     message =
       `Hi ${customerName}, this is ${businessName}. ` +
-      `Your grooming appt is ${appointmentDate}. ` +
+      `${petPossessive} grooming appt is ${appointmentDate}. ` +
       `Reply YES to confirm or NO to cancel.`;
   }
 
@@ -399,6 +399,26 @@ export async function POST(request: Request) {
     const arrivalWindowEnabled = settings?.arrival_window_enabled === true;
     const arrivalWindowMinutes = Number(settings?.arrival_window_minutes ?? 60);
 
+    // Fetch pet names for this appointment
+    const { data: petServiceLines } = await supabaseAdmin
+      .from("appointment_pet_services")
+      .select("pets(name)")
+      .eq("appointment_id", appointmentId)
+      .limit(3);
+
+    const petNames = (petServiceLines ?? [])
+      .map((line: any) => cleanText(line.pets?.name ?? ""))
+      .filter(Boolean)
+      .filter((v: string, i: number, a: string[]) => a.indexOf(v) === i); // dedupe
+
+    // e.g. "Luna's" or "Luna and Milo's"
+    const petPossessive =
+      petNames.length === 0
+        ? "your"
+        : petNames.length === 1
+        ? `${petNames[0]}'s`
+        : `${petNames.slice(0, -1).join(", ")} and ${petNames[petNames.length - 1]}'s`;
+
     if (action === "schedule_reminder") {
       const reminderStatus = await upsertAppointmentReminder({
         businessId,
@@ -456,13 +476,13 @@ export async function POST(request: Request) {
         const end = formatTimeOnly(endTime, businessTimezone);
         message =
           `Hi ${customerName}, this is ${businessName}. ` +
-          `Updated appt: ${date}, arrival ${start}-${end}. ` +
+          `${petPossessive} updated appt: ${date}, arrival ${start}-${end}. ` +
           `Reply YES to confirm or NO to cancel.`;
       } else {
         const appointmentDate = formatDateTime(appointmentDateTime, businessTimezone);
         message =
           `Hi ${customerName}, this is ${businessName}. ` +
-          `Your grooming appt is now ${appointmentDate}. ` +
+          `${petPossessive} grooming appt is now ${appointmentDate}. ` +
           `Reply YES to confirm or NO to cancel.`;
       }
 
@@ -514,7 +534,7 @@ export async function POST(request: Request) {
       const appointmentDate = formatDateTime(appointmentDateTime, businessTimezone);
       const message =
         `Hi ${customerName}, this is ${businessName}. ` +
-        `Your grooming appt on ${appointmentDate} has been cancelled. ` +
+        `${petPossessive} grooming appt on ${appointmentDate} has been cancelled. ` +
         `Questions? Reply here.`;
 
       const segments = calculateSmsSegments(message);
@@ -542,7 +562,7 @@ export async function POST(request: Request) {
     if (action === "appointment_created") {
       const createdApptDate = formatDateTime(appointmentDateTime, businessTimezone);
       const message =
-        `Hi ${customerName}! Your grooming appointment with ${businessName} ` +
+        `Hi ${customerName}! ${petPossessive} grooming appointment with ${businessName} ` +
         `is booked for ${createdApptDate}. We look forward to seeing you!`;
 
       const segments = calculateSmsSegments(message);
