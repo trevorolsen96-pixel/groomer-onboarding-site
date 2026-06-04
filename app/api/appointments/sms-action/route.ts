@@ -6,7 +6,8 @@ type SmsAction =
   | "reschedule"
   | "cancellation"
   | "cancel_reminder_only"
-  | "send_review_request";
+  | "send_review_request"
+  | "appointment_created";
 
 function cleanText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -367,7 +368,7 @@ export async function POST(request: Request) {
 
     // For reminders and reschedules, skip if the appointment is in the past
     // Cancellations and review requests should still send regardless of appointment time
-    if (isPastAppointment && action !== "cancellation" && action !== "send_review_request") {
+    if (isPastAppointment && action !== "cancellation" && action !== "send_review_request" && action !== "appointment_created") {
       await deletePendingAppointmentReminders({ businessId, appointmentId });
 
       return NextResponse.json({
@@ -536,6 +537,26 @@ export async function POST(request: Request) {
         status: "queued",
         reminderStatus: "cancelled",
       });
+    }
+
+    if (action === "appointment_created") {
+      const message =
+        `Hi ${customerName}! Your grooming appointment with ${businessName} ` +
+        `is booked for ${appointmentDate}. We look forward to seeing you!`;
+
+      const segments = calculateSmsSegments(message);
+      await assertSmsCreditsAvailable(businessId, segments);
+
+      await queueImmediateSms({
+        businessId,
+        customerId: customer.id,
+        appointmentId,
+        messageType: "appointment_created",
+        toPhone,
+        message,
+      });
+
+      return NextResponse.json({ ok: true, status: "queued" });
     }
 
     if (action === "send_review_request") {
