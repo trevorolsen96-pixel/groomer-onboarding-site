@@ -177,13 +177,13 @@ async function upsertAppointmentReminder({
     message =
       `Hi ${customerName}, this is ${businessName}. ` +
       `Appt: ${date}, arrival ${start}-${end}. ` +
-      `Reply YES to confirm or NO to reschedule.`;
+      `Reply YES to confirm or NO to cancel.`;
   } else {
     const appointmentDate = formatDateTime(appointmentDateTime, businessTimezone);
     message =
       `Hi ${customerName}, this is ${businessName}. ` +
       `Your grooming appt is ${appointmentDate}. ` +
-      `Reply YES to confirm or NO to reschedule.`;
+      `Reply YES to confirm or NO to cancel.`;
   }
 
     const { error: queueError } = await supabaseAdmin
@@ -456,13 +456,13 @@ export async function POST(request: Request) {
         message =
           `Hi ${customerName}, this is ${businessName}. ` +
           `Updated appt: ${date}, arrival ${start}-${end}. ` +
-          `Reply YES to confirm or NO to reschedule.`;
+          `Reply YES to confirm or NO to cancel.`;
       } else {
         const appointmentDate = formatDateTime(appointmentDateTime, businessTimezone);
         message =
           `Hi ${customerName}, this is ${businessName}. ` +
           `Your grooming appt is now ${appointmentDate}. ` +
-          `Reply YES to confirm or NO to reschedule.`;
+          `Reply YES to confirm or NO to cancel.`;
       }
 
       const segments = calculateSmsSegments(message);

@@ -31,14 +31,12 @@ async function updateLatestAppointmentConfirmation({
   const clean = body.trim().toLowerCase();
 
   const yesValues = new Set(["yes", "y", "confirm", "confirmed"]);
-  const noValues = new Set(["no", "n", "reschedule"]);
+  const noValues  = new Set(["no", "n", "cancel", "reschedule"]);
 
-  let status: string | null = null;
+  const isYes = yesValues.has(clean);
+  const isNo  = noValues.has(clean);
 
-  if (yesValues.has(clean)) status = "confirmed";
-  if (noValues.has(clean)) status = "needs_reschedule";
-
-  if (!status) return;
+  if (!isYes && !isNo) return;
 
   const now = new Date().toISOString();
 
@@ -53,30 +51,58 @@ async function updateLatestAppointmentConfirmation({
     .limit(1);
 
   const appointment = appointments?.[0];
-
   if (!appointment?.id) return;
 
-  await supabaseAdmin
-    .from("appointments")
-    .update({
-      confirmation_status: status,
-      confirmation_responded_at: now,
-    })
-    .eq("id", appointment.id)
-    .eq("business_id", businessId);
+  if (isYes) {
+    // Client confirmed — mark confirmed
+    await supabaseAdmin
+      .from("appointments")
+      .update({
+        confirmation_status: "confirmed",
+        confirmation_responded_at: now,
+      })
+      .eq("id", appointment.id)
+      .eq("business_id", businessId);
 
-  await supabaseAdmin.from("sms_events").insert({
-    business_id: businessId,
-    customer_id: customerId,
-    appointment_id: appointment.id,
-    direction: "inbound",
-    event_type:
-      status === "confirmed"
-        ? "appointment_confirmed"
-        : "appointment_needs_reschedule",
-    message_body: body,
-    created_at: now,
-  });
+    await supabaseAdmin.from("sms_events").insert({
+      business_id: businessId,
+      customer_id: customerId,
+      appointment_id: appointment.id,
+      direction: "inbound",
+      event_type: "appointment_confirmed",
+      message_body: body,
+      created_at: now,
+    });
+  } else {
+    // Client cancelled — cancel the appointment and remove pending reminders
+    await supabaseAdmin
+      .from("appointments")
+      .update({
+        status: "cancelled",
+        confirmation_status: "declined",
+        confirmation_responded_at: now,
+      })
+      .eq("id", appointment.id)
+      .eq("business_id", businessId);
+
+    // Remove any pending reminder texts for this appointment
+    await supabaseAdmin
+      .from("sms_outbound_queue")
+      .delete()
+      .eq("business_id", businessId)
+      .eq("appointment_id", appointment.id)
+      .eq("status", "pending");
+
+    await supabaseAdmin.from("sms_events").insert({
+      business_id: businessId,
+      customer_id: customerId,
+      appointment_id: appointment.id,
+      direction: "inbound",
+      event_type: "appointment_cancelled_by_client",
+      message_body: body,
+      created_at: now,
+    });
+  }
 }
 
 export async function GET() {
