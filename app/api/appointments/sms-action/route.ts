@@ -129,6 +129,7 @@ async function upsertAppointmentReminder({
   appointmentScheduledAt,
   customerName,
   businessName,
+  petPossessive,
   toPhone,
   appointmentDateTime,
   businessTimezone,
@@ -141,6 +142,7 @@ async function upsertAppointmentReminder({
   appointmentScheduledAt: string;
   customerName: string;
   businessName: string;
+  petPossessive: string;
   toPhone: string;
   appointmentDateTime: Date;
   businessTimezone: string;
@@ -427,6 +429,7 @@ export async function POST(request: Request) {
         appointmentScheduledAt: appointment.scheduled_at,
         customerName,
         businessName,
+        petPossessive,
         toPhone,
         appointmentDateTime,
         businessTimezone,
@@ -516,6 +519,7 @@ export async function POST(request: Request) {
         appointmentScheduledAt: appointment.scheduled_at,
         customerName,
         businessName,
+        petPossessive,
         toPhone,
         appointmentDateTime,
         businessTimezone,
