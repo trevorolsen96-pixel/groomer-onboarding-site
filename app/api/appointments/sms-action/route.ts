@@ -540,9 +540,10 @@ export async function POST(request: Request) {
     }
 
     if (action === "appointment_created") {
+      const createdApptDate = formatDateTime(appointmentDateTime, businessTimezone);
       const message =
         `Hi ${customerName}! Your grooming appointment with ${businessName} ` +
-        `is booked for ${appointmentDate}. We look forward to seeing you!`;
+        `is booked for ${createdApptDate}. We look forward to seeing you!`;
 
       const segments = calculateSmsSegments(message);
       await assertSmsCreditsAvailable(businessId, segments);
