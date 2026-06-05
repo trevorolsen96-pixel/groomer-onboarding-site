@@ -8,8 +8,9 @@ type Props = {
   businessName: string;
   logoUrl: string | null;
   customerName: string;
-  serviceName: string;
   amountDue: number;
+  servicesTotal: number;
+  discountPercent: number;
 };
 
 const TIP_PRESETS = [
@@ -23,7 +24,7 @@ function fmt(amount: number) {
   return amount.toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
 
-export default function PayPage({ paymentLinkId, businessName, logoUrl, customerName, serviceName, amountDue }: Props) {
+export default function PayPage({ paymentLinkId, businessName, logoUrl, customerName, amountDue, servicesTotal, discountPercent }: Props) {
   const [selectedPreset, setSelectedPreset] = useState<number | "custom">(0.15);
   const [customTip, setCustomTip] = useState("");
   const [loading, setLoading] = useState(false);
@@ -152,8 +153,14 @@ export default function PayPage({ paymentLinkId, businessName, logoUrl, customer
           <div className="space-y-2 text-sm">
             <div className="flex justify-between text-[var(--text-secondary)]">
               <span>Grooming service</span>
-              <span className="font-semibold">{fmt(amountDue)}</span>
+              <span className="font-semibold">{fmt(servicesTotal)}</span>
             </div>
+            {discountPercent > 0 && (
+              <div className="flex justify-between text-green-700">
+                <span>Discount ({discountPercent.toFixed(0)}%)</span>
+                <span className="font-semibold">-{fmt(Math.round(servicesTotal * discountPercent) / 100)}</span>
+              </div>
+            )}
             {tipAmount > 0 && (
               <div className="flex justify-between text-[var(--text-secondary)]">
                 <span>Tip</span>

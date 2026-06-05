@@ -49,7 +49,7 @@ export default async function PaymentPage({ params }: { params: Promise<{ id: st
       .maybeSingle(),
     supabaseAdmin
       .from("appointments")
-      .select("customer_id, service_type")
+      .select("customer_id, service_type, total_price, discount_percent")
       .eq("id", link.appointment_id)
       .maybeSingle(),
   ]);
@@ -66,8 +66,9 @@ export default async function PaymentPage({ params }: { params: Promise<{ id: st
 
   const businessName = businessSettings?.business_name ?? "Your Groomer";
   const logoUrl = businessSettings?.logo_url ?? null;
-  const serviceName = appointment?.service_type ?? "Grooming appointment";
   const amountDue = Number(link.amount ?? 0);
+  const servicesTotal = Number(appointment?.total_price ?? amountDue);
+  const discountPercent = Number(appointment?.discount_percent ?? 0);
 
   return (
     <PayPage
@@ -75,8 +76,9 @@ export default async function PaymentPage({ params }: { params: Promise<{ id: st
       businessName={businessName}
       logoUrl={logoUrl}
       customerName={customerName}
-      serviceName={serviceName}
       amountDue={amountDue}
+      servicesTotal={servicesTotal}
+      discountPercent={discountPercent}
     />
   );
 }
