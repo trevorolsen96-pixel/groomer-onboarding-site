@@ -62,6 +62,8 @@ input:not([type="checkbox"]):not([type="radio"]),
 select,
 textarea {
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   border-radius: 14px;
   border: 1px solid var(--divider-soft);
   background: var(--warm-surface);
