@@ -174,6 +174,14 @@ export async function GET(
       );
     }
 
+    const { data: recordTypesRows } = await supabaseAdmin
+      .from("business_pet_record_types")
+      .select("id, name, has_expiry, sort_order")
+      .eq("business_id", requestRow.business_id)
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true });
+
     return NextResponse.json({
       request_id: requestRow.id,
       business_name: settingsRow.business_name ?? "Your Groomer",
@@ -184,6 +192,7 @@ export async function GET(
       questions: questionsRows ?? [],
       require_pet_records_onboarding:
         settingsRow.require_pet_records_onboarding ?? false,
+      pet_record_types: recordTypesRows ?? [],
     });
   } catch (error) {
     console.error("GET onboarding token error:", error);
