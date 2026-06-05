@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 type PetForm = {
+  id?: string; // existing pet ID for update requests
   pet_name: string;
   breed: string;
   age: string;
@@ -60,6 +61,21 @@ type PetRecordUpload = {
   file: File;
 };
 
+type PreFill = {
+  owner_first_name: string;
+  owner_last_name: string;
+  phone: string;
+  email: string;
+  address_line_1: string;
+  address_line_2: string;
+  city: string;
+  state: string;
+  postal_code: string;
+  secondary_contact_name: string;
+  secondary_contact_phone: string;
+  pets: PetForm[];
+};
+
 type BrandingResponse = {
   request_id: string;
   business_name: string;
@@ -70,6 +86,9 @@ type BrandingResponse = {
   questions: OnboardingQuestion[];
   require_pet_records_onboarding: boolean;
   pet_record_types: PetRecordType[];
+  is_update: boolean;
+  customer_id: string | null;
+  pre_fill: PreFill | null;
   error?: string;
 };
 
@@ -100,6 +119,7 @@ export default function OnboardingTokenPage() {
   const [businessName, setBusinessName] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [lockedEmail, setLockedEmail] = useState<string | null>(null);
+  const [isUpdate, setIsUpdate] = useState(false);
 
   const [agreements, setAgreements] = useState<Agreement[]>([]);
   const [agreementAcceptances, setAgreementAcceptances] = useState<AgreementAcceptance[]>([]);
@@ -124,6 +144,8 @@ export default function OnboardingTokenPage() {
     city: "",
     state: "",
     postal_code: "",
+    secondary_contact_name: "",
+    secondary_contact_phone: "",
     sms_opt_in: false,
   });
 
@@ -146,10 +168,7 @@ export default function OnboardingTokenPage() {
 
         setBusinessName(result.business_name);
         setLogoUrl(result.logo_url);
-        if (result.client_email) {
-          setLockedEmail(result.client_email);
-          setForm((prev) => ({ ...prev, email: result.client_email! }));
-        }
+        setIsUpdate(result.is_update ?? false);
         setAgreements(result.agreements ?? []);
         setQuestions(loadedQuestions);
         setRequirePetRecords(result.require_pet_records_onboarding ?? false);
@@ -162,12 +181,42 @@ export default function OnboardingTokenPage() {
           })),
         );
 
-        setPetQuestionnaires([
-          {
-            pet_index: 0,
-            answers: buildEmptyAnswers(loadedQuestions),
-          },
-        ]);
+        if (result.pre_fill) {
+          // Pre-fill form for update requests
+          const pf = result.pre_fill;
+          setForm({
+            owner_first_name: pf.owner_first_name,
+            owner_last_name: pf.owner_last_name,
+            phone: pf.phone,
+            email: pf.email,
+            address_line_1: pf.address_line_1,
+            address_line_2: pf.address_line_2,
+            city: pf.city,
+            state: pf.state,
+            postal_code: pf.postal_code,
+            secondary_contact_name: pf.secondary_contact_name,
+            secondary_contact_phone: pf.secondary_contact_phone,
+            sms_opt_in: true, // already opted in as existing client
+          });
+          setPets(pf.pets.length > 0 ? pf.pets : [emptyPet()]);
+          setPetQuestionnaires(
+            (pf.pets.length > 0 ? pf.pets : [emptyPet()]).map((_, i) => ({
+              pet_index: i,
+              answers: buildEmptyAnswers(loadedQuestions),
+            })),
+          );
+        } else {
+          if (result.client_email) {
+            setLockedEmail(result.client_email);
+            setForm((prev) => ({ ...prev, email: result.client_email! }));
+          }
+          setPetQuestionnaires([
+            {
+              pet_index: 0,
+              answers: buildEmptyAnswers(loadedQuestions),
+            },
+          ]);
+        }
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Failed to load onboarding page.";
@@ -633,7 +682,11 @@ export default function OnboardingTokenPage() {
         "payload",
         JSON.stringify({
           ...form,
-          pets,
+          pets: pets.map((pet) => ({
+            ...pet,
+            // Include pet ID for existing pets in update requests
+            id: pet.id ?? undefined,
+          })),
           agreements: agreementAcceptances,
           pet_questionnaire: petQuestionnaires,
           pet_records: uploadPayload,
@@ -704,11 +757,13 @@ export default function OnboardingTokenPage() {
             )}
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--rose-primary)]">
-                Customer onboarding
+                {isUpdate ? "Information update" : "Customer onboarding"}
               </p>
               <h1 className="text-3xl font-bold">{businessName}</h1>
               <p className="mt-2 text-[var(--text-secondary)]">
-                Please complete your information before your appointment.
+                {isUpdate
+                  ? "Please review and update your information. Make any changes and submit when done."
+                  : "Please complete your information before your appointment."}
               </p>
             </div>
           </div>
@@ -740,6 +795,19 @@ export default function OnboardingTokenPage() {
               <input placeholder="City" value={form.city} onChange={(e) => updateOwnerField("city", e.target.value)} required />
               <input placeholder="State" value={form.state} onChange={(e) => updateOwnerField("state", e.target.value)} required />
               <input placeholder="ZIP code" value={form.postal_code} onChange={(e) => updateOwnerField("postal_code", e.target.value)} required />
+            </div>
+
+            <div className="mt-6 rounded-[18px] border border-[var(--divider-soft)] bg-[var(--soft-surface)] p-4">
+              <h3 className="text-base font-semibold text-[var(--text-primary)]">
+                Secondary contact <span className="text-sm font-normal text-[var(--text-secondary)]">(optional)</span>
+              </h3>
+              <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                An emergency or backup contact we can reach if needed.
+              </p>
+              <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                <input placeholder="Name" value={form.secondary_contact_name} onChange={(e) => updateOwnerField("secondary_contact_name", e.target.value)} />
+                <input placeholder="Phone number" value={form.secondary_contact_phone} onChange={(e) => updateOwnerField("secondary_contact_phone", e.target.value)} />
+              </div>
             </div>
           </section>
 
@@ -847,7 +915,7 @@ export default function OnboardingTokenPage() {
               Your information will be used for appointment onboarding.
             </p>
             <button type="submit" disabled={submitting} className="primary-button px-5 py-3">
-              {submitting ? "Submitting..." : "Submit onboarding"}
+              {submitting ? "Submitting..." : isUpdate ? "Submit update" : "Submit onboarding"}
             </button>
           </div>
         </form>

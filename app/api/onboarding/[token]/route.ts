@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sendPushToBusinessAsync } from "@/lib/push-notification";
 
 type PetPayload = {
+  id?: string;
   pet_name: string;
   breed: string;
   age: string;
@@ -48,6 +49,8 @@ type SubmissionPayload = {
   state: string;
   postal_code: string;
   sms_opt_in: boolean;
+  secondary_contact_name?: string;
+  secondary_contact_phone?: string;
   pets: PetPayload[];
   agreements: AgreementAcceptancePayload[];
   pet_questionnaire: PetQuestionnairePayload[];
@@ -168,6 +171,55 @@ export async function GET(
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: true });
 
+    // Load pre-fill data for update requests
+    let preFill = null;
+    const isUpdate = !!requestRow.customer_id;
+
+    if (isUpdate) {
+      const { data: customer } = await supabaseAdmin
+        .from("customers")
+        .select("name, phone, email, address, secondary_contact_name, secondary_contact_phone")
+        .eq("id", requestRow.customer_id)
+        .maybeSingle();
+
+      const { data: pets } = await supabaseAdmin
+        .from("pets")
+        .select("id, name, breed, age, weight, sex, temperament")
+        .eq("customer_id", requestRow.customer_id)
+        .eq("is_active", true)
+        .order("created_at");
+
+      if (customer) {
+        const nameParts = (customer.name ?? "").trim().split(/\s+/);
+        const firstName = nameParts[0] ?? "";
+        const lastName = nameParts.slice(1).join(" ");
+
+        // Address is stored as a single string — put it in address_line_1
+        preFill = {
+          owner_first_name: firstName,
+          owner_last_name: lastName,
+          phone: customer.phone ?? "",
+          email: customer.email ?? "",
+          address_line_1: customer.address ?? "",
+          address_line_2: "",
+          city: "",
+          state: "",
+          postal_code: "",
+          secondary_contact_name: customer.secondary_contact_name ?? "",
+          secondary_contact_phone: customer.secondary_contact_phone ?? "",
+          pets: (pets ?? []).map((p) => ({
+            id: p.id,
+            pet_name: p.name ?? "",
+            breed: p.breed ?? "",
+            age: p.age ?? "",
+            weight_lbs: p.weight ?? "",
+            sex: p.sex ?? "",
+            temperament: p.temperament ?? "",
+          })),
+        };
+      }
+    }
+
     return NextResponse.json({
       request_id: requestRow.id,
       business_name: settingsRow.business_name ?? "Your Groomer",
@@ -179,6 +231,9 @@ export async function GET(
       require_pet_records_onboarding:
         settingsRow.require_pet_records_onboarding ?? false,
       pet_record_types: recordTypesRows ?? [],
+      is_update: isUpdate,
+      customer_id: requestRow.customer_id ?? null,
+      pre_fill: preFill,
     });
   } catch (error) {
     console.error("GET onboarding token error:", error);
@@ -393,28 +448,115 @@ if (requiredRecordTypes.length > 0) {
       body.postal_code,
     );
 
-    const customerNotes = `Onboarding form submitted. Email: ${body.email
-      .trim()
-      .toLowerCase()}. SMS opt-in: Yes`;
-
-    // All onboarding submissions go to pending_approval for groomer review
-    await supabaseAdmin.from("onboarding_requests").update({
-      status: "pending_approval",
-      submission_snapshot: {
-        ...body,
-        _customer_name: customerName,
-        _customer_address: customerAddress,
-        _customer_notes: customerNotes,
-      },
-    }).eq("id", requestRow.id);
-
     const clientName = `${body.owner_first_name ?? ""} ${body.owner_last_name ?? ""}`.trim();
-    await sendPushToBusinessAsync({
-      businessId: requestRow.business_id,
-      title: "New Client Submission",
-      body: `${clientName || "A client"} completed the onboarding form.`,
-      data: { route: "booking_requests", type: "onboarding_submission" },
-    });
+
+    if (requestRow.customer_id) {
+      // UPDATE REQUEST — auto-apply changes immediately
+
+      // Update customer record
+      await supabaseAdmin
+        .from("customers")
+        .update({
+          name: customerName,
+          phone: body.phone?.trim() || null,
+          email: body.email?.trim().toLowerCase() || null,
+          address: customerAddress,
+          secondary_contact_name: (body as any).secondary_contact_name?.trim() || null,
+          secondary_contact_phone: (body as any).secondary_contact_phone?.trim() || null,
+        })
+        .eq("id", requestRow.customer_id)
+        .eq("business_id", requestRow.business_id);
+
+      // Handle pets — update existing, add new, deactivate removed
+      const submittedPets = body.pets ?? [];
+      const submittedPetIds = submittedPets
+        .map((p: any) => p.id)
+        .filter((id: string | undefined) => !!id) as string[];
+
+      // Deactivate pets that were removed
+      const { data: existingPets } = await supabaseAdmin
+        .from("pets")
+        .select("id")
+        .eq("customer_id", requestRow.customer_id)
+        .eq("business_id", requestRow.business_id)
+        .eq("is_active", true);
+
+      const removedPetIds = (existingPets ?? [])
+        .map((p) => p.id)
+        .filter((id) => !submittedPetIds.includes(id));
+
+      if (removedPetIds.length > 0) {
+        await supabaseAdmin
+          .from("pets")
+          .update({ is_active: false })
+          .in("id", removedPetIds);
+      }
+
+      // Update or create pets
+      for (const pet of submittedPets) {
+        const petData = {
+          name: (pet as any).pet_name?.trim() || "",
+          breed: (pet as any).breed?.trim() || "",
+          age: (pet as any).age?.trim() || "",
+          weight: (pet as any).weight_lbs?.trim() || "",
+          sex: (pet as any).sex?.trim() || "",
+          temperament: (pet as any).temperament?.trim() || "",
+        };
+
+        if ((pet as any).id) {
+          await supabaseAdmin
+            .from("pets")
+            .update(petData)
+            .eq("id", (pet as any).id)
+            .eq("business_id", requestRow.business_id);
+        } else {
+          await supabaseAdmin.from("pets").insert({
+            ...petData,
+            business_id: requestRow.business_id,
+            customer_id: requestRow.customer_id,
+            is_active: true,
+          });
+        }
+      }
+
+      // Mark as completed
+      await supabaseAdmin
+        .from("onboarding_requests")
+        .update({
+          status: "completed",
+          submission_snapshot: { ...body, _customer_name: customerName },
+        })
+        .eq("id", requestRow.id);
+
+      await sendPushToBusinessAsync({
+        businessId: requestRow.business_id,
+        title: "Client Info Updated",
+        body: `${clientName || "A client"} updated their information.`,
+        data: { route: "customers", type: "client_update" },
+      });
+    } else {
+      // NEW CLIENT — send to pending_approval for groomer review
+      const customerNotes = `Onboarding form submitted. Email: ${body.email
+        .trim()
+        .toLowerCase()}. SMS opt-in: Yes`;
+
+      await supabaseAdmin.from("onboarding_requests").update({
+        status: "pending_approval",
+        submission_snapshot: {
+          ...body,
+          _customer_name: customerName,
+          _customer_address: customerAddress,
+          _customer_notes: customerNotes,
+        },
+      }).eq("id", requestRow.id);
+
+      await sendPushToBusinessAsync({
+        businessId: requestRow.business_id,
+        title: "New Client Submission",
+        body: `${clientName || "A client"} completed the onboarding form.`,
+        data: { route: "booking_requests", type: "onboarding_submission" },
+      });
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {
