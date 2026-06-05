@@ -463,12 +463,12 @@ export default function OnboardingTokenPage() {
                   </div>
 
                   {recordType.has_expiry && (
-                    <div className="mt-3">
-                      <label className="block">
+                    <div className="mt-3 w-full min-w-0">
+                      <label className="block w-full min-w-0">
                         <span className="text-xs font-semibold text-[var(--text-secondary)]">
                           Expiry date
                         </span>
-                        <div className="mt-1">
+                        <div className="mt-1 w-full min-w-0">
                           <input
                             type="date"
                             value={expiryValue}
