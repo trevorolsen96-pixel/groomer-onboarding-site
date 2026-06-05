@@ -100,7 +100,7 @@ export async function GET(
 
     const { data: requestRow, error: requestError } = await supabaseAdmin
       .from("onboarding_requests")
-      .select("id, token, status, business_id, client_email")
+      .select("id, token, status, business_id, client_email, customer_id")
       .eq("token", cleanToken)
       .single();
 
@@ -292,7 +292,7 @@ if (contentType.includes("multipart/form-data")) {
 
     const { data: requestRow, error: requestError } = await supabaseAdmin
       .from("onboarding_requests")
-      .select("id, status, business_id, source")
+      .select("id, status, business_id, source, customer_id")
       .eq("token", cleanToken)
       .single();
 
