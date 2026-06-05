@@ -463,16 +463,16 @@ export default function OnboardingTokenPage() {
                   </div>
 
                   {recordType.has_expiry && (
-                    <div className="mt-3 w-full overflow-hidden">
-                      <label className="block text-xs font-semibold text-[var(--text-secondary)]">
+                    <div className="mt-3">
+                      <p className="text-xs font-semibold text-[var(--text-secondary)] mb-1">
                         Expiry date
-                        <input
-                          type="date"
-                          value={expiryValue}
-                          onChange={(e) => setExpiryDate(petIndex, recordType.id, e.target.value)}
-                          className="mt-1 block w-full max-w-full box-border"
-                        />
-                      </label>
+                      </p>
+                      <input
+                        type="date"
+                        value={expiryValue}
+                        onChange={(e) => setExpiryDate(petIndex, recordType.id, e.target.value)}
+                        style={{ width: "100%", minWidth: 0, boxSizing: "border-box" }}
+                      />
                     </div>
                   )}
 
