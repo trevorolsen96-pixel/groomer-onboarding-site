@@ -568,6 +568,38 @@ if (requiredRecordTypes.length > 0) {
         }
       }
 
+      // Update questionnaire answers — delete old, insert new
+      const petQuestionnaire = body.pet_questionnaire ?? [];
+      for (const petQ of petQuestionnaire) {
+        const pet = submittedPets[petQ.pet_index];
+        const petId = (pet as any)?.id as string | undefined;
+        if (!petId) continue;
+
+        await supabaseAdmin
+          .from("onboarding_question_responses")
+          .delete()
+          .eq("pet_id", petId);
+
+        const answerRows = (petQ.answers ?? [])
+          .filter((a) => {
+            const ans = a.answer;
+            if (Array.isArray(ans)) return ans.length > 0;
+            return String(ans ?? "").trim().length > 0;
+          })
+          .map((a) => ({
+            request_id: requestRow.id,
+            pet_id: petId,
+            question_id: a.question_id,
+            answer: a.answer,
+          }));
+
+        if (answerRows.length > 0) {
+          await supabaseAdmin
+            .from("onboarding_question_responses")
+            .insert(answerRows);
+        }
+      }
+
       // Handle pet record uploads — delete old, upload new, insert rows
       const petRecordUploads = body.pet_records ?? [];
       if (formData && petRecordUploads.length > 0) {
