@@ -194,17 +194,36 @@ export async function GET(
         const firstName = nameParts[0] ?? "";
         const lastName = nameParts.slice(1).join(" ");
 
-        // Address is stored as a single string — put it in address_line_1
+        // Parse stored address "line1[, line2], city state zip" back into fields
+        const addressParts = (customer.address ?? "").split(", ");
+        let addressLine1 = "";
+        let addressLine2 = "";
+        let city = "";
+        let state = "";
+        let postalCode = "";
+
+        if (addressParts.length >= 2) {
+          const cityStateZip = addressParts[addressParts.length - 1];
+          const cityStateZipParts = cityStateZip.trim().split(/\s+/);
+          postalCode = cityStateZipParts[cityStateZipParts.length - 1] ?? "";
+          state = cityStateZipParts[cityStateZipParts.length - 2] ?? "";
+          city = cityStateZipParts.slice(0, -2).join(" ");
+          addressLine1 = addressParts[0];
+          addressLine2 = addressParts.length === 3 ? addressParts[1] : "";
+        } else {
+          addressLine1 = customer.address ?? "";
+        }
+
         preFill = {
           owner_first_name: firstName,
           owner_last_name: lastName,
           phone: customer.phone ?? "",
           email: customer.email ?? "",
-          address_line_1: customer.address ?? "",
-          address_line_2: "",
-          city: "",
-          state: "",
-          postal_code: "",
+          address_line_1: addressLine1,
+          address_line_2: addressLine2,
+          city,
+          state,
+          postal_code: postalCode,
           secondary_contact_name: customer.secondary_contact_name ?? "",
           secondary_contact_phone: customer.secondary_contact_phone ?? "",
           pets: (pets ?? []).map((p) => ({
