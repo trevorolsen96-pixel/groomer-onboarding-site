@@ -520,30 +520,42 @@ if (requiredRecordTypes.length > 0) {
       }
 
       // Upsert agreement acceptances
-      const acceptedAgreements = (body.agreements ?? []).filter(
-        (a) => a.accepted && a.agreement_id?.trim(),
+      const rawAgreements = body.agreements ?? [];
+      console.log("[agreements] raw payload:", JSON.stringify(rawAgreements));
+
+      const acceptedAgreements = rawAgreements.filter(
+        (a) => a.accepted === true && a.agreement_id?.trim(),
       );
+      console.log("[agreements] accepted count:", acceptedAgreements.length);
 
       if (acceptedAgreements.length > 0) {
-        const { data: agreementTextRows } = await supabaseAdmin
+        const { data: agreementTextRows, error: textError } = await supabaseAdmin
           .from("intake_agreements")
           .select("id, agreement_text")
           .in("id", acceptedAgreements.map((a) => a.agreement_id));
+
+        if (textError) console.error("[agreements] text fetch error:", textError);
 
         const textMap = new Map(
           (agreementTextRows ?? []).map((r) => [r.id, r.agreement_text ?? ""]),
         );
 
-        await supabaseAdmin.from("intake_agreement_acceptances").upsert(
-          acceptedAgreements.map((a) => ({
-            customer_id: requestRow.customer_id,
-            agreement_id: a.agreement_id.trim(),
-            accepted: true,
-            accepted_at: new Date().toISOString(),
-            accepted_text: textMap.get(a.agreement_id.trim()) ?? null,
-          })),
-          { onConflict: "customer_id,agreement_id" },
-        );
+        const { error: upsertError } = await supabaseAdmin
+          .from("intake_agreement_acceptances")
+          .upsert(
+            acceptedAgreements.map((a) => ({
+              onboarding_request_id: requestRow.id,
+              customer_id: requestRow.customer_id,
+              agreement_id: a.agreement_id.trim(),
+              accepted: true,
+              accepted_at: new Date().toISOString(),
+              accepted_text: textMap.get(a.agreement_id.trim()) ?? null,
+            })),
+            { onConflict: "customer_id,agreement_id" },
+          );
+
+        if (upsertError) console.error("[agreements] upsert error:", upsertError);
+        else console.log("[agreements] upsert success");
       }
 
       // Mark as completed
