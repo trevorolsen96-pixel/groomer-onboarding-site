@@ -432,7 +432,7 @@ export default function OnboardingTokenPage() {
               return (
                 <div
                   key={recordType.id}
-                  className="rounded-[16px] border border-[var(--divider-soft)] bg-[var(--cream-background)] p-4"
+                  className="rounded-[16px] border border-[var(--divider-soft)] bg-[var(--cream-background)] p-4 overflow-hidden"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-sm font-semibold text-[var(--text-primary)]">
