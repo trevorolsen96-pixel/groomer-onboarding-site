@@ -189,7 +189,8 @@ export async function GET(
         .eq("is_active", true)
         .order("created_at");
 
-      if (customer) {
+      if (customer && pets) {
+        const petIds = (pets ?? []).map((p) => p.id).filter(Boolean);
         const nameParts = (customer.name ?? "").trim().split(/\s+/);
         const firstName = nameParts[0] ?? "";
         const lastName = nameParts.slice(1).join(" ");
@@ -214,6 +215,24 @@ export async function GET(
           addressLine1 = customer.address ?? "";
         }
 
+        // Fetch questionnaire answers for existing pets
+        const { data: questionResponses } = petIds.length > 0
+          ? await supabaseAdmin
+              .from("onboarding_question_responses")
+              .select("pet_id, question_id, answer")
+              .in("pet_id", petIds)
+          : { data: [] };
+
+        // Fetch valid (non-expired) pet documents
+        const today = new Date().toISOString().split("T")[0];
+        const { data: existingDocs } = petIds.length > 0
+          ? await supabaseAdmin
+              .from("pet_documents")
+              .select("pet_id, record_type_id, title, expires_at")
+              .in("pet_id", petIds)
+              .or(`expires_at.is.null,expires_at.gte.${today}`)
+          : { data: [] };
+
         preFill = {
           owner_first_name: firstName,
           owner_last_name: lastName,
@@ -226,6 +245,17 @@ export async function GET(
           postal_code: postalCode,
           secondary_contact_name: customer.secondary_contact_name ?? "",
           secondary_contact_phone: customer.secondary_contact_phone ?? "",
+          question_responses: (questionResponses ?? []).map((r) => ({
+            pet_id: r.pet_id,
+            question_id: r.question_id,
+            answer: r.answer,
+          })),
+          existing_records: (existingDocs ?? []).map((d) => ({
+            pet_id: d.pet_id,
+            record_type_id: d.record_type_id,
+            title: d.title,
+            expires_at: d.expires_at ?? null,
+          })),
           pets: (pets ?? []).map((p) => ({
             id: p.id,
             pet_name: p.name ?? "",

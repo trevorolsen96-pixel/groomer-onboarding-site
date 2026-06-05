@@ -61,6 +61,19 @@ type PetRecordUpload = {
   file: File;
 };
 
+type ExistingRecord = {
+  pet_id: string;
+  record_type_id: string | null;
+  title: string | null;
+  expires_at: string | null;
+};
+
+type QuestionResponse = {
+  pet_id: string;
+  question_id: string;
+  answer: string | string[];
+};
+
 type PreFill = {
   owner_first_name: string;
   owner_last_name: string;
@@ -74,6 +87,8 @@ type PreFill = {
   secondary_contact_name: string;
   secondary_contact_phone: string;
   pets: PetForm[];
+  question_responses: QuestionResponse[];
+  existing_records: ExistingRecord[];
 };
 
 type BrandingResponse = {
@@ -130,6 +145,7 @@ export default function OnboardingTokenPage() {
   // key: `${petIndex}:${typeId}` → expiry date string (yyyy-mm-dd)
   const [petRecordExpiries, setPetRecordExpiries] = useState<Record<string, string>>({});
   const [petQuestionnaires, setPetQuestionnaires] = useState<PetQuestionnaire[]>([]);
+  const [existingRecords, setExistingRecords] = useState<ExistingRecord[]>([]);
 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -198,12 +214,21 @@ export default function OnboardingTokenPage() {
             secondary_contact_phone: pf.secondary_contact_phone,
             sms_opt_in: true, // already opted in as existing client
           });
-          setPets(pf.pets.length > 0 ? pf.pets : [emptyPet()]);
+          const prefillPets = pf.pets.length > 0 ? pf.pets : [emptyPet()];
+          setPets(prefillPets);
+          setExistingRecords(pf.existing_records ?? []);
           setPetQuestionnaires(
-            (pf.pets.length > 0 ? pf.pets : [emptyPet()]).map((_, i) => ({
-              pet_index: i,
-              answers: buildEmptyAnswers(loadedQuestions),
-            })),
+            prefillPets.map((pet, i) => {
+              const petId = (pet as any).id as string | undefined;
+              const responses = (pf.question_responses ?? []).filter(
+                (r) => r.pet_id === petId,
+              );
+              const answers = buildEmptyAnswers(loadedQuestions).map((empty) => {
+                const saved = responses.find((r) => r.question_id === empty.question_id);
+                return saved ? { ...empty, answer: saved.answer } : empty;
+              });
+              return { pet_index: i, answers };
+            }),
           );
         } else {
           if (result.client_email) {
@@ -359,9 +384,14 @@ export default function OnboardingTokenPage() {
 
   function validateRequiredRecordTypes(): string | null {
     if (petRecordTypes.length === 0) {
-      // Legacy: just require at least one record per pet if toggle is on
       if (requirePetRecords) {
-        const missing = pets.some((_, petIndex) => getPetRecords(petIndex).length === 0);
+        const missing = pets.some((pet, petIndex) => {
+          const petId = (pet as any).id as string | undefined;
+          const hasExisting = petId
+            ? existingRecords.some((r) => r.pet_id === petId)
+            : false;
+          return !hasExisting && getPetRecords(petIndex).length === 0;
+        });
         if (missing) return "Please upload at least one record for each pet.";
       }
       return null;
@@ -369,9 +399,15 @@ export default function OnboardingTokenPage() {
 
     const requiredTypes = petRecordTypes.filter((t) => t.is_required);
     for (let petIndex = 0; petIndex < pets.length; petIndex++) {
+      const petId = (pets[petIndex] as any).id as string | undefined;
       for (const type of requiredTypes) {
         const hasUpload = getPetRecordsForType(petIndex, type.id).length > 0;
-        if (!hasUpload) {
+        const hasExisting = petId
+          ? existingRecords.some(
+              (r) => r.pet_id === petId && r.record_type_id === type.id,
+            )
+          : false;
+        if (!hasUpload && !hasExisting) {
           return `Please upload a ${type.name} for each pet.`;
         }
       }
