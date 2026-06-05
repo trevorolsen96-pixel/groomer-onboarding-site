@@ -568,6 +568,75 @@ if (requiredRecordTypes.length > 0) {
         }
       }
 
+      // Handle pet record uploads — delete old, upload new, insert rows
+      const petRecordUploads = body.pet_records ?? [];
+      if (formData && petRecordUploads.length > 0) {
+        // Build map of pet index → pet ID from submitted pets
+        const petIndexToId = new Map<number, string>();
+        for (const pet of submittedPets) {
+          const petId = (pet as any).id as string | undefined;
+          const petIndex = submittedPets.indexOf(pet);
+          if (petId) petIndexToId.set(petIndex, petId);
+        }
+
+        for (const record of petRecordUploads) {
+          const petId = petIndexToId.get(record.pet_index);
+          if (!petId) continue;
+
+          const file = formData.get(record.file_key) as File | null;
+          if (!file) continue;
+
+          // Delete existing records of this type for this pet
+          if (record.document_type) {
+            await supabaseAdmin
+              .from("pet_documents")
+              .delete()
+              .eq("pet_id", petId)
+              .eq("record_type_id", record.document_type);
+          }
+
+          // Upload file to storage
+          const timestamp = Date.now();
+          const cleanFileName = (record.file_name ?? "record")
+            .trim()
+            .replace(/[^a-zA-Z0-9._-]/g, "_")
+            .replace(/_+/g, "_");
+          const storagePath = `${requestRow.business_id}/${requestRow.customer_id}/${petId}/${timestamp}-${cleanFileName}`;
+
+          const fileBuffer = await file.arrayBuffer();
+          const { error: uploadError } = await supabaseAdmin.storage
+            .from("pet-documents")
+            .upload(storagePath, fileBuffer, {
+              contentType: record.mime_type || "application/octet-stream",
+              upsert: false,
+            });
+
+          if (uploadError) {
+            console.error("[pet_records] upload error:", uploadError);
+            continue;
+          }
+
+          const publicUrl = supabaseAdmin.storage
+            .from("pet-documents")
+            .getPublicUrl(storagePath).data.publicUrl;
+
+          // Insert new pet_document row
+          await supabaseAdmin.from("pet_documents").insert({
+            business_id: requestRow.business_id,
+            customer_id: requestRow.customer_id,
+            pet_id: petId,
+            record_type_id: record.document_type || null,
+            document_type: record.document_type || null,
+            title: record.title || record.file_name || "Record",
+            file_url: publicUrl,
+            file_path: storagePath,
+            file_name: record.file_name || cleanFileName,
+            mime_type: record.mime_type || "application/octet-stream",
+            expires_at: record.expiry_date || null,
+          });
+        }
+      }
+
       // Upsert agreement acceptances
       const rawAgreements = body.agreements ?? [];
       console.log("[agreements] raw payload:", JSON.stringify(rawAgreements));
