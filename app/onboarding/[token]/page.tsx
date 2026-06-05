@@ -45,6 +45,14 @@ type PetQuestionnaire = {
   answers: QuestionAnswer[];
 };
 
+type PetRecordType = {
+  id: string;
+  name: string;
+  has_expiry: boolean;
+  is_required: boolean;
+  sort_order: number;
+};
+
 type PetRecordUpload = {
   id: string;
   pet_index: number;
@@ -61,6 +69,7 @@ type BrandingResponse = {
   agreements: Agreement[];
   questions: OnboardingQuestion[];
   require_pet_records_onboarding: boolean;
+  pet_record_types: PetRecordType[];
   error?: string;
 };
 
@@ -93,16 +102,14 @@ export default function OnboardingTokenPage() {
   const [lockedEmail, setLockedEmail] = useState<string | null>(null);
 
   const [agreements, setAgreements] = useState<Agreement[]>([]);
-  const [agreementAcceptances, setAgreementAcceptances] = useState<
-    AgreementAcceptance[]
-  >([]);
-
+  const [agreementAcceptances, setAgreementAcceptances] = useState<AgreementAcceptance[]>([]);
   const [questions, setQuestions] = useState<OnboardingQuestion[]>([]);
   const [requirePetRecords, setRequirePetRecords] = useState(false);
-const [petRecords, setPetRecords] = useState<PetRecordUpload[]>([]);
-  const [petQuestionnaires, setPetQuestionnaires] = useState<
-    PetQuestionnaire[]
-  >([]);
+  const [petRecordTypes, setPetRecordTypes] = useState<PetRecordType[]>([]);
+  const [petRecords, setPetRecords] = useState<PetRecordUpload[]>([]);
+  // key: `${petIndex}:${typeId}` → expiry date string (yyyy-mm-dd)
+  const [petRecordExpiries, setPetRecordExpiries] = useState<Record<string, string>>({});
+  const [petQuestionnaires, setPetQuestionnaires] = useState<PetQuestionnaire[]>([]);
 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -146,6 +153,7 @@ const [petRecords, setPetRecords] = useState<PetRecordUpload[]>([]);
         setAgreements(result.agreements ?? []);
         setQuestions(loadedQuestions);
         setRequirePetRecords(result.require_pet_records_onboarding ?? false);
+        setPetRecordTypes(result.pet_record_types ?? []);
 
         setAgreementAcceptances(
           (result.agreements ?? []).map((agreement) => ({
@@ -162,9 +170,7 @@ const [petRecords, setPetRecords] = useState<PetRecordUpload[]>([]);
         ]);
       } catch (error) {
         const message =
-          error instanceof Error
-            ? error.message
-            : "Failed to load onboarding page.";
+          error instanceof Error ? error.message : "Failed to load onboarding page.";
         setLoadError(message);
       } finally {
         setLoading(false);
@@ -177,19 +183,13 @@ const [petRecords, setPetRecords] = useState<PetRecordUpload[]>([]);
   }, [token]);
 
   function updateOwnerField(key: string, value: string | boolean) {
-    setForm((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
+    setForm((prev) => ({ ...prev, [key]: value }));
   }
 
   function updatePetField(index: number, key: keyof PetForm, value: string) {
     setPets((prev) => {
       const next = [...prev];
-      next[index] = {
-        ...next[index],
-        [key]: value,
-      };
+      next[index] = { ...next[index], [key]: value };
       return next;
     });
   }
@@ -202,17 +202,10 @@ const [petRecords, setPetRecords] = useState<PetRecordUpload[]>([]);
     );
   }
 
-  function updatePetQuestionAnswer(
-    petIndex: number,
-    questionId: string,
-    answer: string | string[],
-  ) {
+  function updatePetQuestionAnswer(petIndex: number, questionId: string, answer: string | string[]) {
     setPetQuestionnaires((prev) =>
       prev.map((petQuestionnaire) => {
-        if (petQuestionnaire.pet_index !== petIndex) {
-          return petQuestionnaire;
-        }
-
+        if (petQuestionnaire.pet_index !== petIndex) return petQuestionnaire;
         return {
           ...petQuestionnaire,
           answers: petQuestionnaire.answers.map((item) =>
@@ -223,80 +216,60 @@ const [petRecords, setPetRecords] = useState<PetRecordUpload[]>([]);
     );
   }
 
-  function togglePetMultiSelectAnswer(
-    petIndex: number,
-    questionId: string,
-    option: string,
-  ) {
+  function togglePetMultiSelectAnswer(petIndex: number, questionId: string, option: string) {
     setPetQuestionnaires((prev) =>
       prev.map((petQuestionnaire) => {
-        if (petQuestionnaire.pet_index !== petIndex) {
-          return petQuestionnaire;
-        }
-
+        if (petQuestionnaire.pet_index !== petIndex) return petQuestionnaire;
         return {
           ...petQuestionnaire,
           answers: petQuestionnaire.answers.map((item) => {
             if (item.question_id !== questionId) return item;
-
             const current = Array.isArray(item.answer) ? item.answer : [];
             const exists = current.includes(option);
-
-            return {
-              ...item,
-              answer: exists
-                ? current.filter((value) => value !== option)
-                : [...current, option],
-            };
+            return { ...item, answer: exists ? current.filter((v) => v !== option) : [...current, option] };
           }),
         };
       }),
     );
   }
 
-  function documentTypeLabel(type: string) {
-  switch (type) {
-    case "rabies":
-      return "Rabies Certificate";
-    case "vaccines":
-      return "Vaccine Records";
-    case "vet_note":
-      return "Vet Note";
-    case "medication":
-      return "Medication Instructions";
-    default:
-      return "Other Record";
+  function setExpiryDate(petIndex: number, typeId: string, value: string) {
+    setPetRecordExpiries((prev) => ({
+      ...prev,
+      [`${petIndex}:${typeId}`]: value,
+    }));
   }
-}
 
-function addPetRecord(petIndex: number, documentType: string, file: File) {
-  setPetRecords((prev) => [
-    ...prev,
-    {
-      id: crypto.randomUUID(),
-      pet_index: petIndex,
-      document_type: documentType,
-      file,
-    },
-  ]);
-}
+  function getExpiryDate(petIndex: number, typeId: string): string {
+    return petRecordExpiries[`${petIndex}:${typeId}`] ?? "";
+  }
 
-function removePetRecord(recordId: string) {
-  setPetRecords((prev) => prev.filter((record) => record.id !== recordId));
-}
+  function addPetRecord(petIndex: number, documentType: string, file: File) {
+    setPetRecords((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), pet_index: petIndex, document_type: documentType, file },
+    ]);
+  }
 
-function getPetRecords(petIndex: number) {
-  return petRecords.filter((record) => record.pet_index === petIndex);
-}
+  function removePetRecord(recordId: string) {
+    setPetRecords((prev) => prev.filter((record) => record.id !== recordId));
+  }
+
+  function getPetRecordsForType(petIndex: number, typeId: string) {
+    return petRecords.filter(
+      (record) => record.pet_index === petIndex && record.document_type === typeId,
+    );
+  }
+
+  function getPetRecords(petIndex: number) {
+    return petRecords.filter((record) => record.pet_index === petIndex);
+  }
 
   function addPet() {
     setPets((prev) => [...prev, emptyPet()]);
     setPetQuestionnaires((prev) => [
       ...prev,
-      {
-        pet_index: prev.length,
-        answers: buildEmptyAnswers(questions),
-      },
+      { pet_index: prev.length, answers: buildEmptyAnswers(questions) },
     ]);
   }
 
@@ -308,46 +281,53 @@ function getPetRecords(petIndex: number) {
 
     setPetQuestionnaires((prev) => {
       if (prev.length === 1) return prev;
-
       return prev
         .filter((item) => item.pet_index !== index)
-        .map((item, newIndex) => ({
-          ...item,
-          pet_index: newIndex,
-        }));
+        .map((item, newIndex) => ({ ...item, pet_index: newIndex }));
     });
 
     setPetRecords((prev) =>
-  prev
-    .filter((record) => record.pet_index !== index)
-    .map((record) => ({
-      ...record,
-      pet_index:
-        record.pet_index > index ? record.pet_index - 1 : record.pet_index,
-    })),
-);
+      prev
+        .filter((record) => record.pet_index !== index)
+        .map((record) => ({
+          ...record,
+          pet_index: record.pet_index > index ? record.pet_index - 1 : record.pet_index,
+        })),
+    );
   }
 
   function validateRequiredQuestions() {
     return pets.every((_, petIndex) => {
-      const petQuestionnaire = petQuestionnaires.find(
-        (item) => item.pet_index === petIndex,
-      );
-
+      const petQuestionnaire = petQuestionnaires.find((item) => item.pet_index === petIndex);
       return questions.every((question) => {
         if (!question.is_required) return true;
-
-        const answer = petQuestionnaire?.answers.find(
-          (item) => item.question_id === question.id,
-        )?.answer;
-
-        if (Array.isArray(answer)) {
-          return answer.length > 0;
-        }
-
+        const answer = petQuestionnaire?.answers.find((item) => item.question_id === question.id)?.answer;
+        if (Array.isArray(answer)) return answer.length > 0;
         return String(answer ?? "").trim().length > 0;
       });
     });
+  }
+
+  function validateRequiredRecordTypes(): string | null {
+    if (petRecordTypes.length === 0) {
+      // Legacy: just require at least one record per pet if toggle is on
+      if (requirePetRecords) {
+        const missing = pets.some((_, petIndex) => getPetRecords(petIndex).length === 0);
+        if (missing) return "Please upload at least one record for each pet.";
+      }
+      return null;
+    }
+
+    const requiredTypes = petRecordTypes.filter((t) => t.is_required);
+    for (let petIndex = 0; petIndex < pets.length; petIndex++) {
+      for (const type of requiredTypes) {
+        const hasUpload = getPetRecordsForType(petIndex, type.id).length > 0;
+        if (!hasUpload) {
+          return `Please upload a ${type.name} for each pet.`;
+        }
+      }
+    }
+    return null;
   }
 
   function getPetAnswer(petIndex: number, questionId: string) {
@@ -365,9 +345,7 @@ function getPetRecords(petIndex: number) {
       return (
         <select
           value={typeof answer === "string" ? answer : ""}
-          onChange={(e) =>
-            updatePetQuestionAnswer(petIndex, question.id, e.target.value)
-          }
+          onChange={(e) => updatePetQuestionAnswer(petIndex, question.id, e.target.value)}
           required={question.is_required}
         >
           <option value="">Select an answer</option>
@@ -381,16 +359,12 @@ function getPetRecords(petIndex: number) {
       return (
         <select
           value={typeof answer === "string" ? answer : ""}
-          onChange={(e) =>
-            updatePetQuestionAnswer(petIndex, question.id, e.target.value)
-          }
+          onChange={(e) => updatePetQuestionAnswer(petIndex, question.id, e.target.value)}
           required={question.is_required}
         >
           <option value="">Select an answer</option>
           {question.options.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
+            <option key={option} value={option}>{option}</option>
           ))}
         </select>
       );
@@ -398,7 +372,6 @@ function getPetRecords(petIndex: number) {
 
     if (question.response_type === "dropdown_multi") {
       const selected = Array.isArray(answer) ? answer : [];
-
       return (
         <div className="space-y-2">
           {question.options.map((option) => (
@@ -410,13 +383,9 @@ function getPetRecords(petIndex: number) {
                 type="checkbox"
                 className="h-4 w-4 shrink-0"
                 checked={selected.includes(option)}
-                onChange={() =>
-                  togglePetMultiSelectAnswer(petIndex, question.id, option)
-                }
+                onChange={() => togglePetMultiSelectAnswer(petIndex, question.id, option)}
               />
-              <span className="text-sm text-[var(--text-secondary)]">
-                {option}
-              </span>
+              <span className="text-sm text-[var(--text-secondary)]">{option}</span>
             </label>
           ))}
         </div>
@@ -427,12 +396,176 @@ function getPetRecords(petIndex: number) {
       <textarea
         placeholder="Type your answer"
         value={typeof answer === "string" ? answer : ""}
-        onChange={(e) =>
-          updatePetQuestionAnswer(petIndex, question.id, e.target.value)
-        }
+        onChange={(e) => updatePetQuestionAnswer(petIndex, question.id, e.target.value)}
         required={question.is_required}
         className="min-h-28"
       />
+    );
+  }
+
+  function renderRecordsSection(petIndex: number) {
+    const hasCustomTypes = petRecordTypes.length > 0;
+    const hasRequiredTypes = petRecordTypes.some((t) => t.is_required);
+
+    if (!hasCustomTypes && !requirePetRecords) return null;
+
+    return (
+      <div className="mt-6 border-t border-[var(--divider-soft)] pt-5">
+        <h4 className="text-base font-semibold">
+          Pet records
+          {(hasRequiredTypes || (requirePetRecords && !hasCustomTypes)) && (
+            <span className="text-[var(--rose-primary)]"> *</span>
+          )}
+        </h4>
+        <p className="mt-1 text-sm text-[var(--text-secondary)]">
+          {hasCustomTypes
+            ? "Upload the required documents for this pet."
+            : "Upload rabies certificates, vaccine records, vet notes, or PDFs."}
+        </p>
+
+        {hasCustomTypes ? (
+          <div className="mt-4 space-y-4">
+            {petRecordTypes.map((recordType) => {
+              const uploaded = getPetRecordsForType(petIndex, recordType.id);
+              const expiryValue = getExpiryDate(petIndex, recordType.id);
+
+              return (
+                <div
+                  key={recordType.id}
+                  className="rounded-[16px] border border-[var(--divider-soft)] bg-[var(--cream-background)] p-4"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-semibold text-[var(--text-primary)]">
+                      {recordType.name}
+                      {recordType.is_required && (
+                        <span className="text-[var(--rose-primary)]"> *</span>
+                      )}
+                      {!recordType.is_required && (
+                        <span className="ml-2 text-xs font-normal text-[var(--text-secondary)]">
+                          (optional)
+                        </span>
+                      )}
+                    </span>
+                    <label className="cursor-pointer rounded-lg border border-[var(--divider-soft)] bg-white px-3 py-2 text-xs font-semibold text-[var(--rose-primary)] transition hover:border-[var(--rose-primary)]">
+                      <input
+                        type="file"
+                        accept="image/*,.pdf"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          addPetRecord(petIndex, recordType.id, file);
+                          e.currentTarget.value = "";
+                        }}
+                      />
+                      + Upload
+                    </label>
+                  </div>
+
+                  {recordType.has_expiry && (
+                    <div className="mt-3">
+                      <label className="block text-xs font-semibold text-[var(--text-secondary)]">
+                        Expiry date
+                        <input
+                          type="date"
+                          value={expiryValue}
+                          onChange={(e) => setExpiryDate(petIndex, recordType.id, e.target.value)}
+                          className="mt-1 block w-full"
+                        />
+                      </label>
+                    </div>
+                  )}
+
+                  {uploaded.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      {uploaded.map((record) => (
+                        <div
+                          key={record.id}
+                          className="flex items-center justify-between gap-3 rounded-[10px] border border-[var(--divider-soft)] bg-white px-3 py-2"
+                        >
+                          <p className="truncate text-xs text-[var(--text-secondary)]">
+                            ✓ {record.file.name}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => removePetRecord(record.id)}
+                            className="shrink-0 text-xs font-medium text-[var(--error-rose)]"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          // Legacy: generic upload when no custom types configured
+          <>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {["rabies", "vaccines", "vet_note", "medication", "other"].map((type) => {
+                const labels: Record<string, string> = {
+                  rabies: "Rabies Certificate",
+                  vaccines: "Vaccine Records",
+                  vet_note: "Vet Note",
+                  medication: "Medication Instructions",
+                  other: "Other Record",
+                };
+                return (
+                  <label
+                    key={type}
+                    className="cursor-pointer rounded-[16px] border border-[var(--divider-soft)] bg-[var(--cream-background)] px-4 py-3 text-sm font-semibold text-[var(--text-primary)] transition hover:border-[var(--rose-primary)]"
+                  >
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        addPetRecord(petIndex, type, file);
+                        e.currentTarget.value = "";
+                      }}
+                    />
+                    Upload {labels[type]}
+                  </label>
+                );
+              })}
+            </div>
+
+            <div className="mt-4 space-y-2">
+              {getPetRecords(petIndex).length === 0 ? (
+                <p className="text-sm text-[var(--text-secondary)]">No records uploaded yet.</p>
+              ) : (
+                getPetRecords(petIndex).map((record) => (
+                  <div
+                    key={record.id}
+                    className="flex items-center justify-between gap-3 rounded-[14px] border border-[var(--divider-soft)] bg-white px-4 py-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-[var(--text-primary)]">
+                        {record.document_type}
+                      </p>
+                      <p className="truncate text-xs text-[var(--text-secondary)]">
+                        {record.file.name}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removePetRecord(record.id)}
+                      className="shrink-0 rounded-lg border border-[rgba(184,92,114,0.2)] px-3 py-2 text-xs font-medium text-[var(--error-rose)]"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </>
+        )}
+      </div>
     );
   }
 
@@ -449,11 +582,7 @@ function getPetRecords(petIndex: number) {
 
     const missingRequiredAgreement = agreements.some((agreement) => {
       if (!agreement.is_required) return false;
-
-      const accepted = agreementAcceptances.find(
-        (item) => item.agreement_id === agreement.id,
-      );
-
+      const accepted = agreementAcceptances.find((item) => item.agreement_id === agreement.id);
       return !accepted?.accepted;
     });
 
@@ -469,53 +598,53 @@ function getPetRecords(petIndex: number) {
       return;
     }
 
+    const recordError = validateRequiredRecordTypes();
+    if (recordError) {
+      setSubmitError(recordError);
+      setSubmitting(false);
+      return;
+    }
 
-    if (requirePetRecords) {
-  const everyPetHasRecord = pets.every((_, petIndex) =>
-    petRecords.some((record) => record.pet_index === petIndex),
-  );
-
-  if (!everyPetHasRecord) {
-    setSubmitError("Please upload at least one record for each pet.");
-    setSubmitting(false);
-    return;
-  }
-}
     try {
       const uploadPayload = petRecords.map((record, index) => {
-  const fileKey = `pet_record_${index}`;
+        const fileKey = `pet_record_${index}`;
+        const recordType = petRecordTypes.find((t) => t.id === record.document_type);
+        const expiryDate = recordType?.has_expiry
+          ? getExpiryDate(record.pet_index, record.document_type)
+          : undefined;
 
-  return {
-    pet_index: record.pet_index,
-    file_key: fileKey,
-    document_type: record.document_type,
-    title: documentTypeLabel(record.document_type),
-    file_name: record.file.name,
-    mime_type: record.file.type || "application/octet-stream",
-  };
-});
+        return {
+          pet_index: record.pet_index,
+          file_key: fileKey,
+          document_type: record.document_type,
+          title: recordType?.name ?? record.document_type,
+          file_name: record.file.name,
+          mime_type: record.file.type || "application/octet-stream",
+          expiry_date: expiryDate || undefined,
+        };
+      });
 
-const formData = new FormData();
+      const formData = new FormData();
 
-formData.append(
-  "payload",
-  JSON.stringify({
-    ...form,
-    pets,
-    agreements: agreementAcceptances,
-    pet_questionnaire: petQuestionnaires,
-    pet_records: uploadPayload,
-  }),
-);
+      formData.append(
+        "payload",
+        JSON.stringify({
+          ...form,
+          pets,
+          agreements: agreementAcceptances,
+          pet_questionnaire: petQuestionnaires,
+          pet_records: uploadPayload,
+        }),
+      );
 
-petRecords.forEach((record, index) => {
-  formData.append(`pet_record_${index}`, record.file);
-});
+      petRecords.forEach((record, index) => {
+        formData.append(`pet_record_${index}`, record.file);
+      });
 
-const response = await fetch(`/api/onboarding/${token}`, {
-  method: "POST",
-  body: formData,
-});
+      const response = await fetch(`/api/onboarding/${token}`, {
+        method: "POST",
+        body: formData,
+      });
 
       const result = await response.json();
 
@@ -526,9 +655,7 @@ const response = await fetch(`/api/onboarding/${token}`, {
       router.push("/thank-you");
     } catch (error) {
       const message =
-        error instanceof Error
-          ? error.message
-          : "Failed to submit onboarding form.";
+        error instanceof Error ? error.message : "Failed to submit onboarding form.";
       setSubmitError(message);
     } finally {
       setSubmitting(false);
@@ -539,9 +666,7 @@ const response = await fetch(`/api/onboarding/${token}`, {
     return (
       <main className="site-shell flex min-h-screen items-center justify-center px-4">
         <div className="soft-card w-full max-w-xl p-8 text-center">
-          <p className="text-[var(--text-secondary)]">
-            Loading onboarding form...
-          </p>
+          <p className="text-[var(--text-secondary)]">Loading onboarding form...</p>
         </div>
       </main>
     );
@@ -551,9 +676,7 @@ const response = await fetch(`/api/onboarding/${token}`, {
     return (
       <main className="site-shell flex min-h-screen items-center justify-center px-4">
         <div className="soft-card w-full max-w-xl p-8 text-center">
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">
-            Unable to load form
-          </h1>
+          <h1 className="text-2xl font-bold text-[var(--text-primary)]">Unable to load form</h1>
           <p className="mt-3 text-[var(--text-secondary)]">{loadError}</p>
         </div>
       </main>
@@ -576,7 +699,6 @@ const response = await fetch(`/api/onboarding/${token}`, {
                 {businessName ? businessName.charAt(0).toUpperCase() : "G"}
               </div>
             )}
-
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--rose-primary)]">
                 Customer onboarding
@@ -657,7 +779,6 @@ const response = await fetch(`/api/onboarding/${token}`, {
                       <p className="mt-1 text-sm text-[var(--text-secondary)]">
                         These answers will be saved to this pet profile.
                       </p>
-
                       <div className="mt-4 space-y-4">
                         {questions.map((question) => (
                           <div key={question.id} className="rounded-[18px] border border-[var(--divider-soft)] bg-[var(--cream-background)] p-4">
@@ -673,67 +794,8 @@ const response = await fetch(`/api/onboarding/${token}`, {
                       </div>
                     </div>
                   ) : null}
-                  <div className="mt-6 border-t border-[var(--divider-soft)] pt-5">
-  <h4 className="text-base font-semibold">
-    Pet records {requirePetRecords ? <span className="text-[var(--rose-primary)]">*</span> : null}
-  </h4>
-  <p className="mt-1 text-sm text-[var(--text-secondary)]">
-    Upload rabies certificates, vaccine records, vet notes, screenshots, photos, or PDFs.
-  </p>
 
-  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-    {["rabies", "vaccines", "vet_note", "medication", "other"].map((type) => (
-      <label
-        key={type}
-        className="cursor-pointer rounded-[16px] border border-[var(--divider-soft)] bg-[var(--cream-background)] px-4 py-3 text-sm font-semibold text-[var(--text-primary)] transition hover:border-[var(--rose-primary)]"
-      >
-        <input
-          type="file"
-          accept="image/*,.pdf"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (!file) return;
-            addPetRecord(index, type, file);
-            e.currentTarget.value = "";
-          }}
-        />
-        Upload {documentTypeLabel(type)}
-      </label>
-    ))}
-  </div>
-
-  <div className="mt-4 space-y-2">
-    {getPetRecords(index).length === 0 ? (
-      <p className="text-sm text-[var(--text-secondary)]">
-        No records uploaded yet.
-      </p>
-    ) : (
-      getPetRecords(index).map((record) => (
-        <div
-          key={record.id}
-          className="flex items-center justify-between gap-3 rounded-[14px] border border-[var(--divider-soft)] bg-white px-4 py-3"
-        >
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-[var(--text-primary)]">
-              {documentTypeLabel(record.document_type)}
-            </p>
-            <p className="truncate text-xs text-[var(--text-secondary)]">
-              {record.file.name}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => removePetRecord(record.id)}
-            className="shrink-0 rounded-lg border border-[rgba(184,92,114,0.2)] px-3 py-2 text-xs font-medium text-[var(--error-rose)]"
-          >
-            Remove
-          </button>
-        </div>
-      ))
-    )}
-  </div>
-</div>
+                  {renderRecordsSection(index)}
                 </div>
               ))}
             </div>
@@ -745,15 +807,12 @@ const response = await fetch(`/api/onboarding/${token}`, {
               <div className="mt-4 space-y-4">
                 {agreements.map((agreement) => {
                   const accepted = agreementAcceptances.find((item) => item.agreement_id === agreement.id)?.accepted ?? false;
-
                   return (
                     <div key={agreement.id} className="rounded-[22px] border border-[var(--divider-soft)] bg-[var(--soft-surface)] p-4">
                       {agreement.title ? <h3 className="text-base font-semibold text-[var(--text-primary)]">{agreement.title}</h3> : null}
-
                       <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[var(--text-secondary)]">
                         {agreement.agreement_text}
                       </p>
-
                       <label className="mt-4 inline-flex max-w-full cursor-pointer items-center gap-2 rounded-lg border border-[var(--divider-soft)] bg-[var(--cream-background)] px-4 py-3">
                         <input type="checkbox" className="h-4 w-4 shrink-0" checked={accepted} onChange={(e) => updateAgreement(agreement.id, e.target.checked)} required={agreement.is_required} />
                         <span className="text-sm leading-5 text-[var(--text-secondary)]">

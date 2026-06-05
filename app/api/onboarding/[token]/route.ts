@@ -34,6 +34,7 @@ type PetRecordUploadPayload = {
   title: string;
   file_name: string;
   mime_type: string;
+  expiry_date?: string;
 };
 
 type SubmissionPayload = {
@@ -70,21 +71,6 @@ function cleanFileName(value: string) {
     .trim()
     .replace(/[^a-zA-Z0-9._-]/g, "_")
     .replace(/_+/g, "_") || "record";
-}
-
-function documentTypeTitle(type: string) {
-  switch (type) {
-    case "rabies":
-      return "Rabies Certificate";
-    case "vaccines":
-      return "Vaccine Records";
-    case "vet_note":
-      return "Vet Note";
-    case "medication":
-      return "Medication Instructions";
-    default:
-      return "Other Record";
-  }
 }
 
 function buildAddress(
@@ -315,12 +301,38 @@ if (settingsValidationError || !settingsValidationRow) {
 const requirePetRecords =
   settingsValidationRow.require_pet_records_onboarding ?? false;
 
-if (requirePetRecords) {
+// Load custom record types for this business
+const { data: customRecordTypes } = await supabaseAdmin
+  .from("business_pet_record_types")
+  .select("id, name, is_required")
+  .eq("business_id", requestRow.business_id)
+  .eq("is_active", true);
+
+const requiredRecordTypes = (customRecordTypes ?? []).filter((t) => t.is_required);
+
+if (requiredRecordTypes.length > 0) {
+  // Validate each required record type per pet
+  for (let petIndex = 0; petIndex < body.pets.length; petIndex += 1) {
+    for (const recordType of requiredRecordTypes) {
+      const hasUpload = (body.pet_records ?? []).some(
+        (record) =>
+          record.pet_index === petIndex &&
+          record.document_type === recordType.id &&
+          record.file_key?.trim(),
+      );
+      if (!hasUpload) {
+        return badRequest(
+          `Please upload a ${recordType.name} for each pet.`,
+        );
+      }
+    }
+  }
+} else if (requirePetRecords) {
+  // Legacy: no custom types but toggle is on — require at least one record per pet
   for (let petIndex = 0; petIndex < body.pets.length; petIndex += 1) {
     const hasRecord = (body.pet_records ?? []).some(
       (record) => record.pet_index === petIndex && record.file_key?.trim(),
     );
-
     if (!hasRecord) {
       return badRequest("Please upload at least one record for each pet.");
     }
