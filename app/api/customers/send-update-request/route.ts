@@ -119,8 +119,9 @@ export async function POST(request: Request) {
       });
 
     if (insertError) {
+      console.error("Insert onboarding_request error:", insertError);
       return NextResponse.json(
-        { error: "Failed to create update request." },
+        { error: `Failed to create update request: ${insertError.message}` },
         { status: 500 }
       );
     }
