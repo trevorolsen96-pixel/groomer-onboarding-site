@@ -91,7 +91,7 @@ export async function POST(request: Request) {
     const purchased = await purchasePhoneNumber(phoneNumber);
     const now = new Date().toISOString();
 
-    await supabaseAdmin
+    const { error: upsertError } = await supabaseAdmin
       .from("business_sms_setup")
       .upsert(
         {
@@ -106,6 +106,11 @@ export async function POST(request: Request) {
         },
         { onConflict: "business_id" }
       );
+
+    if (upsertError) {
+      console.error("SMS setup upsert failed:", upsertError);
+      throw new Error(`Failed to save SMS setup: ${upsertError.message}`);
+    }
 
     await supabaseAdmin
       .from("business_settings")
