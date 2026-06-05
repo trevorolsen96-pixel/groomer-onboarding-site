@@ -519,6 +519,33 @@ if (requiredRecordTypes.length > 0) {
         }
       }
 
+      // Upsert agreement acceptances
+      const acceptedAgreements = (body.agreements ?? []).filter(
+        (a) => a.accepted && a.agreement_id?.trim(),
+      );
+
+      if (acceptedAgreements.length > 0) {
+        const { data: agreementTextRows } = await supabaseAdmin
+          .from("intake_agreements")
+          .select("id, agreement_text")
+          .in("id", acceptedAgreements.map((a) => a.agreement_id));
+
+        const textMap = new Map(
+          (agreementTextRows ?? []).map((r) => [r.id, r.agreement_text ?? ""]),
+        );
+
+        await supabaseAdmin.from("intake_agreement_acceptances").upsert(
+          acceptedAgreements.map((a) => ({
+            customer_id: requestRow.customer_id,
+            agreement_id: a.agreement_id.trim(),
+            accepted: true,
+            accepted_at: new Date().toISOString(),
+            accepted_text: textMap.get(a.agreement_id.trim()) ?? null,
+          })),
+          { onConflict: "customer_id,agreement_id" },
+        );
+      }
+
       // Mark as completed
       await supabaseAdmin
         .from("onboarding_requests")
