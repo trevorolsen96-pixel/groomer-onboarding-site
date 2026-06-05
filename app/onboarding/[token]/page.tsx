@@ -513,6 +513,13 @@ export default function OnboardingTokenPage() {
             {petRecordTypes.map((recordType) => {
               const uploaded = getPetRecordsForType(petIndex, recordType.id);
               const expiryValue = getExpiryDate(petIndex, recordType.id);
+              const petId = (pets[petIndex] as any)?.id as string | undefined;
+              const onFileRecord = petId
+                ? existingRecords.find(
+                    (r) => r.pet_id === petId && r.record_type_id === recordType.id,
+                  )
+                : undefined;
+              const showOnFile = !!onFileRecord && uploaded.length === 0;
 
               return (
                 <div
@@ -543,7 +550,7 @@ export default function OnboardingTokenPage() {
                           e.currentTarget.value = "";
                         }}
                       />
-                      + Upload
+                      {showOnFile ? "Replace" : "+ Upload"}
                     </label>
                   </div>
 
@@ -561,6 +568,18 @@ export default function OnboardingTokenPage() {
                           />
                         </div>
                       </label>
+                    </div>
+                  )}
+
+                  {showOnFile && (
+                    <div className="mt-3 flex items-center gap-2 rounded-[10px] border border-[var(--divider-soft)] bg-white px-3 py-2">
+                      <span className="text-xs text-green-600">✓</span>
+                      <p className="truncate text-xs text-[var(--text-secondary)]">
+                        On file: {onFileRecord.title ?? "Record"}
+                        {onFileRecord.expires_at && (
+                          <span className="ml-1">· expires {onFileRecord.expires_at}</span>
+                        )}
+                      </p>
                     </div>
                   )}
 
@@ -624,7 +643,27 @@ export default function OnboardingTokenPage() {
             </div>
 
             <div className="mt-4 space-y-2">
-              {getPetRecords(petIndex).length === 0 ? (
+              {(() => {
+                const petId = (pets[petIndex] as any)?.id as string | undefined;
+                const onFile = petId
+                  ? existingRecords.filter((r) => r.pet_id === petId)
+                  : [];
+                return onFile.map((r) => (
+                  <div
+                    key={r.record_type_id ?? r.title}
+                    className="flex items-center gap-2 rounded-[14px] border border-[var(--divider-soft)] bg-white px-4 py-3"
+                  >
+                    <span className="text-xs text-green-600">✓</span>
+                    <p className="truncate text-sm text-[var(--text-secondary)]">
+                      On file: {r.title ?? "Record"}
+                      {r.expires_at && (
+                        <span className="ml-1">· expires {r.expires_at}</span>
+                      )}
+                    </p>
+                  </div>
+                ));
+              })()}
+              {getPetRecords(petIndex).length === 0 && existingRecords.filter((r) => r.pet_id === (pets[petIndex] as any)?.id).length === 0 ? (
                 <p className="text-sm text-[var(--text-secondary)]">No records uploaded yet.</p>
               ) : (
                 getPetRecords(petIndex).map((record) => (
