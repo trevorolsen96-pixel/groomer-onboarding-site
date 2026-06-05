@@ -102,6 +102,7 @@ export async function POST(request: Request) {
           failure_reason: null,
           submitted_at: now,
           approved_at: now,
+          created_at: now,
           updated_at: now,
         },
         { onConflict: "business_id" }
