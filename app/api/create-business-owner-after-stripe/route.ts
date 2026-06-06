@@ -234,12 +234,13 @@ const currentPeriodEndsAt = toIsoFromUnix(
     }
 
     // Fire notification email — don't block or fail the response
+    console.log("[new-account] firing notification for", pendingSignup.email);
     sendNewAccountNotification({
       email: pendingSignup.email,
       businessName: pendingSignup.business_name,
       fullName: pendingSignup.full_name,
       plan: (pendingSignup.selected_plan as string | null) ?? "basic",
-    }).catch((err) => console.error("Account notification email failed:", err));
+    }).catch((err) => console.error("[new-account] notification email failed:", err));
 
     return NextResponse.json({
       ok: true,
