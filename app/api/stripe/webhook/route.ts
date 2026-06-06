@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { stripe } from "../../../../lib/stripe";
 import { supabaseAdmin } from "../../../../lib/supabase-admin";
-import { sendPasswordSetupEmail } from "../../../../lib/email";
+import { sendPasswordSetupEmail, sendNewAccountNotification } from "../../../../lib/email";
 
 type StripeSubscriptionItemWithPeriods = Stripe.SubscriptionItem & {
   current_period_start?: number | null;
@@ -340,6 +340,14 @@ async function handleNewSignup(
     // Don't return — mark as completed so we don't retry infinitely.
     // The resend endpoint can be used to re-send.
   }
+
+  // --- Notify support of new account ---
+  sendNewAccountNotification({
+    email: pendingSignup.email,
+    businessName: pendingSignup.business_name,
+    fullName: pendingSignup.full_name,
+    plan: (pendingSignup.selected_plan as string | null) ?? "basic",
+  }).catch((err) => console.error("[new-account] notification email failed:", err));
 
   // --- Mark signup as completed ---
   await supabaseAdmin
