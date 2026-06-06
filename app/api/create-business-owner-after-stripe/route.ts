@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { stripe } from "../../../lib/stripe";
 import { supabaseAdmin } from "../../../lib/supabase-admin";
+import { sendNewAccountNotification } from "../../../lib/email";
 
 function cleanText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -231,6 +232,14 @@ const currentPeriodEndsAt = toIsoFromUnix(
     if (pendingUpdateError) {
       throw new Error(pendingUpdateError.message);
     }
+
+    // Fire notification email — don't block or fail the response
+    sendNewAccountNotification({
+      email: pendingSignup.email,
+      businessName: pendingSignup.business_name,
+      fullName: pendingSignup.full_name,
+      plan: (pendingSignup.selected_plan as string | null) ?? "basic",
+    }).catch((err) => console.error("Account notification email failed:", err));
 
     return NextResponse.json({
       ok: true,
