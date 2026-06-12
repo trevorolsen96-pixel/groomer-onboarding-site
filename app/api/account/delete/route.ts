@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "../../../../lib/supabase-admin";
+import { stripe } from "../../../../lib/stripe";
 import { sendAccountDeletionNotification } from "../../../../lib/email";
 
 export async function POST(request: Request) {
@@ -45,13 +46,24 @@ export async function POST(request: Request) {
       );
     }
 
+    // ---------- Get business details ----------
     const { data: business } = await supabaseAdmin
       .from("businesses")
-      .select("name")
+      .select("name, payment_subscription_id")
       .eq("id", businessId)
       .maybeSingle();
 
-    // Collect every auth user tied to this business before deleting rows.
+    // ---------- Cancel Stripe subscription ----------
+    if (business?.payment_subscription_id) {
+      try {
+        await stripe.subscriptions.cancel(business.payment_subscription_id);
+      } catch (stripeError) {
+        console.error("[delete-account] Stripe cancel error:", stripeError);
+        // Don't block deletion if subscription is already cancelled
+      }
+    }
+
+    // ---------- Collect every auth user tied to this business ----------
     const authUserIds = new Set<string>();
 
     const { data: businessProfiles } = await supabaseAdmin
@@ -104,7 +116,6 @@ export async function POST(request: Request) {
     await deleteWhereIn("intake_agreement_acceptances", "customer_id", customerIds);
     await deleteWhereIn("onboarding_question_responses", "pet_id", petIds);
 
-    // Tables that reference pets/appointments/customers but also carry business_id
     const directTables = [
       "pet_documents",
       "pet_notes",
@@ -144,7 +155,7 @@ export async function POST(request: Request) {
       await deleteByBusiness(table);
     }
 
-    // Profiles (staff + owner) and the business itself
+    // Profiles and the business itself
     await deleteByBusiness("profiles");
 
     const { error: businessDeleteError } = await supabaseAdmin
@@ -156,7 +167,7 @@ export async function POST(request: Request) {
       console.error("[delete-account] failed deleting business row:", businessDeleteError.message);
     }
 
-    // Finally, remove every auth user tied to this business.
+    // ---------- Delete all auth users ----------
     for (const id of authUserIds) {
       const { error } = await supabaseAdmin.auth.admin.deleteUser(id);
       if (error) {
@@ -164,6 +175,7 @@ export async function POST(request: Request) {
       }
     }
 
+    // ---------- Send notification email ----------
     sendAccountDeletionNotification({
       businessName: (business?.name as string | null) ?? "Unknown business",
       businessId,
@@ -176,7 +188,12 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("[delete-account] error:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unable to delete account." },
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Something went wrong deleting your account.",
+      },
       { status: 500 }
     );
   }
