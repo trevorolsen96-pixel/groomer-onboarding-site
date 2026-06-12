@@ -248,10 +248,28 @@ export async function GET() {
   try {
     const { data: setups, error: setupsError } = await supabaseAdmin
       .from("business_sms_setup")
-      .select("business_id, status, timezone, care_reminder_send_time_local")
+      .select("business_id, status, care_reminder_send_time_local")
       .eq("status", "approved");
 
     if (setupsError) throw new Error(setupsError.message);
+
+    const businessIds = (setups ?? [])
+      .map((s) => String(s.business_id ?? "").trim())
+      .filter((id) => id.length > 0);
+
+    const { data: settingsRows } = businessIds.length
+      ? await supabaseAdmin
+          .from("business_settings")
+          .select("business_id, sms_timezone")
+          .in("business_id", businessIds)
+      : { data: [] as { business_id: string; sms_timezone: string | null }[] };
+
+    const timezoneByBusinessId = new Map<string, string>();
+    for (const row of settingsRows ?? []) {
+      const id = String(row.business_id ?? "").trim();
+      const tz = String(row.sms_timezone ?? "").trim();
+      if (id) timezoneByBusinessId.set(id, tz);
+    }
 
     let businessesChecked = 0;
     let businessesInWindow = 0;
@@ -262,7 +280,7 @@ export async function GET() {
       businessesChecked++;
 
       const businessId = String(setup.business_id ?? "").trim();
-      const timezone = String(setup.timezone ?? "America/Los_Angeles").trim();
+      const timezone = timezoneByBusinessId.get(businessId) || "America/Los_Angeles";
       const sendTimeLocal = cleanTime(setup.care_reminder_send_time_local);
 
       if (!businessId) continue;

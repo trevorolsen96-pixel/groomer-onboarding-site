@@ -314,7 +314,7 @@ export async function POST(request: Request) {
 
     const { data: smsSetup } = await supabaseAdmin
       .from("business_sms_setup")
-      .select("status, phone_number, timezone")
+      .select("status, phone_number")
       .eq("business_id", businessId)
       .maybeSingle();
 
@@ -325,14 +325,14 @@ export async function POST(request: Request) {
       );
     }
 
-    const businessTimezone =
-      cleanText(smsSetup.timezone) || "America/Los_Angeles";
-
     const { data: settings } = await supabaseAdmin
       .from("business_settings")
-      .select("business_name, sms_enabled, reschedule_sms_enabled, arrival_window_enabled, arrival_window_minutes, review_link")
+      .select("business_name, sms_enabled, reschedule_sms_enabled, arrival_window_enabled, arrival_window_minutes, review_link, sms_timezone")
       .eq("business_id", businessId)
       .maybeSingle();
+
+    const businessTimezone =
+      cleanText(settings?.sms_timezone) || "America/Los_Angeles";
 
     if (settings?.sms_enabled === false) {
       await deletePendingAppointmentReminders({ businessId, appointmentId });

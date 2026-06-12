@@ -290,7 +290,7 @@ async function handleNewSignup(
       sms_enabled: false,
       reschedule_sms_enabled: false,
       default_customer_sms_mode: "enabled",
-      sms_timezone: "America/Los_Angeles",
+      sms_timezone: null,
       ask_confirmation_day_before: false,
     },
     { onConflict: "business_id" }

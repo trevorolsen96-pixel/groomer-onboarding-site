@@ -214,6 +214,60 @@ export async function sendNewAccountNotification({
   });
 }
 
+export async function sendAccountDeletionNotification({
+  businessName,
+  businessId,
+  email,
+  fullName,
+  deletedUserCount,
+}: {
+  businessName: string;
+  businessId: string;
+  email: string;
+  fullName: string;
+  deletedUserCount: number;
+}): Promise<void> {
+  const transporter = createTransporter();
+  const now = new Date().toLocaleString("en-US", { timeZone: "America/Los_Angeles" });
+
+  await transporter.sendMail({
+    from: '"Wagzly" <support@wagzly.com>',
+    to: "support@wagzly.com",
+    subject: `Account deleted — ${businessName}`,
+    text: [
+      "A Wagzly account was deleted from the app.",
+      "",
+      `Name:          ${fullName}`,
+      `Email:         ${email}`,
+      `Business:      ${businessName}`,
+      `Business ID:   ${businessId}`,
+      `Users removed: ${deletedUserCount}`,
+      `Time:          ${now} PT`,
+    ].join("\n"),
+    html: `<!DOCTYPE html>
+<html lang="en">
+<body style="margin:0;padding:0;background-color:#faf8f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <div style="max-width:520px;margin:40px auto;padding:0 20px 40px;">
+    <div style="background:#ffffff;border-radius:20px;padding:40px 36px;border:1px solid #ede8e4;">
+      <div style="margin-bottom:24px;">
+        <span style="font-size:20px;font-weight:800;color:#2e2430;">Wagzly</span>
+      </div>
+      <h1 style="margin:0 0 20px;font-size:20px;font-weight:700;color:#2e2430;">Account deleted</h1>
+      <table style="width:100%;border-collapse:collapse;font-size:14px;">
+        <tr><td style="padding:8px 0;color:#7a6b75;width:130px;">Name</td><td style="padding:8px 0;color:#2e2430;font-weight:600;">${fullName}</td></tr>
+        <tr><td style="padding:8px 0;color:#7a6b75;">Email</td><td style="padding:8px 0;color:#2e2430;font-weight:600;">${email}</td></tr>
+        <tr><td style="padding:8px 0;color:#7a6b75;">Business</td><td style="padding:8px 0;color:#2e2430;font-weight:600;">${businessName}</td></tr>
+        <tr><td style="padding:8px 0;color:#7a6b75;">Business ID</td><td style="padding:8px 0;color:#2e2430;font-weight:600;">${businessId}</td></tr>
+        <tr><td style="padding:8px 0;color:#7a6b75;">Users removed</td><td style="padding:8px 0;color:#2e2430;font-weight:600;">${deletedUserCount}</td></tr>
+        <tr><td style="padding:8px 0;color:#7a6b75;">Time</td><td style="padding:8px 0;color:#2e2430;">${now} PT</td></tr>
+      </table>
+    </div>
+  </div>
+</body>
+</html>`,
+  });
+}
+
 export async function sendPasswordSetupEmail({
   to,
   name,
