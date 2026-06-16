@@ -475,6 +475,8 @@ export default function GroomerBookingPage({
             {/* Date + time */}
             <DateTimePicker
               availability={availability}
+              slug={slug!}
+              selectedServiceId={selectedServiceId}
               selectedDate={requestedDate}
               selectedTime={requestedTime}
               onDateChange={(d) => { setRequestedDate(d); setRequestedTime(""); }}
@@ -517,25 +519,33 @@ export default function GroomerBookingPage({
   );
 }
 
-// ── Date/time picker with business hours awareness ─────────────────
+// ── Date/time picker with business hours + live slot availability ────
 
 function DateTimePicker({
   availability,
+  slug,
+  selectedServiceId,
   selectedDate,
   selectedTime,
   onDateChange,
   onTimeChange,
 }: {
   availability: Availability | null;
+  slug: string;
+  selectedServiceId: string;
   selectedDate: string;
   selectedTime: string;
   onDateChange: (d: string) => void;
   onTimeChange: (t: string) => void;
 }) {
+  const [slots, setSlots] = useState<string[]>([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [slotsError, setSlotsError] = useState("");
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // JS getDay(): 0=Sun,1=Mon...6=Sat → map to Flutter convention 1=Mon...7=Sun
+  // JS getDay(): 0=Sun,1=Mon...6=Sat → Flutter convention 1=Mon...7=Sun
   function jsToFlutterDay(jsDay: number): number {
     return jsDay === 0 ? 7 : jsDay;
   }
@@ -559,57 +569,12 @@ function DateTimePicker({
     if (!availability) return true;
     const d = new Date(dateStr + "T12:00:00");
     if (d < today) return false;
-    // Check if it's a closed holiday
     if (availability.closedDates.includes(dateStr)) return false;
-    // Check business hours for that day
     const flutterDay = jsToFlutterDay(d.getDay());
     const hour = availability.hours.find((h) => h.dayOfWeek === flutterDay);
     if (hour?.isOpen !== true) return false;
-    // Check if an all-day time block covers the entire day
-    const blocks = blocksForDate(dateStr);
-    if (blocks.some((b) => b.allDay)) return false;
+    if (blocksForDate(dateStr).some((b) => b.allDay)) return false;
     return true;
-  }
-
-  function getHoursForDate(dateStr: string): { start: string; end: string } | null {
-    if (!availability || !dateStr) return null;
-    const d = new Date(dateStr + "T12:00:00");
-    const flutterDay = jsToFlutterDay(d.getDay());
-    const hour = availability.hours.find((h) => h.dayOfWeek === flutterDay);
-    if (!hour?.isOpen || !hour.startTime || !hour.endTime) return null;
-    return { start: hour.startTime, end: hour.endTime };
-  }
-
-  function timeToMinutes(t: string): number {
-    const [h, m] = t.split(":").map(Number);
-    return h * 60 + m;
-  }
-
-  function generateTimeSlots(start: string, end: string, blockedRanges: { start: string; end: string }[]): string[] {
-    const slots: string[] = [];
-    const [startH, startM] = start.split(":").map(Number);
-    const [endH, endM] = end.split(":").map(Number);
-    let h = startH;
-    let m = startM;
-    const endTotal = endH * 60 + endM;
-    while (h * 60 + m <= endTotal) {
-      const slotMinutes = h * 60 + m;
-      const timeStr = `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
-      const blocked = blockedRanges.some(
-        (r) => slotMinutes >= timeToMinutes(r.start) && slotMinutes < timeToMinutes(r.end)
-      );
-      if (!blocked) slots.push(timeStr);
-      m += 30;
-      if (m >= 60) { h += 1; m -= 60; }
-    }
-    return slots;
-  }
-
-  function formatTime(t: string): string {
-    const [h, m] = t.split(":").map(Number);
-    const ampm = h < 12 ? "AM" : "PM";
-    const hour = h % 12 === 0 ? 12 : h % 12;
-    return `${hour}:${m.toString().padStart(2, "0")} ${ampm}`;
   }
 
   // Build next 60 days, filter to available ones
@@ -621,28 +586,46 @@ function DateTimePicker({
     if (isDateAvailable(str)) availableDates.push(str);
   }
 
+  // Fetch available slots whenever date or service changes
+  useEffect(() => {
+    if (!selectedDate || !selectedServiceId) {
+      setSlots([]);
+      return;
+    }
+    let cancelled = false;
+    setSlotsLoading(true);
+    setSlotsError("");
+    fetch(`/api/book/slots?slug=${slug}&date=${selectedDate}&serviceId=${selectedServiceId}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (data.error) {
+          setSlotsError(data.error);
+          setSlots([]);
+        } else {
+          setSlots(data.slots ?? []);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setSlotsError("Couldn't load available times.");
+      })
+      .finally(() => {
+        if (!cancelled) setSlotsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [selectedDate, selectedServiceId, slug]);
+
+  function formatTime(t: string): string {
+    const [h, m] = t.split(":").map(Number);
+    const ampm = h < 12 ? "AM" : "PM";
+    const hour = h % 12 === 0 ? 12 : h % 12;
+    return `${hour}:${m.toString().padStart(2, "0")} ${ampm}`;
+  }
+
   function formatDateLabel(str: string): string {
     const d = new Date(str + "T12:00:00");
     return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
   }
-
-  const hours = selectedDate ? getHoursForDate(selectedDate) : null;
-  const partialBlocks = selectedDate
-    ? blocksForDate(selectedDate)
-        .filter((b) => !b.allDay && b.startTime && b.endTime)
-        .map((b) => ({ start: b.startTime!, end: b.endTime! }))
-    : [];
-  const timeSlots = hours ? generateTimeSlots(hours.start, hours.end, partialBlocks) : [];
-  const closedReason = selectedDate && availability
-    ? (() => {
-        const d = new Date(selectedDate + "T12:00:00");
-        const flutterDay = jsToFlutterDay(d.getDay());
-        const hour = availability.hours.find((h) => h.dayOfWeek === flutterDay);
-        if (availability.closedDates.includes(selectedDate)) return "closed (holiday)";
-        if (!hour?.isOpen) return "closed that day";
-        return null;
-      })()
-    : null;
 
   return (
     <div className="space-y-4">
@@ -668,31 +651,36 @@ function DateTimePicker({
         ) : null}
       </div>
 
-      {selectedDate && !closedReason ? (
+      {selectedDate && selectedServiceId ? (
         <div>
           <label className="text-sm font-semibold text-[var(--text-primary)]">
             Preferred time
           </label>
-          {timeSlots.length > 0 ? (
+          {slotsLoading ? (
+            <p className="mt-2 text-sm text-[var(--text-secondary)]">Loading available times…</p>
+          ) : slotsError ? (
+            <p className="mt-2 text-sm text-[var(--rose-primary)] font-semibold">{slotsError}</p>
+          ) : slots.length > 0 ? (
             <select
               value={selectedTime}
               onChange={(e) => onTimeChange(e.target.value)}
               className="mt-2"
             >
               <option value="">Select a time</option>
-              {timeSlots.map((t) => (
+              {slots.map((t) => (
                 <option key={t} value={t}>{formatTime(t)}</option>
               ))}
             </select>
           ) : (
-            <input
-              type="time"
-              value={selectedTime}
-              onChange={(e) => onTimeChange(e.target.value)}
-              className="mt-2"
-            />
+            <p className="mt-2 text-sm text-[var(--rose-primary)] font-semibold">
+              No available times on this date. Try a different day.
+            </p>
           )}
         </div>
+      ) : selectedDate && !selectedServiceId ? (
+        <p className="text-sm text-[var(--text-secondary)]">
+          Select a service above to see available times.
+        </p>
       ) : null}
     </div>
   );
