@@ -23,6 +23,10 @@ type GroomerProfile = {
   businessName: string | null;
   logoUrl: string | null;
   bookingSlug: string;
+  phone: string | null;
+  website: string | null;
+  facebook: string | null;
+  instagram: string | null;
   services: Service[];
 };
 
@@ -255,28 +259,89 @@ export default function GroomerBookingPage({
       <section className="mx-auto max-w-lg px-6 py-12">
 
         {/* Groomer header */}
-        <div className="mb-8 flex items-center gap-4">
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[var(--soft-surface)]">
-            {groomer.logoUrl ? (
-              <Image
-                src={groomer.logoUrl}
-                alt={groomer.businessName ?? "Groomer"}
-                width={64}
-                height={64}
-                className="h-16 w-16 object-cover"
-              />
-            ) : (
-              <span className="text-3xl">🐾</span>
-            )}
+        <div className="mb-8">
+          <div className="flex items-center gap-4">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[var(--soft-surface)]">
+              {groomer.logoUrl ? (
+                <Image
+                  src={groomer.logoUrl}
+                  alt={groomer.businessName ?? "Groomer"}
+                  width={64}
+                  height={64}
+                  className="h-16 w-16 object-cover"
+                />
+              ) : (
+                <span className="text-3xl">🐾</span>
+              )}
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-[var(--rose-primary)]">
+                Online Booking
+              </p>
+              <h1 className="text-2xl font-bold text-[var(--text-primary)]">
+                {groomer.businessName ?? "Wagzly Groomer"}
+              </h1>
+            </div>
           </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-[var(--rose-primary)]">
-              Online Booking
-            </p>
-            <h1 className="text-2xl font-bold text-[var(--text-primary)]">
-              {groomer.businessName ?? "Wagzly Groomer"}
-            </h1>
-          </div>
+
+          {/* Contact info — only renders fields that are set */}
+          {(groomer.phone || groomer.website || groomer.instagram || groomer.facebook) ? (
+            <div className="mt-4 flex flex-wrap gap-3">
+              {groomer.phone ? (
+                <a
+                  href={`tel:${groomer.phone}`}
+                  className="flex items-center gap-1.5 rounded-full bg-[var(--soft-surface)] px-3.5 py-1.5 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--divider-soft)] transition"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0 text-[var(--rose-primary)]">
+                    <path fillRule="evenodd" d="M2 3.5A1.5 1.5 0 0 1 3.5 2h1.148a1.5 1.5 0 0 1 1.465 1.175l.716 3.223a1.5 1.5 0 0 1-1.052 1.767l-.933.267c-.41.117-.643.555-.48.95a11.542 11.542 0 0 0 6.254 6.254c.395.163.833-.07.95-.48l.267-.933a1.5 1.5 0 0 1 1.767-1.052l3.223.716A1.5 1.5 0 0 1 18 15.352V16.5a1.5 1.5 0 0 1-1.5 1.5H15c-1.149 0-2.263-.15-3.326-.43A13.022 13.022 0 0 1 2.43 8.326 13.019 13.019 0 0 1 2 5V3.5Z" clipRule="evenodd" />
+                  </svg>
+                  {groomer.phone}
+                </a>
+              ) : null}
+
+              {groomer.website ? (
+                <a
+                  href={groomer.website.startsWith("http") ? groomer.website : `https://${groomer.website}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 rounded-full bg-[var(--soft-surface)] px-3.5 py-1.5 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--divider-soft)] transition"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0 text-[var(--rose-primary)]">
+                    <path d="M10 1a9 9 0 1 0 0 18A9 9 0 0 0 10 1ZM6.94 5.5a14.18 14.18 0 0 0-.4 1.5H4.62a7.522 7.522 0 0 1 2.32-1.5ZM4.062 8.5h2.21a17.476 17.476 0 0 0-.172 1.5H3.798a7.48 7.48 0 0 1 .264-1.5ZM3.798 11.5h2.302c.028.508.085 1.012.172 1.5H4.062a7.48 7.48 0 0 1-.264-1.5ZM4.62 14.5h1.92c.12.534.265 1.034.44 1.5A7.522 7.522 0 0 1 4.62 14.5ZM9.25 15.698A10.627 10.627 0 0 1 8 14.5h2.5a10.627 10.627 0 0 1-1.25 1.198ZM8 5.5h4a10.63 10.63 0 0 1 .898 1.5H7.102A10.63 10.63 0 0 1 8 5.5ZM7.102 8.5h5.796c.1.49.163.993.18 1.5H6.922c.017-.507.08-1.01.18-1.5ZM6.922 11.5h6.156c-.017.507-.08 1.01-.18 1.5H7.102a14.6 14.6 0 0 1-.18-1.5ZM7.102 14.5H12.9A10.63 10.63 0 0 1 12 16h-4a10.63 10.63 0 0 1-.898-1.5ZM13.06 16c.175-.466.32-.966.44-1.5h1.92a7.522 7.522 0 0 1-2.36 1.5ZM15.938 13h-2.21a17.56 17.56 0 0 0 .172-1.5h2.302a7.48 7.48 0 0 1-.264 1.5ZM16.202 10h-2.104a17.476 17.476 0 0 0-.172-1.5h2.21a7.48 7.48 0 0 1 .066 1.5Zm-2.276-3h-1.86a12.207 12.207 0 0 0-.44-1.5A7.522 7.522 0 0 1 13.926 7Z" />
+                  </svg>
+                  Website
+                </a>
+              ) : null}
+
+              {groomer.instagram ? (
+                <a
+                  href={`https://instagram.com/${groomer.instagram.replace(/^@/, "")}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 rounded-full bg-[var(--soft-surface)] px-3.5 py-1.5 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--divider-soft)] transition"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 shrink-0 text-[var(--rose-primary)]">
+                    <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069Zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073Zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324ZM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881Z"/>
+                  </svg>
+                  Instagram
+                </a>
+              ) : null}
+
+              {groomer.facebook ? (
+                <a
+                  href={groomer.facebook.startsWith("http") ? groomer.facebook : `https://facebook.com/${groomer.facebook}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 rounded-full bg-[var(--soft-surface)] px-3.5 py-1.5 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--divider-soft)] transition"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 shrink-0 text-[var(--rose-primary)]">
+                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073Z"/>
+                  </svg>
+                  Facebook
+                </a>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         {/* Step: email */}
