@@ -9,7 +9,7 @@ export async function GET(
 
   const { data: settings, error } = await supabaseAdmin
     .from("business_settings")
-    .select("business_id, business_name, logo_url, booking_slug, online_booking_enabled, phone, website, facebook, instagram")
+    .select("business_id, business_name, logo_url, booking_slug, online_booking_enabled, phone, website, facebook, instagram, address, booking_accent_color")
     .eq("booking_slug", slug)
     .maybeSingle();
 
@@ -39,6 +39,8 @@ export async function GET(
     website: settings.website ?? null,
     facebook: settings.facebook ?? null,
     instagram: settings.instagram ?? null,
+    address: settings.address ?? null,
+    accentColor: settings.booking_accent_color ?? null,
     services: services ?? [],
   });
 }
