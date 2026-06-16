@@ -33,9 +33,21 @@ type BusinessHour = {
   endTime: string | null;
 };
 
+type TimeBlock = {
+  reason: string;
+  allDay: boolean;
+  startTime: string | null;
+  endTime: string | null;
+  startDate: string;
+  endDate: string | null;
+  isRecurring: boolean;
+  recurrenceDays: number[]; // 1=Mon...7=Sun
+};
+
 type Availability = {
   hours: BusinessHour[];
   closedDates: string[];
+  timeBlocks: TimeBlock[];
 };
 
 type Step = "email" | "code" | "booking" | "done";
@@ -528,6 +540,21 @@ function DateTimePicker({
     return jsDay === 0 ? 7 : jsDay;
   }
 
+  function blocksForDate(dateStr: string): TimeBlock[] {
+    if (!availability) return [];
+    const flutterDay = jsToFlutterDay(new Date(dateStr + "T12:00:00").getDay());
+    return availability.timeBlocks.filter((b) => {
+      if (b.isRecurring) {
+        if (dateStr < b.startDate) return false;
+        if (b.endDate && dateStr > b.endDate) return false;
+        return b.recurrenceDays.includes(flutterDay);
+      } else {
+        const end = b.endDate ?? b.startDate;
+        return dateStr >= b.startDate && dateStr <= end;
+      }
+    });
+  }
+
   function isDateAvailable(dateStr: string): boolean {
     if (!availability) return true;
     const d = new Date(dateStr + "T12:00:00");
@@ -537,7 +564,11 @@ function DateTimePicker({
     // Check business hours for that day
     const flutterDay = jsToFlutterDay(d.getDay());
     const hour = availability.hours.find((h) => h.dayOfWeek === flutterDay);
-    return hour?.isOpen === true;
+    if (hour?.isOpen !== true) return false;
+    // Check if an all-day time block covers the entire day
+    const blocks = blocksForDate(dateStr);
+    if (blocks.some((b) => b.allDay)) return false;
+    return true;
   }
 
   function getHoursForDate(dateStr: string): { start: string; end: string } | null {
@@ -549,7 +580,12 @@ function DateTimePicker({
     return { start: hour.startTime, end: hour.endTime };
   }
 
-  function generateTimeSlots(start: string, end: string): string[] {
+  function timeToMinutes(t: string): number {
+    const [h, m] = t.split(":").map(Number);
+    return h * 60 + m;
+  }
+
+  function generateTimeSlots(start: string, end: string, blockedRanges: { start: string; end: string }[]): string[] {
     const slots: string[] = [];
     const [startH, startM] = start.split(":").map(Number);
     const [endH, endM] = end.split(":").map(Number);
@@ -557,7 +593,12 @@ function DateTimePicker({
     let m = startM;
     const endTotal = endH * 60 + endM;
     while (h * 60 + m <= endTotal) {
-      slots.push(`${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`);
+      const slotMinutes = h * 60 + m;
+      const timeStr = `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
+      const blocked = blockedRanges.some(
+        (r) => slotMinutes >= timeToMinutes(r.start) && slotMinutes < timeToMinutes(r.end)
+      );
+      if (!blocked) slots.push(timeStr);
       m += 30;
       if (m >= 60) { h += 1; m -= 60; }
     }
@@ -586,7 +627,12 @@ function DateTimePicker({
   }
 
   const hours = selectedDate ? getHoursForDate(selectedDate) : null;
-  const timeSlots = hours ? generateTimeSlots(hours.start, hours.end) : [];
+  const partialBlocks = selectedDate
+    ? blocksForDate(selectedDate)
+        .filter((b) => !b.allDay && b.startTime && b.endTime)
+        .map((b) => ({ start: b.startTime!, end: b.endTime! }))
+    : [];
+  const timeSlots = hours ? generateTimeSlots(hours.start, hours.end, partialBlocks) : [];
   const closedReason = selectedDate && availability
     ? (() => {
         const d = new Date(selectedDate + "T12:00:00");

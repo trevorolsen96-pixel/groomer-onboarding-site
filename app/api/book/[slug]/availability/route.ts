@@ -19,7 +19,7 @@ export async function GET(
 
   const businessId = settings.business_id;
 
-  const [{ data: hours }, { data: holidays }] = await Promise.all([
+  const [{ data: hours }, { data: holidays }, { data: timeBlocks }] = await Promise.all([
     supabaseAdmin
       .from("business_hours")
       .select("day_of_week, is_open, start_time, end_time")
@@ -29,6 +29,10 @@ export async function GET(
       .select("holiday_date, is_open")
       .eq("business_id", businessId)
       .eq("is_open", false),
+    supabaseAdmin
+      .from("business_time_blocks")
+      .select("reason, all_day, start_time, end_time, start_date, end_date, is_recurring, recurrence_days")
+      .eq("business_id", businessId),
   ]);
 
   return NextResponse.json({
@@ -41,5 +45,16 @@ export async function GET(
     })),
     // Dates the groomer is closed
     closedDates: (holidays ?? []).map((h) => h.holiday_date as string),
+    // Time blocks (lunch, vacation, etc.)
+    timeBlocks: (timeBlocks ?? []).map((b) => ({
+      reason: b.reason,
+      allDay: b.all_day,
+      startTime: b.start_time,
+      endTime: b.end_time,
+      startDate: b.start_date,
+      endDate: b.end_date,
+      isRecurring: b.is_recurring,
+      recurrenceDays: b.recurrence_days ?? [],
+    })),
   });
 }
