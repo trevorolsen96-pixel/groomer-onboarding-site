@@ -18,6 +18,7 @@ function haversineDistance(
 
 export async function GET(req: NextRequest) {
   const zip = req.nextUrl.searchParams.get("zip")?.trim();
+  const type = req.nextUrl.searchParams.get("type") ?? "mobile"; // "mobile" | "salon"
 
   if (!zip || !/^\d{5}$/.test(zip)) {
     return NextResponse.json({ error: "Valid 5-digit zip code required." }, { status: 400 });
@@ -37,30 +38,49 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Could not look up that zip code." }, { status: 500 });
   }
 
-  // Fetch all groomers with online booking enabled and a home location set
-  const { data, error } = await supabaseAdmin
+  const isSalon = type === "salon";
+
+  const query = supabaseAdmin
     .from("business_settings")
-    .select("business_id, business_name, logo_url, booking_slug, home_lat, home_lng, service_radius_miles")
+    .select("business_id, business_name, logo_url, booking_slug, home_lat, home_lng, service_radius_miles, address, business_mode")
     .eq("online_booking_enabled", true)
     .not("home_lat", "is", null)
     .not("home_lng", "is", null)
     .not("booking_slug", "is", null);
 
+  if (isSalon) {
+    query.eq("business_mode", "shop");
+  } else {
+    query.eq("business_mode", "mobile_grooming");
+  }
+
+  const { data, error } = await query;
+
   if (error) {
     return NextResponse.json({ error: "Failed to load groomers." }, { status: 500 });
   }
 
-  const results = (data ?? [])
-    .filter((g) => {
-      const dist = haversineDistance(zipLat, zipLng, g.home_lat, g.home_lng);
-      return dist <= (g.service_radius_miles ?? 25);
-    })
+  const SALON_RADIUS = 60;
+
+  const withDistance = (data ?? [])
     .map((g) => ({
-      businessId: g.business_id,
-      businessName: g.business_name,
-      logoUrl: g.logo_url,
-      bookingSlug: g.booking_slug,
-    }));
+      ...g,
+      distanceMiles: haversineDistance(zipLat, zipLng, g.home_lat, g.home_lng),
+    }))
+    .filter((g) => {
+      if (isSalon) return g.distanceMiles <= SALON_RADIUS;
+      return g.distanceMiles <= (g.service_radius_miles ?? 25);
+    })
+    .sort((a, b) => a.distanceMiles - b.distanceMiles);
+
+  const results = withDistance.map((g) => ({
+    businessId: g.business_id,
+    businessName: g.business_name,
+    logoUrl: g.logo_url,
+    bookingSlug: g.booking_slug,
+    address: g.address ?? null,
+    distanceMiles: Math.round(g.distanceMiles * 10) / 10,
+  }));
 
   return NextResponse.json({ results });
 }
