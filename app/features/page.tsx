@@ -128,6 +128,7 @@ export default function FeaturesPage() {
                     "Address stored per client",
                     "Navigate directly from the app",
                     "Multi-van route visibility for teams",
+                    "Mileage tracking per vehicle for tax reporting",
                   ].map((item) => (
                     <li key={item} className="flex items-center gap-2.5 text-sm text-[var(--text-secondary)]">
                       <span className="font-bold text-[var(--rose-primary)]">✓</span> {item}
