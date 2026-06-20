@@ -280,7 +280,7 @@ export default function HomePage() {
                 ["Customer & pet profiles", "🐾", "🐾"],
                 ["Services, add-ons, notes & flags", "🐾", "🐾"],
                 ["Appointment reminders", "🐾", "🐾"],
-                ["Staff / groomers", "1", "Unlimited"],
+                ["Team accounts", "2 (1 owner + 1 groomer)", "Unlimited"],
                 ["Vehicles / vans", "1", "Unlimited"],
                 ["SMS credits", "200/mo", "900/mo"],
                 ["Payment links", "—", "🐾"],
@@ -478,7 +478,7 @@ const basicFeatures = [
   "Route planning & calendar views",
   "Automated appointment reminders",
   "200 SMS / month",
-  "2 team accounts (1 admin + 1 groomer)",
+  "2 accounts (1 business owner + 1 groomer)",
   "1 van",
 ];
 

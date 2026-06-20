@@ -4,7 +4,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Pricing | Mobile Grooming Software Plans",
   description:
-    "Simple, transparent pricing for grooming teams. Wagzly Basic starts at $39.99/mo with 2 team accounts. Wagzly Pro at $89.99/mo with unlimited staff. Both plans include a 14-day free trial.",
+    "Simple, transparent pricing for grooming teams. Wagzly Basic starts at $39.99/mo — includes 2 accounts (1 business owner + 1 groomer). Wagzly Pro at $89.99/mo with unlimited staff. 14-day free trial.",
 };
 
 const basicFeatures = [
@@ -13,7 +13,7 @@ const basicFeatures = [
   "Route planning & calendar views",
   "Automated appointment reminders",
   "200 SMS / month",
-  "2 team accounts (1 admin + 1 groomer)",
+  "2 accounts (1 business owner + 1 groomer)",
   "1 van",
 ];
 
@@ -33,7 +33,7 @@ const comparisonRows = [
   ["Customer & pet profiles", "🐾", "🐾"],
   ["Services, add-ons, notes & flags", "🐾", "🐾"],
   ["Appointment reminders", "🐾", "🐾"],
-  ["Team accounts", "2 (1 admin + 1 groomer)", "Unlimited"],
+  ["Team accounts", "2 (1 owner + 1 groomer)", "Unlimited"],
   ["Vehicles / vans", "1", "Unlimited"],
   ["SMS credits", "200/mo", "900/mo"],
   ["Payment links", "—", "🐾"],
