@@ -224,7 +224,7 @@ export default function HomePage() {
         </h2>
         <p className="mx-auto mt-3 max-w-2xl text-center text-[var(--text-secondary)]">
           Every Wagzly plan includes the full scheduling system. Basic gives
-          owner-operators the essentials, while Pro adds tools to help you grow.
+          your team the essentials, while Pro adds tools to help you scale.
         </p>
 
         <div className="mt-10 grid gap-6 lg:grid-cols-2">
@@ -478,7 +478,8 @@ const basicFeatures = [
   "Route planning & calendar views",
   "Automated appointment reminders",
   "200 SMS / month",
-  "1 staff account & 1 van",
+  "2 team accounts (1 admin + 1 groomer)",
+  "1 van",
 ];
 
 const proFeatures = [

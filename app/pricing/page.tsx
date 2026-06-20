@@ -4,7 +4,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Pricing | Mobile Grooming Software Plans",
   description:
-    "Simple, transparent pricing for mobile grooming software. Wagzly Basic starts at $39.99/mo. Wagzly Pro at $89.99/mo. Both plans include a 14-day free trial. No contracts.",
+    "Simple, transparent pricing for grooming teams. Wagzly Basic starts at $39.99/mo with 2 team accounts. Wagzly Pro at $89.99/mo with unlimited staff. Both plans include a 14-day free trial.",
 };
 
 const basicFeatures = [
@@ -13,7 +13,8 @@ const basicFeatures = [
   "Route planning & calendar views",
   "Automated appointment reminders",
   "200 SMS / month",
-  "1 staff account & 1 van",
+  "2 team accounts (1 admin + 1 groomer)",
+  "1 van",
 ];
 
 const proFeatures = [
@@ -32,7 +33,7 @@ const comparisonRows = [
   ["Customer & pet profiles", "🐾", "🐾"],
   ["Services, add-ons, notes & flags", "🐾", "🐾"],
   ["Appointment reminders", "🐾", "🐾"],
-  ["Staff / groomers", "1", "Unlimited"],
+  ["Team accounts", "2 (1 admin + 1 groomer)", "Unlimited"],
   ["Vehicles / vans", "1", "Unlimited"],
   ["SMS credits", "200/mo", "900/mo"],
   ["Payment links", "—", "🐾"],
@@ -55,7 +56,7 @@ export default function PricingPage() {
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-[var(--text-secondary)]">
           Every Wagzly plan includes the full scheduling system. Basic gives
-          owner-operators the essentials, while Pro adds the tools you need to grow.
+          your team the essentials, while Pro adds the tools you need to scale.
           Both plans include a 14-day free trial — no credit card required.
         </p>
       </section>
@@ -67,7 +68,7 @@ export default function PricingPage() {
           {/* Basic */}
           <div className="soft-card p-8">
             <h2 className="text-2xl font-bold text-[var(--text-primary)]">Wagzly Basic</h2>
-            <p className="mt-1 text-sm text-[var(--text-secondary)]">Perfect for solo owner-operators</p>
+            <p className="mt-1 text-sm text-[var(--text-secondary)]">For small grooming teams</p>
             <p className="mt-5 text-4xl font-bold text-[var(--text-primary)]">$39.99<span className="text-lg font-medium text-[var(--text-secondary)]">/mo</span></p>
             <p className="mt-1 text-sm font-bold text-[var(--rose-primary)]">14-day free trial</p>
             <Link href="/create-account?plan=basic" className="secondary-button mt-6 block text-center">

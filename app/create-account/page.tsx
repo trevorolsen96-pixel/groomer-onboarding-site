@@ -83,9 +83,9 @@ export default function CreateAccountPage() {
           </h1>
 
           <p className="mt-5 text-lg leading-8 text-[var(--text-secondary)]">
-            Every Wagzly plan includes the full scheduling system. Basic is
-            built for solo groomers. Pro adds growth tools for teams, multiple
-            vans, payments, and more texting power.
+            Every Wagzly plan includes the full scheduling system. Basic
+            gives your team the essentials. Pro adds growth tools, unlimited
+            staff, multiple vans, payments, and more texting power.
           </p>
         </div>
 
@@ -94,7 +94,7 @@ export default function CreateAccountPage() {
             selected={selectedPlan === "basic"}
             title="Wagzly Basic"
             price="$39.99/month"
-            subtitle="Built for owner-operators"
+            subtitle="For small grooming teams"
             description="Everything you need to run your grooming business with appointments, customers, pets, reminders, and daily scheduling tools."
             onClick={() => setSelectedPlan("basic")}
           />
