@@ -217,6 +217,71 @@ export default function HomePage() {
         </section>
       </div>
 
+      {/* ── Built for Teams ── */}
+      <section className="mx-auto max-w-6xl px-6 py-16">
+        <p className="text-center text-sm font-semibold uppercase tracking-[0.2em] text-[var(--rose-primary)]">
+          Two roles, one platform
+        </p>
+        <h2 className="mt-3 text-center text-3xl font-bold text-[var(--text-primary)]">
+          Built for how grooming businesses actually work
+        </h2>
+        <p className="mx-auto mt-4 max-w-2xl text-center text-[var(--text-secondary)]">
+          The business owner manages everything. The groomer sees only what they
+          need to get through their day. Each person gets their own login with the
+          right level of access.
+        </p>
+
+        <div className="mt-12 grid gap-6 lg:grid-cols-2">
+          <div className="soft-card p-8">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--rose-primary)]/10 text-2xl">
+              👔
+            </div>
+            <h3 className="mt-5 text-xl font-bold text-[var(--text-primary)]">Business Owner</h3>
+            <p className="mt-2 text-sm text-[var(--text-secondary)]">
+              Full control over your grooming business from one dashboard.
+            </p>
+            <ul className="mt-5 space-y-2.5">
+              {[
+                "Manage all appointments and scheduling",
+                "View and edit client & pet records",
+                "Track finances, payments, and expenses",
+                "Manage fleet vehicles and mileage reports",
+                "Configure business settings and SMS",
+                "Invite groomers and manage staff access",
+              ].map((item) => (
+                <li key={item} className="flex items-center gap-2.5 text-sm text-[var(--text-secondary)]">
+                  <span className="font-bold text-[var(--rose-primary)]">✓</span> {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="soft-card p-8">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--rose-primary)]/10 text-2xl">
+              ✂️
+            </div>
+            <h3 className="mt-5 text-xl font-bold text-[var(--text-primary)]">Groomer</h3>
+            <p className="mt-2 text-sm text-[var(--text-secondary)]">
+              A focused view of their schedule — no distractions, no clutter.
+            </p>
+            <ul className="mt-5 space-y-2.5">
+              {[
+                "View their own appointments for the day",
+                "See their weekly schedule at a glance",
+                "Access route maps and navigation",
+                "Clock in and out of appointments",
+                "Cannot view other groomers' schedules",
+                "Cannot access finances or business settings",
+              ].map((item) => (
+                <li key={item} className="flex items-center gap-2.5 text-sm text-[var(--text-secondary)]">
+                  <span className="font-bold text-[var(--rose-primary)]">✓</span> {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </section>
+
       {/* ── Pricing ── */}
       <section id="pricing" className="mx-auto max-w-6xl px-6 py-16">
         <h2 className="text-center text-3xl font-bold text-[var(--text-primary)]">

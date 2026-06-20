@@ -265,6 +265,65 @@ export default function FeaturesPage() {
           </div>
         </section>
 
+        {/* Team Roles */}
+        <div className="bg-[var(--soft-surface)]">
+          <section className="mx-auto max-w-6xl px-6 py-14">
+            <div className="text-center">
+              <div className="flex justify-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--rose-primary)]/10 text-[var(--rose-primary)]">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
+                    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+                  </svg>
+                </div>
+              </div>
+              <h2 className="mt-5 text-2xl font-bold text-[var(--text-primary)] lg:text-3xl">Role-Based Access</h2>
+              <p className="mx-auto mt-4 max-w-2xl text-[var(--text-secondary)] leading-7">
+                Every Wagzly account includes two roles — business owner and groomer.
+                The owner manages the business. The groomer logs in and sees only
+                their own schedule, routes, and appointments. No access to finances,
+                client records, other groomers, or business settings.
+              </p>
+            </div>
+
+            <div className="mt-10 grid gap-6 lg:grid-cols-2">
+              <div className="rounded-3xl bg-white p-6 shadow-sm">
+                <h3 className="text-lg font-bold text-[var(--text-primary)]">👔 Business Owner</h3>
+                <ul className="mt-4 space-y-2.5">
+                  {[
+                    "Full scheduling, client, and pet management",
+                    "Finance tracking — payments, tips, expenses",
+                    "Fleet and mileage management",
+                    "SMS settings, reminders, and messaging",
+                    "Staff invites and access control",
+                    "Business settings and online booking",
+                  ].map((item) => (
+                    <li key={item} className="flex items-center gap-2.5 text-sm text-[var(--text-secondary)]">
+                      <span className="font-bold text-[var(--rose-primary)]">✓</span> {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="rounded-3xl bg-white p-6 shadow-sm">
+                <h3 className="text-lg font-bold text-[var(--text-primary)]">✂️ Groomer</h3>
+                <ul className="mt-4 space-y-2.5">
+                  {[
+                    "View their own daily and weekly schedule",
+                    "Access route maps and turn-by-turn navigation",
+                    "Clock in and out of appointments",
+                    "Cannot view other groomers' schedules",
+                    "Cannot access finances or business settings",
+                    "Cannot edit client or pet records",
+                  ].map((item) => (
+                    <li key={item} className="flex items-center gap-2.5 text-sm text-[var(--text-secondary)]">
+                      <span className="font-bold text-[var(--rose-primary)]">✓</span> {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </section>
+        </div>
+
       </div>
 
       {/* Bottom CTA */}
