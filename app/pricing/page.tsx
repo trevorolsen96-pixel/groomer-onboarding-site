@@ -150,7 +150,7 @@ export default function PricingPage() {
             {[
               {
                 q: "Do I need a credit card to start the free trial?",
-                a: "No. You can start your 14-day free trial without entering any payment information. You'll only be asked for billing details if you decide to continue after the trial.",
+                a: "Yes — you'll enter your card through Stripe when you sign up, but you won't be charged until your 14-day trial ends. You can cancel anytime before the trial is over and you won't be billed.",
               },
               {
                 q: "Can I switch plans later?",
