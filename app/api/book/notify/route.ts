@@ -3,7 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sendSms } from "@/lib/telnyx";
 
 export async function POST(req: NextRequest) {
-  const { requestId, status, clientPhone, businessId: directBusinessId } = await req.json();
+  const { requestId, status, clientPhone, businessId: directBusinessId, customerId } = await req.json();
 
   if (!requestId || !status) {
     return NextResponse.json({ error: "requestId and status are required." }, { status: 400 });
@@ -48,9 +48,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Request not found." }, { status: 404 });
   }
 
-  const rawPhone = request.client_phone as string | null;
+  let rawPhone = request.client_phone as string | null;
+
+  // Fall back to customer record if booking request has no phone
+  if (!rawPhone && customerId) {
+    const { data: customer } = await supabaseAdmin
+      .from("customers")
+      .select("phone")
+      .eq("id", customerId)
+      .maybeSingle();
+    rawPhone = customer?.phone as string | null;
+  }
+
   if (!rawPhone) {
-    console.log(`[book/notify] skipped — no client_phone on request ${requestId}`);
+    console.log(`[book/notify] skipped — no phone on request ${requestId} or customer ${customerId}`);
     return NextResponse.json({ ok: true, skipped: "no_phone" });
   }
 
