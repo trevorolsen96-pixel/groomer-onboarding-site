@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { OfferType } from "@apple/app-store-server-library";
-import { appleAppStoreClient, appleSignedDataVerifier, planFromProductId } from "../../../../lib/apple-app-store";
+import { getAppleAppStoreClient, getAppleSignedDataVerifier, planFromProductId } from "../../../../lib/apple-app-store";
 import { supabaseAdmin } from "../../../../lib/supabase-admin";
 import { sendNewAccountNotification } from "../../../../lib/email";
 
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
 
     // --- Verify the transaction with Apple ---
     const { signedTransactionInfo } =
-      await appleAppStoreClient.getTransactionInfo(transactionId);
+      await getAppleAppStoreClient().getTransactionInfo(transactionId);
 
     if (!signedTransactionInfo) {
       return NextResponse.json(
@@ -73,7 +73,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const transaction = await appleSignedDataVerifier.verifyAndDecodeTransaction(
+    const transaction = await getAppleSignedDataVerifier().verifyAndDecodeTransaction(
       signedTransactionInfo
     );
 
