@@ -46,7 +46,7 @@ export const appleSignedDataVerifier = new SignedDataVerifier(
 
 export function planFromProductId(productId?: string): "basic" | "pro" | null {
   const basicProductId = process.env.APPLE_BASIC_PRODUCT_ID ?? "wagzly_basic_monthly";
-  const proProductId = process.env.APPLE_PRO_PRODUCT_ID ?? "wagzly_pro_monthly";
+  const proProductId = process.env.APPLE_PRO_PRODUCT_ID ?? "wagzly_pro_monthly_v2";
 
   if (productId === proProductId) return "pro";
   if (productId === basicProductId) return "basic";
