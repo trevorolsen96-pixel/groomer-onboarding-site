@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { NotificationTypeV2, Subtype } from "@apple/app-store-server-library";
-import { getAppleSignedDataVerifier, planFromProductId } from "../../../../lib/apple-app-store";
+import { describeAppleError, getAppleSignedDataVerifier, planFromProductId } from "../../../../lib/apple-app-store";
 import { supabaseAdmin } from "../../../../lib/supabase-admin";
 
 function toIsoFromMillis(value?: number | null) {
@@ -126,13 +126,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ received: true });
   } catch (error) {
-    console.error("[apple-webhook]", error);
+    const message = describeAppleError(error);
+    console.error("[apple-webhook]", message, error);
 
-    return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Webhook handler failed.",
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

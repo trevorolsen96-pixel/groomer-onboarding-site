@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { OfferType } from "@apple/app-store-server-library";
-import { getAppleAppStoreClient, getAppleSignedDataVerifier, planFromProductId } from "../../../../lib/apple-app-store";
+import { describeAppleError, getAppleAppStoreClient, getAppleSignedDataVerifier, planFromProductId } from "../../../../lib/apple-app-store";
 import { supabaseAdmin } from "../../../../lib/supabase-admin";
 import { sendNewAccountNotification } from "../../../../lib/email";
 
@@ -241,12 +241,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Something went wrong finishing your account.",
-      },
+      { error: describeAppleError(error) },
       { status: 400 }
     );
   }

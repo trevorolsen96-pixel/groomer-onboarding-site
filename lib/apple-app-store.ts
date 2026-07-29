@@ -1,9 +1,11 @@
 import fs from "fs";
 import path from "path";
 import {
+  APIException,
   AppStoreServerAPIClient,
   Environment,
   SignedDataVerifier,
+  VerificationException,
 } from "@apple/app-store-server-library";
 
 const bundleId = process.env.APPLE_BUNDLE_ID ?? "com.wagzly.app";
@@ -64,6 +66,30 @@ export function getAppleSignedDataVerifier(): SignedDataVerifier {
   );
 
   return cachedVerifier;
+}
+
+// Both APIException and VerificationException extend Error but call
+// super() with no message, so the real detail lives on their own
+// properties (.errorMessage/.apiError/.httpStatusCode, or .status/.cause)
+// instead of the standard .message property.
+export function describeAppleError(error: unknown): string {
+  if (error instanceof APIException) {
+    return `Apple API error (HTTP ${error.httpStatusCode}, code ${error.apiError}): ${
+      error.errorMessage ?? "no message provided"
+    }`;
+  }
+
+  if (error instanceof VerificationException) {
+    return `Apple signature verification failed (status ${error.status}): ${
+      error.cause?.message ?? "no further detail"
+    }`;
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return "Something went wrong.";
 }
 
 export function planFromProductId(productId?: string): "basic" | "pro" | null {
