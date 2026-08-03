@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { NotificationTypeV2, Subtype } from "@apple/app-store-server-library";
-import { describeAppleError, getAppleSignedDataVerifier, planFromProductId } from "../../../../lib/apple-app-store";
+import { describeAppleError, verifyAppleNotification, verifyAppleTransaction, planFromProductId } from "../../../../lib/apple-app-store";
 import { supabaseAdmin } from "../../../../lib/supabase-admin";
 
 function toIsoFromMillis(value?: number | null) {
@@ -17,9 +17,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing signedPayload." }, { status: 400 });
     }
 
-    const notification = await getAppleSignedDataVerifier().verifyAndDecodeNotification(
-      signedPayload
-    );
+    const notification = await verifyAppleNotification(signedPayload);
 
     const signedTransactionInfo = notification.data?.signedTransactionInfo;
 
@@ -28,9 +26,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ received: true });
     }
 
-    const transaction = await getAppleSignedDataVerifier().verifyAndDecodeTransaction(
-      signedTransactionInfo
-    );
+    const transaction = await verifyAppleTransaction(signedTransactionInfo);
 
     const originalTransactionId = transaction.originalTransactionId;
 
