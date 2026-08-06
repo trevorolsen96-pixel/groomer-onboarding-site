@@ -98,6 +98,66 @@ export async function GET(
     const { token } = await context.params;
     const cleanToken = normalizeToken(token);
 
+    // A business owner previewing their own form — no real onboarding_request
+    // exists, so serve the current policies/questions/records straight from
+    // business_settings instead of doing a token lookup.
+    if (cleanToken.startsWith("preview-")) {
+      const businessId = cleanToken.slice("preview-".length);
+
+      const { data: settingsRow, error: settingsError } = await supabaseAdmin
+        .from("business_settings")
+        .select("business_name, logo_url, require_pet_records_onboarding")
+        .eq("business_id", businessId)
+        .single();
+
+      if (settingsError || !settingsRow) {
+        return NextResponse.json(
+          { error: "Business not found." },
+          { status: 404 },
+        );
+      }
+
+      const { data: agreementsRows } = await supabaseAdmin
+        .from("intake_agreements")
+        .select("id, title, agreement_text, is_required, sort_order")
+        .eq("business_id", businessId)
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true });
+
+      const { data: questionsRows } = await supabaseAdmin
+        .from("onboarding_questions")
+        .select("id, question_text, response_type, options, is_required, sort_order")
+        .eq("business_id", businessId)
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true });
+
+      const { data: recordTypesRows } = await supabaseAdmin
+        .from("business_pet_record_types")
+        .select("id, name, has_expiry, sort_order")
+        .eq("business_id", businessId)
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true });
+
+      return NextResponse.json({
+        request_id: "preview",
+        business_name: settingsRow.business_name ?? "Your Groomer",
+        logo_url: settingsRow.logo_url ?? null,
+        status: "preview",
+        client_email: null,
+        agreements: agreementsRows ?? [],
+        questions: questionsRows ?? [],
+        require_pet_records_onboarding:
+          settingsRow.require_pet_records_onboarding ?? false,
+        pet_record_types: recordTypesRows ?? [],
+        is_update: false,
+        customer_id: null,
+        pre_fill: null,
+      });
+    }
+
     const { data: requestRow, error: requestError } = await supabaseAdmin
       .from("onboarding_requests")
       .select("id, token, status, business_id, client_email, customer_id")
@@ -300,6 +360,14 @@ export async function POST(
   try {
     const { token } = await context.params;
     const cleanToken = normalizeToken(token);
+
+    // Preview links don't correspond to a real onboarding_request — never
+    // write anything, just acknowledge so the preview UI can show its own
+    // "this wasn't submitted" state.
+    if (cleanToken.startsWith("preview-")) {
+      return NextResponse.json({ ok: true, preview: true });
+    }
+
     const contentType = req.headers.get("content-type") ?? "";
 
 let body: SubmissionPayload;

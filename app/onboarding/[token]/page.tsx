@@ -128,6 +128,8 @@ export default function OnboardingTokenPage() {
   const params = useParams<{ token: string }>();
   const router = useRouter();
   const token = params.token;
+  const isPreview = token?.startsWith("preview-") ?? false;
+  const [previewSubmitted, setPreviewSubmitted] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -783,6 +785,12 @@ export default function OnboardingTokenPage() {
         throw new Error(result.error || "Failed to submit onboarding form.");
       }
 
+      if (isPreview) {
+        setPreviewSubmitted(true);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+
       router.push("/thank-you");
     } catch (error) {
       const message =
@@ -817,6 +825,13 @@ export default function OnboardingTokenPage() {
   return (
     <main className="site-shell min-h-screen px-4 py-10 text-[var(--text-primary)]">
       <div className="mx-auto max-w-4xl">
+        {isPreview ? (
+          <div className="mb-6 rounded-[16px] border border-[var(--rose-primary)] bg-[rgba(184,92,114,0.08)] px-4 py-3 text-center text-sm font-semibold text-[var(--rose-primary)]">
+            {previewSubmitted
+              ? "Preview complete — nothing was saved or submitted."
+              : "Preview mode — this is exactly what your clients see. Nothing you enter here will be saved."}
+          </div>
+        ) : null}
         <div className="soft-card mb-8 p-6">
           <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:text-left">
             {logoUrl ? (
