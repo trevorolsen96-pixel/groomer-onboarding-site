@@ -12,6 +12,13 @@ import {
 
 const bundleId = process.env.APPLE_BUNDLE_ID ?? "com.wagzly.app";
 
+// Required by SignedDataVerifier whenever it's constructed for the
+// Production environment (not required for Sandbox). This is the app's
+// numeric Apple ID from App Store Connect — not the bundle ID.
+const appAppleId = process.env.APPLE_APP_ID
+  ? Number(process.env.APPLE_APP_ID)
+  : undefined;
+
 // A purchase made via Xcode, TestFlight, or by Apple's App Review team is
 // ALWAYS a Sandbox transaction, regardless of whether the app is live on
 // the App Store — only a purchase made through the live App Store by a
@@ -77,11 +84,16 @@ function getVerifierFor(environment: Environment): SignedDataVerifier {
     path.join(process.cwd(), "certs", "AppleRootCA-G3.cer")
   );
 
+  if (environment === Environment.PRODUCTION && appAppleId === undefined) {
+    throw new Error("Missing APPLE_APP_ID");
+  }
+
   const verifier = new SignedDataVerifier(
     [rootCertificate],
     true,
     environment,
-    bundleId
+    bundleId,
+    appAppleId
   );
 
   cachedVerifiers.set(environment, verifier);
