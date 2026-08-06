@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sendPushToBusinessAsync } from "@/lib/push-notification";
 
@@ -785,12 +785,18 @@ if (requiredRecordTypes.length > 0) {
         })
         .eq("id", requestRow.id);
 
-      await sendPushToBusinessAsync({
-        businessId: requestRow.business_id,
-        title: "Client Info Updated",
-        body: `${clientName || "A client"} updated their information.`,
-        data: { route: "customers", type: "client_update" },
-      });
+      // Don't block the response on this — it's a slow, timeout-less
+      // multi-hop Google Cloud auth chain that was leaving the client's
+      // submit button stuck waiting on it. `after` still lets it run to
+      // completion, just without holding up what the client sees.
+      after(() =>
+        sendPushToBusinessAsync({
+          businessId: requestRow.business_id,
+          title: "Client Info Updated",
+          body: `${clientName || "A client"} updated their information.`,
+          data: { route: "customers", type: "client_update" },
+        }),
+      );
     } else {
       // NEW CLIENT — send to pending_approval for groomer review
       const customerNotes = `Onboarding form submitted. Email: ${body.email
@@ -807,12 +813,14 @@ if (requiredRecordTypes.length > 0) {
         },
       }).eq("id", requestRow.id);
 
-      await sendPushToBusinessAsync({
-        businessId: requestRow.business_id,
-        title: "New Client Submission",
-        body: `${clientName || "A client"} completed the onboarding form.`,
-        data: { route: "booking_requests", type: "onboarding_submission" },
-      });
+      after(() =>
+        sendPushToBusinessAsync({
+          businessId: requestRow.business_id,
+          title: "New Client Submission",
+          body: `${clientName || "A client"} completed the onboarding form.`,
+          data: { route: "booking_requests", type: "onboarding_submission" },
+        }),
+      );
     }
 
     return NextResponse.json({ ok: true });
