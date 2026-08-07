@@ -28,13 +28,12 @@ function contentTypeForExtension(ext: string) {
   }
 }
 
-// Uploads a base64-encoded photo to the private message-attachments bucket
-// and mints a 72-hour signed link — that link (not the raw photo) is what
-// actually gets texted, since sending it as a plain SMS costs ~$0.008
-// instead of Telnyx's MMS rate (~$0.025). The storage path is kept
-// separately so the app's own message history can mint a fresh signed URL
-// on demand later, even after this 72-hour link has expired for the
-// customer.
+// Uploads a base64-encoded photo to the private message-attachments bucket.
+// Sending it as a plain SMS (rather than a real MMS media attachment) costs
+// ~$0.008 instead of Telnyx's MMS rate (~$0.025) — but a raw Supabase signed
+// URL is 200+ characters, which alone blows past the 160-character single
+// SMS segment. createShortLink() below wraps it in a short wagzly.com
+// redirect instead.
 async function uploadMessageAttachment({
   businessId,
   conversationId,
@@ -45,7 +44,7 @@ async function uploadMessageAttachment({
   conversationId: string;
   imageBase64: string;
   imageFileName: string;
-}): Promise<{ path: string; signedUrl: string; expiresAt: string }> {
+}): Promise<{ path: string }> {
   const ext = extensionForFileName(imageFileName || "photo.jpg");
   const path = `${businessId}/${conversationId}/${Date.now()}-${Math.random()
     .toString(36)
@@ -64,21 +63,62 @@ async function uploadMessageAttachment({
     throw new Error(`Unable to upload photo: ${uploadError.message}`);
   }
 
-  const { data: signedData, error: signError } = await supabaseAdmin.storage
-    .from(ATTACHMENT_BUCKET)
-    .createSignedUrl(path, ATTACHMENT_LINK_TTL_SECONDS);
+  return { path };
+}
 
-  if (signError || !signedData?.signedUrl) {
-    throw new Error(
-      `Unable to create link for photo: ${signError?.message ?? "unknown error"}`
-    );
+const SHORT_ID_ALPHABET =
+  "23456789abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ"; // no 0/O/1/l/i — avoids ambiguous characters if anyone types it manually
+const SHORT_ID_LENGTH = 8;
+
+function randomShortId(): string {
+  let id = "";
+  for (let i = 0; i < SHORT_ID_LENGTH; i++) {
+    id += SHORT_ID_ALPHABET[
+      Math.floor(Math.random() * SHORT_ID_ALPHABET.length)
+    ];
   }
+  return id;
+}
 
+// Wraps a private storage path in a short, branded wagzly.com/p/<id> link
+// that redirects to a freshly-minted signed URL on each click — see
+// app/p/[id]/route.ts. "https://www.wagzly.com/p/" + 8 chars is ~34
+// characters total, comfortably inside one 160-character SMS segment even
+// with a caption in front of it.
+async function createShortLink({
+  businessId,
+  attachmentPath,
+}: {
+  businessId: string;
+  attachmentPath: string;
+}): Promise<{ url: string; expiresAt: string }> {
   const expiresAt = new Date(
     Date.now() + ATTACHMENT_LINK_TTL_SECONDS * 1000
   ).toISOString();
 
-  return { path, signedUrl: signedData.signedUrl, expiresAt };
+  // Astronomically unlikely to collide (56^8 ids), but guard against it
+  // anyway rather than silently overwriting someone else's link.
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const id = randomShortId();
+
+    const { error } = await supabaseAdmin.from("message_attachment_links").insert({
+      id,
+      business_id: businessId,
+      attachment_path: attachmentPath,
+      expires_at: expiresAt,
+    });
+
+    if (!error) {
+      return { url: `https://www.wagzly.com/p/${id}`, expiresAt };
+    }
+
+    if (error.code !== "23505") {
+      // Not a unique-violation — no point retrying.
+      throw new Error(`Unable to create photo link: ${error.message}`);
+    }
+  }
+
+  throw new Error("Unable to create photo link: too many collisions.");
 }
 
 function normalizePhone(value: string) {
@@ -223,11 +263,16 @@ export async function POST(request: Request) {
         imageFileName,
       });
 
+      const shortLink = await createShortLink({
+        businessId,
+        attachmentPath: uploaded.path,
+      });
+
       attachmentPath = uploaded.path;
-      attachmentExpiresAt = uploaded.expiresAt;
+      attachmentExpiresAt = shortLink.expiresAt;
       outgoingText = messageBody
-        ? `${messageBody}\n${uploaded.signedUrl}`
-        : `Photo: ${uploaded.signedUrl}`;
+        ? `${messageBody}\n${shortLink.url}`
+        : `Photo: ${shortLink.url}`;
     }
 
     await assertSmsCreditsAvailable({ businessId, body: outgoingText });
