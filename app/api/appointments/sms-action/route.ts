@@ -148,27 +148,25 @@ async function upsertAppointmentReminder({
   businessTimezone: string;
   arrivalWindowEnabled: boolean;
   arrivalWindowMinutes: number;
-}) {
-  const { data: selectedRule } = await supabaseAdmin
+}): Promise<{ status: string; queuedCount: number }> {
+  // A business can now enable more than one reminder timeframe at once
+  // (e.g. 1 week before AND 24 hours before) — each enabled rule gets its
+  // own row in sms_outbound_queue, with its own scheduled_for_utc and its
+  // own dedupe_key, so every one fires independently.
+  const { data: enabledRules } = await supabaseAdmin
     .from("business_sms_reminder_rules")
     .select("rule_type, offset_minutes, enabled")
     .eq("business_id", businessId)
     .eq("enabled", true)
-    .order("offset_minutes", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .order("offset_minutes", { ascending: false });
 
-  if (!selectedRule) return "no_rule";
-
-  const scheduledFor = new Date(
-    new Date(appointmentScheduledAt).getTime() -
-      Number(selectedRule.offset_minutes ?? 0) * 60 * 1000
-  );
-
+  // Always clear whatever was previously queued for this appointment first
+  // — the current set of enabled rules is the source of truth, whether
+  // that's zero, one, or several reminders.
   await deletePendingAppointmentReminders({ businessId, appointmentId });
 
-  if (scheduledFor.getTime() <= Date.now()) {
-    return "past_due_removed";
+  if (!enabledRules || enabledRules.length === 0) {
+    return { status: "no_rule", queuedCount: 0 };
   }
 
   let message: string;
@@ -189,49 +187,54 @@ async function upsertAppointmentReminder({
       `Reply YES to confirm or NO to cancel.`;
   }
 
-    const { error: queueError } = await supabaseAdmin
-    .from("sms_outbound_queue")
-    .upsert(
-      {
-        business_id: businessId,
-        customer_id: customerId,
-        appointment_id: appointmentId,
-        message_type: "appointment_reminder",
-        rule_type: selectedRule.rule_type,
-        to_phone: toPhone,
-        body_rendered: message,
-        scheduled_for_utc: scheduledFor.toISOString(),
-        status: "pending",
-        dedupe_key: `${appointmentId}:${selectedRule.rule_type}`,
-        attempt_count: 0,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "dedupe_key" }
+  const nowIso = new Date().toISOString();
+  let queuedCount = 0;
+
+  for (const rule of enabledRules) {
+    const scheduledFor = new Date(
+      new Date(appointmentScheduledAt).getTime() -
+        Number(rule.offset_minutes ?? 0) * 60 * 1000
     );
+
+    // Skip only this rule if its fire time has already passed (e.g. a
+    // "1 week before" reminder for an appointment booked 3 days out) —
+    // other enabled rules that are still upcoming still get queued.
+    if (scheduledFor.getTime() <= Date.now()) continue;
+
+    const { error: queueError } = await supabaseAdmin
+      .from("sms_outbound_queue")
+      .upsert(
+        {
+          business_id: businessId,
+          customer_id: customerId,
+          appointment_id: appointmentId,
+          message_type: "appointment_reminder",
+          rule_type: rule.rule_type,
+          to_phone: toPhone,
+          body_rendered: message,
+          scheduled_for_utc: scheduledFor.toISOString(),
+          status: "pending",
+          dedupe_key: `${appointmentId}:${rule.rule_type}`,
+          attempt_count: 0,
+          updated_at: nowIso,
+        },
+        { onConflict: "dedupe_key" }
+      );
 
     if (queueError) {
-    throw new Error(`Unable to queue appointment reminder: ${queueError.message}`);
+      throw new Error(
+        `Unable to queue ${rule.rule_type} reminder: ${queueError.message}`
+      );
+    }
+
+    queuedCount++;
   }
 
-  const { data: queuedRow, error: verifyError } = await supabaseAdmin
-    .from("sms_outbound_queue")
-    .select("id, appointment_id, message_type, rule_type, scheduled_for_utc, status")
-    .eq("business_id", businessId)
-    .eq("appointment_id", appointmentId)
-    .eq("message_type", "appointment_reminder")
-    .maybeSingle();
-
-  if (verifyError) {
-    throw new Error(`Unable to verify queued reminder: ${verifyError.message}`);
+  if (queuedCount === 0) {
+    return { status: "past_due_removed", queuedCount: 0 };
   }
 
-  if (!queuedRow) {
-    throw new Error(
-      `Reminder upsert reported success, but no sms_outbound_queue row exists for appointment ${appointmentId}`
-    );
-  }
-
-  return "refreshed";
+  return { status: "refreshed", queuedCount };
 }
 
 function calculateSmsSegments(message: string) {
@@ -422,7 +425,7 @@ export async function POST(request: Request) {
         : `${petNames.slice(0, -1).join(", ")} and ${petNames[petNames.length - 1]}'s`;
 
     if (action === "schedule_reminder") {
-      const reminderStatus = await upsertAppointmentReminder({
+      const reminderResult = await upsertAppointmentReminder({
         businessId,
         customerId: customer.id,
         appointmentId,
@@ -437,7 +440,7 @@ export async function POST(request: Request) {
         arrivalWindowMinutes,
       });
 
-      if (reminderStatus === "no_rule") {
+      if (reminderResult.status === "no_rule") {
         return NextResponse.json({
           ok: true,
           status: "skipped",
@@ -445,7 +448,7 @@ export async function POST(request: Request) {
         });
       }
 
-      if (reminderStatus === "past_due_removed") {
+      if (reminderResult.status === "past_due_removed") {
         return NextResponse.json({
           ok: true,
           status: "skipped",
@@ -466,7 +469,8 @@ export async function POST(request: Request) {
       return NextResponse.json({
         ok: true,
         status: "queued",
-        reminderStatus,
+        reminderStatus: reminderResult.status,
+        queuedCount: reminderResult.queuedCount,
       });
     }
 
@@ -512,7 +516,7 @@ export async function POST(request: Request) {
         .eq("id", appointmentId)
         .eq("business_id", businessId);
 
-      const reminderStatus = await upsertAppointmentReminder({
+      const reminderResult = await upsertAppointmentReminder({
         businessId,
         customerId: customer.id,
         appointmentId,
@@ -530,7 +534,8 @@ export async function POST(request: Request) {
       return NextResponse.json({
         ok: true,
         status: "queued",
-        reminderStatus,
+        reminderStatus: reminderResult.status,
+        queuedCount: reminderResult.queuedCount,
       });
     }
 
