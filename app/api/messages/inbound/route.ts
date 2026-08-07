@@ -5,8 +5,66 @@ import { supabaseAdmin } from "../../../../lib/supabase-admin";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const ATTACHMENT_BUCKET = "message-attachments";
+
 function cleanText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+type TelnyxMedia = { url?: string; content_type?: string };
+
+function extensionForContentType(contentType: string) {
+  if (contentType.includes("png")) return "png";
+  if (contentType.includes("webp")) return "webp";
+  if (contentType.includes("heic")) return "heic";
+  if (contentType.includes("gif")) return "gif";
+  return "jpg";
+}
+
+// Telnyx hosts inbound MMS media at a temporary URL that isn't guaranteed to
+// stay available indefinitely, so we pull it down immediately and re-host it
+// in our own private bucket — the same one and same attachment_path column
+// outbound photos already use, which is why no Flutter changes are needed
+// to display these: the existing _MessageBubble attachment rendering just
+// works for inbound rows too.
+async function downloadAndStoreInboundMedia({
+  businessId,
+  conversationId,
+  media,
+}: {
+  businessId: string;
+  conversationId: string;
+  media: TelnyxMedia[];
+}): Promise<string | null> {
+  const first = media.find((item) => (item?.url ?? "").trim().length > 0);
+  if (!first?.url) return null;
+
+  try {
+    const res = await fetch(first.url);
+    if (!res.ok) return null;
+
+    const bytes = Buffer.from(await res.arrayBuffer());
+    const contentType =
+      first.content_type || res.headers.get("content-type") || "image/jpeg";
+    const ext = extensionForContentType(contentType);
+    const path = `${businessId}/${conversationId}/${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2, 8)}.${ext}`;
+
+    const { error } = await supabaseAdmin.storage
+      .from(ATTACHMENT_BUCKET)
+      .upload(path, bytes, { contentType, upsert: false });
+
+    if (error) {
+      console.error("Failed to store inbound MMS media:", error.message);
+      return null;
+    }
+
+    return path;
+  } catch (error) {
+    console.error("Failed to download inbound MMS media:", error);
+    return null;
+  }
 }
 
 function normalizePhone(value: string) {
@@ -122,8 +180,11 @@ export async function POST(request: Request) {
       cleanText(payload?.to?.[0]?.phone_number ?? "")
     );
     const body = cleanText(payload?.text ?? "");
+    const media: TelnyxMedia[] = Array.isArray(payload?.media)
+      ? payload.media
+      : [];
 
-    if (!fromPhone || !toPhone || !body) {
+    if (!fromPhone || !toPhone || (!body && media.length === 0)) {
       return NextResponse.json({ ok: true });
     }
 
@@ -209,21 +270,36 @@ export async function POST(request: Request) {
       conversationId = insertedConversation.id;
     }
 
+    const attachmentPath =
+      media.length > 0
+        ? await downloadAndStoreInboundMedia({
+            businessId,
+            conversationId,
+            media,
+          })
+        : null;
+
+    // Falls back to a friendly label for the conversation preview/push
+    // notification when a photo arrives with no caption text.
+    const displayBody = body || (attachmentPath ? "📷 Photo" : "");
+
     await supabaseAdmin.from("message_items").insert({
       business_id: businessId,
       conversation_id: conversationId,
       customer_id: customer.id,
       direction: "inbound",
-      body,
+      body: displayBody,
       status: "received",
       provider: "telnyx",
       created_at: now,
+      attachment_path: attachmentPath,
+      attachment_caption: attachmentPath ? body || null : null,
     });
 
     await supabaseAdmin
       .from("message_conversations")
       .update({
-        last_message_body: body,
+        last_message_body: displayBody,
         last_message_at: now,
         unread_count: (existingConversation?.unread_count ?? 0) + 1,
         is_closed: false,
@@ -297,7 +373,7 @@ export async function POST(request: Request) {
             businessId,
             conversationId,
             customerName: customer.name,
-            messageBody: body,
+            messageBody: displayBody,
           }),
         });
       }
