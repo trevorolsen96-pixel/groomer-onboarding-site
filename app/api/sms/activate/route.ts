@@ -72,17 +72,25 @@ export async function POST(request: Request) {
     const isPro = (business?.plan ?? "basic").toLowerCase() === "pro";
     const areaCode = isPro && rawAreaCode ? rawAreaCode : undefined;
 
-    let phoneNumber = await searchAvailableNumber(areaCode);
-
-    if (!phoneNumber && areaCode) {
-      phoneNumber = await searchAvailableNumber();
+    if (areaCode && areaCode.length !== 3) {
+      return NextResponse.json(
+        { error: "Area code must be exactly 3 digits." },
+        { status: 400 }
+      );
     }
+
+    // Deliberately does NOT fall back to a random area code when the
+    // requested one has no availability — the whole point of asking is to
+    // guarantee a local number, so silently substituting a different area
+    // code would defeat that. The user picks a different code instead.
+    const phoneNumber = await searchAvailableNumber(areaCode);
 
     if (!phoneNumber) {
       return NextResponse.json(
         {
-          error:
-            "No phone numbers are available right now. Please try again later.",
+          error: areaCode
+            ? `No phone numbers are available in area code ${areaCode} right now. Try a different area code.`
+            : "No phone numbers are available right now. Please try again later.",
         },
         { status: 400 }
       );
