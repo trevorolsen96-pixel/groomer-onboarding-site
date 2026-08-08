@@ -162,9 +162,16 @@ export async function POST(request: Request) {
       );
     }
 
+    // Turn on the reminder/reschedule toggles automatically now that there's
+    // a real number to send from — a business shouldn't have to remember to
+    // flip these on themselves right after activating.
     await supabaseAdmin
       .from("business_settings")
-      .update({ sms_sender_number: purchased.phoneNumber })
+      .update({
+        sms_sender_number: purchased.phoneNumber,
+        sms_enabled: true,
+        reschedule_sms_enabled: true,
+      })
       .eq("business_id", safeBusinessId);
 
     return NextResponse.json({
