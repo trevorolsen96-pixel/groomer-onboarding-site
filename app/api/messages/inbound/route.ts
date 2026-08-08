@@ -270,6 +270,10 @@ export async function POST(request: Request) {
       conversationId = insertedConversation.id;
     }
 
+    if (!conversationId) {
+      throw new Error("Missing conversation id after lookup/create.");
+    }
+
     const attachmentPath =
       media.length > 0
         ? await downloadAndStoreInboundMedia({
