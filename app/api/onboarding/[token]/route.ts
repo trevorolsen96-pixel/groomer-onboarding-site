@@ -28,6 +28,8 @@ type PetQuestionnairePayload = {
   answers: QuestionAnswerPayload[];
 };
 
+type ClientQuestionnairePayload = QuestionAnswerPayload[];
+
 type PetRecordUploadPayload = {
   pet_index: number;
   file_key: string;
@@ -54,6 +56,7 @@ type SubmissionPayload = {
   pets: PetPayload[];
   agreements: AgreementAcceptancePayload[];
   pet_questionnaire: PetQuestionnairePayload[];
+  client_questionnaire?: ClientQuestionnairePayload;
   pet_records?: PetRecordUploadPayload[];
 };
 
@@ -127,7 +130,7 @@ export async function GET(
 
       const { data: questionsRows } = await supabaseAdmin
         .from("onboarding_questions")
-        .select("id, question_text, response_type, options, is_required, sort_order")
+        .select("id, question_text, response_type, options, is_required, sort_order, applies_to")
         .eq("business_id", businessId)
         .eq("is_active", true)
         .order("sort_order", { ascending: true })
@@ -148,7 +151,8 @@ export async function GET(
         status: "preview",
         client_email: null,
         agreements: agreementsRows ?? [],
-        questions: questionsRows ?? [],
+        pet_questions: (questionsRows ?? []).filter((q) => q.applies_to !== "client"),
+        client_questions: (questionsRows ?? []).filter((q) => q.applies_to === "client"),
         require_pet_records_onboarding:
           settingsRow.require_pet_records_onboarding ?? false,
         pet_record_types: recordTypesRows ?? [],
@@ -209,7 +213,7 @@ export async function GET(
 
     const { data: questionsRows, error: questionsError } = await supabaseAdmin
       .from("onboarding_questions")
-      .select("id, question_text, response_type, options, is_required, sort_order")
+      .select("id, question_text, response_type, options, is_required, sort_order, applies_to")
       .eq("business_id", requestRow.business_id)
       .eq("is_active", true)
       .order("sort_order", { ascending: true })
@@ -283,6 +287,12 @@ export async function GET(
               .in("pet_id", petIds)
           : { data: [] };
 
+        // Fetch the client's own (not per-pet) questionnaire answers
+        const { data: clientQuestionResponses } = await supabaseAdmin
+          .from("onboarding_question_responses")
+          .select("question_id, answer")
+          .eq("customer_id", requestRow.customer_id);
+
         // Fetch valid (non-expired) pet documents
         const today = new Date().toISOString().split("T")[0];
         const { data: existingDocs } = petIds.length > 0
@@ -307,6 +317,10 @@ export async function GET(
           secondary_contact_phone: customer.secondary_contact_phone ?? "",
           question_responses: (questionResponses ?? []).map((r) => ({
             pet_id: r.pet_id,
+            question_id: r.question_id,
+            answer: r.answer,
+          })),
+          client_question_responses: (clientQuestionResponses ?? []).map((r) => ({
             question_id: r.question_id,
             answer: r.answer,
           })),
@@ -336,7 +350,8 @@ export async function GET(
       status: requestRow.status,
       client_email: requestRow.client_email ?? null,
       agreements: agreementsRows ?? [],
-      questions: questionsRows ?? [],
+      pet_questions: (questionsRows ?? []).filter((q) => q.applies_to !== "client"),
+      client_questions: (questionsRows ?? []).filter((q) => q.applies_to === "client"),
       require_pet_records_onboarding:
         settingsRow.require_pet_records_onboarding ?? false,
       pet_record_types: recordTypesRows ?? [],
@@ -514,7 +529,7 @@ if (requiredRecordTypes.length > 0) {
     const { data: requiredQuestions, error: requiredQuestionsError } =
       await supabaseAdmin
         .from("onboarding_questions")
-        .select("id")
+        .select("id, applies_to")
         .eq("business_id", requestRow.business_id)
         .eq("is_active", true)
         .eq("is_required", true);
@@ -525,6 +540,32 @@ if (requiredRecordTypes.length > 0) {
         { error: "Failed to validate onboarding questions." },
         { status: 500 },
       );
+    }
+
+    const requiredPetQuestions = (requiredQuestions ?? []).filter(
+      (q) => q.applies_to !== "client",
+    );
+    const requiredClientQuestions = (requiredQuestions ?? []).filter(
+      (q) => q.applies_to === "client",
+    );
+
+    const clientAnswersMap = new Map(
+      (body.client_questionnaire ?? []).map((answer) => [
+        answer.question_id,
+        answer.answer,
+      ]),
+    );
+
+    for (const question of requiredClientQuestions) {
+      const answer = clientAnswersMap.get(question.id);
+
+      if (
+        !answer ||
+        (Array.isArray(answer) && answer.length === 0) ||
+        (typeof answer === "string" && answer.trim() === "")
+      ) {
+        return badRequest("Please answer all required questions about yourself.");
+      }
     }
 
     for (let petIndex = 0; petIndex < body.pets.length; petIndex += 1) {
@@ -539,7 +580,7 @@ if (requiredRecordTypes.length > 0) {
         ]),
       );
 
-      for (const question of requiredQuestions ?? []) {
+      for (const question of requiredPetQuestions) {
         const answer = answersMap.get(question.id);
 
         if (
@@ -666,6 +707,32 @@ if (requiredRecordTypes.length > 0) {
             .from("onboarding_question_responses")
             .insert(answerRows);
         }
+      }
+
+      // Update the client's own (not per-pet) questionnaire answers —
+      // same delete-then-insert approach as the per-pet answers above.
+      await supabaseAdmin
+        .from("onboarding_question_responses")
+        .delete()
+        .eq("customer_id", requestRow.customer_id);
+
+      const clientAnswerRows = (body.client_questionnaire ?? [])
+        .filter((a) => {
+          const ans = a.answer;
+          if (Array.isArray(ans)) return ans.length > 0;
+          return String(ans ?? "").trim().length > 0;
+        })
+        .map((a) => ({
+          request_id: requestRow.id,
+          customer_id: requestRow.customer_id,
+          question_id: a.question_id,
+          answer: a.answer,
+        }));
+
+      if (clientAnswerRows.length > 0) {
+        await supabaseAdmin
+          .from("onboarding_question_responses")
+          .insert(clientAnswerRows);
       }
 
       // Handle pet record uploads — delete old, upload new, insert rows

@@ -59,7 +59,7 @@ export async function POST(request: Request) {
     // Load customer
     const { data: customer, error: customerError } = await supabaseAdmin
       .from("customers")
-      .select("id, name, phone, email, address, secondary_contact_name, secondary_contact_phone, business_id")
+      .select("id, name, phone, email, address, secondary_contact_name, secondary_contact_phone, business_id, image_url")
       .eq("id", customerId)
       .eq("business_id", profile.business_id)
       .maybeSingle();
@@ -127,6 +127,7 @@ export async function POST(request: Request) {
     }
 
     const onboardingUrl = `https://www.wagzly.com/onboarding/${onboardingToken}`;
+    const smsText = `Hi ${customer.name.split(" ")[0] || "there"}, ${businessName} has sent you a link to update your client information. Please review and update here: ${onboardingUrl}`;
 
     // Send SMS if available
     if (smsActive) {
@@ -134,8 +135,71 @@ export async function POST(request: Request) {
         await sendSms({
           from: normalizePhone(smsSetup!.phone_number!),
           to: normalizePhone(customer.phone),
-          text: `Hi ${customer.name.split(" ")[0] || "there"}, ${businessName} has sent you a link to update your client information. Please review and update here: ${onboardingUrl}`,
+          text: smsText,
         });
+
+        // Log it in the customer's Messages thread too, the same way a
+        // manually-sent text would appear — otherwise a groomer has no way
+        // to tell from the app whether (or when) an update link went out.
+        try {
+          const now = new Date().toISOString();
+
+          const { data: existingConversation } = await supabaseAdmin
+            .from("message_conversations")
+            .select("id, unread_count")
+            .eq("business_id", profile.business_id)
+            .eq("customer_id", customerId)
+            .maybeSingle();
+
+          let conversationId = existingConversation?.id as string | undefined;
+
+          if (!conversationId) {
+            const { data: insertedConversation, error: insertConversationError } =
+              await supabaseAdmin
+                .from("message_conversations")
+                .insert({
+                  business_id: profile.business_id,
+                  customer_id: customerId,
+                  customer_name: customer.name,
+                  customer_phone: customer.phone,
+                  customer_image_url: customer.image_url ?? null,
+                  last_message_body: smsText,
+                  last_message_at: now,
+                  unread_count: 0,
+                })
+                .select("id")
+                .single();
+
+            if (insertConversationError) throw insertConversationError;
+            conversationId = insertedConversation?.id;
+          }
+
+          if (conversationId) {
+            await supabaseAdmin.from("message_items").insert({
+              business_id: profile.business_id,
+              conversation_id: conversationId,
+              customer_id: customerId,
+              direction: "outbound",
+              body: smsText,
+              status: "sent",
+              provider: "telnyx",
+              created_at: now,
+            });
+
+            await supabaseAdmin
+              .from("message_conversations")
+              .update({
+                last_message_body: smsText,
+                last_message_at: now,
+                is_closed: false,
+              })
+              .eq("id", conversationId);
+          }
+        } catch (messageLogError) {
+          console.error("Failed to log update-request SMS to Messages:", messageLogError);
+          // Don't fail the whole request if this best-effort logging fails —
+          // the SMS itself already went out successfully.
+        }
       } catch (smsError) {
         console.error("Failed to send update SMS:", smsError);
         // Don't fail the whole request if SMS fails

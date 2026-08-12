@@ -183,6 +183,10 @@ export async function POST(request: Request) {
     const messageBody = cleanText(body.body);
     const imageBase64 = cleanText(body.imageBase64);
     const imageFileName = cleanText(body.imageFileName) || "photo.jpg";
+    // Lets the app target a phone number other than the conversation's
+    // stored customer_phone snapshot — e.g. texting a customer's secondary
+    // contact from within the same conversation thread.
+    const toPhoneOverride = cleanText(body.toPhone);
 
     if (
       !businessId ||
@@ -240,7 +244,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const toPhone = normalizePhone(conversation.customer_phone ?? "");
+    const toPhone = normalizePhone(
+      toPhoneOverride || conversation.customer_phone || ""
+    );
 
     if (!toPhone) {
       return NextResponse.json(

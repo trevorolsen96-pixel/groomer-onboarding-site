@@ -33,6 +33,7 @@ type OnboardingQuestion = {
   options: string[];
   is_required: boolean;
   sort_order: number;
+  applies_to?: "pet" | "client";
 };
 
 type QuestionAnswer = {
@@ -88,6 +89,7 @@ type PreFill = {
   secondary_contact_phone: string;
   pets: PetForm[];
   question_responses: QuestionResponse[];
+  client_question_responses: { question_id: string; answer: string | string[] }[];
   existing_records: ExistingRecord[];
 };
 
@@ -98,7 +100,8 @@ type BrandingResponse = {
   status: string;
   client_email: string | null;
   agreements: Agreement[];
-  questions: OnboardingQuestion[];
+  pet_questions: OnboardingQuestion[];
+  client_questions: OnboardingQuestion[];
   require_pet_records_onboarding: boolean;
   pet_record_types: PetRecordType[];
   is_update: boolean;
@@ -141,6 +144,8 @@ export default function OnboardingTokenPage() {
   const [agreements, setAgreements] = useState<Agreement[]>([]);
   const [agreementAcceptances, setAgreementAcceptances] = useState<AgreementAcceptance[]>([]);
   const [questions, setQuestions] = useState<OnboardingQuestion[]>([]);
+  const [clientQuestions, setClientQuestions] = useState<OnboardingQuestion[]>([]);
+  const [clientAnswers, setClientAnswers] = useState<QuestionAnswer[]>([]);
   const [requirePetRecords, setRequirePetRecords] = useState(false);
   const [petRecordTypes, setPetRecordTypes] = useState<PetRecordType[]>([]);
   const [petRecords, setPetRecords] = useState<PetRecordUpload[]>([]);
@@ -182,13 +187,15 @@ export default function OnboardingTokenPage() {
           throw new Error(result.error || "Failed to load onboarding page.");
         }
 
-        const loadedQuestions = result.questions ?? [];
+        const loadedQuestions = result.pet_questions ?? [];
+        const loadedClientQuestions = result.client_questions ?? [];
 
         setBusinessName(result.business_name);
         setLogoUrl(result.logo_url);
         setIsUpdate(result.is_update ?? false);
         setAgreements(result.agreements ?? []);
         setQuestions(loadedQuestions);
+        setClientQuestions(loadedClientQuestions);
         setRequirePetRecords(result.require_pet_records_onboarding ?? false);
         setPetRecordTypes(result.pet_record_types ?? []);
 
@@ -232,6 +239,14 @@ export default function OnboardingTokenPage() {
               return { pet_index: i, answers };
             }),
           );
+          setClientAnswers(
+            buildEmptyAnswers(loadedClientQuestions).map((empty) => {
+              const saved = (pf.client_question_responses ?? []).find(
+                (r) => r.question_id === empty.question_id,
+              );
+              return saved ? { ...empty, answer: saved.answer } : empty;
+            }),
+          );
         } else {
           if (result.client_email) {
             setLockedEmail(result.client_email);
@@ -243,6 +258,7 @@ export default function OnboardingTokenPage() {
               answers: buildEmptyAnswers(loadedQuestions),
             },
           ]);
+          setClientAnswers(buildEmptyAnswers(loadedClientQuestions));
         }
       } catch (error) {
         const message =
@@ -309,6 +325,29 @@ export default function OnboardingTokenPage() {
     );
   }
 
+  function updateClientQuestionAnswer(questionId: string, answer: string | string[]) {
+    setClientAnswers((prev) =>
+      prev.map((item) =>
+        item.question_id === questionId ? { ...item, answer } : item,
+      ),
+    );
+  }
+
+  function toggleClientMultiSelectAnswer(questionId: string, option: string) {
+    setClientAnswers((prev) =>
+      prev.map((item) => {
+        if (item.question_id !== questionId) return item;
+        const current = Array.isArray(item.answer) ? item.answer : [];
+        const exists = current.includes(option);
+        return { ...item, answer: exists ? current.filter((v) => v !== option) : [...current, option] };
+      }),
+    );
+  }
+
+  function getClientAnswer(questionId: string) {
+    return clientAnswers.find((item) => item.question_id === questionId)?.answer ?? "";
+  }
+
   function setExpiryDate(petIndex: number, typeId: string, value: string) {
     setPetRecordExpiries((prev) => ({
       ...prev,
@@ -373,7 +412,7 @@ export default function OnboardingTokenPage() {
   }
 
   function validateRequiredQuestions() {
-    return pets.every((_, petIndex) => {
+    const petsOk = pets.every((_, petIndex) => {
       const petQuestionnaire = petQuestionnaires.find((item) => item.pet_index === petIndex);
       return questions.every((question) => {
         if (!question.is_required) return true;
@@ -382,6 +421,15 @@ export default function OnboardingTokenPage() {
         return String(answer ?? "").trim().length > 0;
       });
     });
+
+    const clientOk = clientQuestions.every((question) => {
+      if (!question.is_required) return true;
+      const answer = getClientAnswer(question.id);
+      if (Array.isArray(answer)) return answer.length > 0;
+      return String(answer ?? "").trim().length > 0;
+    });
+
+    return petsOk && clientOk;
   }
 
   function validateRequiredRecordTypes(): string | null {
@@ -484,6 +532,71 @@ export default function OnboardingTokenPage() {
         placeholder="Type your answer"
         value={typeof answer === "string" ? answer : ""}
         onChange={(e) => updatePetQuestionAnswer(petIndex, question.id, e.target.value)}
+        required={question.is_required}
+        className="min-h-28"
+      />
+    );
+  }
+
+  function renderClientQuestionInput(question: OnboardingQuestion) {
+    const answer = getClientAnswer(question.id);
+
+    if (question.response_type === "yes_no") {
+      return (
+        <select
+          value={typeof answer === "string" ? answer : ""}
+          onChange={(e) => updateClientQuestionAnswer(question.id, e.target.value)}
+          required={question.is_required}
+        >
+          <option value="">Select an answer</option>
+          <option value="Yes">Yes</option>
+          <option value="No">No</option>
+        </select>
+      );
+    }
+
+    if (question.response_type === "dropdown_single") {
+      return (
+        <select
+          value={typeof answer === "string" ? answer : ""}
+          onChange={(e) => updateClientQuestionAnswer(question.id, e.target.value)}
+          required={question.is_required}
+        >
+          <option value="">Select an answer</option>
+          {question.options.map((option) => (
+            <option key={option} value={option}>{option}</option>
+          ))}
+        </select>
+      );
+    }
+
+    if (question.response_type === "dropdown_multi") {
+      const selected = Array.isArray(answer) ? answer : [];
+      return (
+        <div className="space-y-2">
+          {question.options.map((option) => (
+            <label
+              key={option}
+              className="flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--divider-soft)] bg-[var(--cream-background)] px-4 py-3"
+            >
+              <input
+                type="checkbox"
+                className="h-4 w-4 shrink-0"
+                checked={selected.includes(option)}
+                onChange={() => toggleClientMultiSelectAnswer(question.id, option)}
+              />
+              <span className="text-sm text-[var(--text-secondary)]">{option}</span>
+            </label>
+          ))}
+        </div>
+      );
+    }
+
+    return (
+      <textarea
+        placeholder="Type your answer"
+        value={typeof answer === "string" ? answer : ""}
+        onChange={(e) => updateClientQuestionAnswer(question.id, e.target.value)}
         required={question.is_required}
         className="min-h-28"
       />
@@ -766,6 +879,7 @@ export default function OnboardingTokenPage() {
           })),
           agreements: agreementAcceptances,
           pet_questionnaire: petQuestionnaires,
+          client_questionnaire: clientAnswers,
           pet_records: uploadPayload,
         }),
       );
@@ -899,6 +1013,28 @@ export default function OnboardingTokenPage() {
                 <input placeholder="Phone number" value={form.secondary_contact_phone} onChange={(e) => updateOwnerField("secondary_contact_phone", e.target.value)} />
               </div>
             </div>
+
+            {clientQuestions.length > 0 ? (
+              <div className="mt-6 border-t border-[var(--divider-soft)] pt-5">
+                <h3 className="text-base font-semibold">About you</h3>
+                <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                  A few questions about you as our client.
+                </p>
+                <div className="mt-4 space-y-4">
+                  {clientQuestions.map((question) => (
+                    <div key={question.id} className="rounded-[18px] border border-[var(--divider-soft)] bg-[var(--cream-background)] p-4">
+                      <label className="block">
+                        <span className="text-base font-semibold text-[var(--text-primary)]">
+                          {question.question_text}
+                          {question.is_required ? <span className="text-[var(--rose-primary)]"> *</span> : null}
+                        </span>
+                        <div className="mt-3">{renderClientQuestionInput(question)}</div>
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </section>
 
           <section>
