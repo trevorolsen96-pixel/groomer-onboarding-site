@@ -149,6 +149,7 @@ export async function POST(request: Request) {
             .select("id, unread_count")
             .eq("business_id", profile.business_id)
             .eq("customer_id", customerId)
+            .eq("contact_type", "primary")
             .maybeSingle();
 
           let conversationId = existingConversation?.id as string | undefined;
@@ -160,6 +161,7 @@ export async function POST(request: Request) {
                 .insert({
                   business_id: profile.business_id,
                   customer_id: customerId,
+                  contact_type: "primary",
                   customer_name: customer.name,
                   customer_phone: customer.phone,
                   customer_image_url: customer.image_url ?? null,

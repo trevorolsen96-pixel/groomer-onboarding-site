@@ -136,6 +136,7 @@ export async function GET() {
             .select("id")
             .eq("business_id", row.business_id)
             .eq("customer_id", row.customer_id)
+            .eq("contact_type", "primary")
             .maybeSingle();
 
           let conversationId = existingConversation?.id as string | undefined;
@@ -146,6 +147,7 @@ export async function GET() {
               .insert({
                 business_id: row.business_id,
                 customer_id: row.customer_id,
+                contact_type: "primary",
                 customer_name: customer.name,
                 customer_phone: customer.phone,
                 customer_image_url: customer.image_url,

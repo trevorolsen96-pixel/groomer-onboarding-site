@@ -204,7 +204,9 @@ export async function POST(request: Request) {
 
     const { data: customers } = await supabaseAdmin
       .from("customers")
-      .select("id, name, phone, secondary_contact_phone, image_url")
+      .select(
+        "id, name, phone, secondary_contact_name, secondary_contact_phone, image_url"
+      )
       .eq("business_id", businessId);
 
     const customer = (customers ?? []).find((item) => {
@@ -228,6 +230,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true });
     }
 
+    // A secondary contact texting in gets routed to their own thread,
+    // separate from the primary contact's — matched by which phone number
+    // this message actually came from.
+    const isFromSecondary =
+      normalizePhone(customer.secondary_contact_phone ?? "") === fromPhone &&
+      normalizePhone(customer.phone ?? "") !== fromPhone;
+    const contactType = isFromSecondary ? "secondary" : "primary";
+
     await updateLatestAppointmentConfirmation({
       businessId,
       customerId: customer.id,
@@ -239,6 +249,7 @@ export async function POST(request: Request) {
       .select("*")
       .eq("business_id", businessId)
       .eq("customer_id", customer.id)
+      .eq("contact_type", contactType)
       .maybeSingle();
 
     let conversationId = existingConversation?.id as string | undefined;
@@ -250,9 +261,14 @@ export async function POST(request: Request) {
           .insert({
             business_id: businessId,
             customer_id: customer.id,
-            customer_name: customer.name,
-            customer_phone: customer.phone,
-            customer_image_url: customer.image_url,
+            contact_type: contactType,
+            customer_name: isFromSecondary
+              ? `${cleanText(customer.secondary_contact_name) || "Secondary Contact"} (Secondary)`
+              : customer.name,
+            customer_phone: isFromSecondary
+              ? customer.secondary_contact_phone
+              : customer.phone,
+            customer_image_url: isFromSecondary ? null : customer.image_url,
             last_message_body: body,
             last_message_at: now,
             unread_count: 1,
