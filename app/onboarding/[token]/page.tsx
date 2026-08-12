@@ -110,6 +110,57 @@ type BrandingResponse = {
   error?: string;
 };
 
+// Vercel's serverless functions reject request bodies over ~4.5MB before
+// our code ever runs, returning a plain-text/HTML error instead of JSON —
+// which crashes the browser's response.json() with a cryptic parse error
+// ("The string did not match the expected pattern") rather than a clean,
+// readable message. Compressing photos client-side (and capping
+// non-image files, which can't be compressed) keeps real-world uploads
+// comfortably under that limit.
+const MAX_IMAGE_DIMENSION = 1600; // px, longest side
+const IMAGE_JPEG_QUALITY = 0.82;
+const MAX_NON_IMAGE_FILE_BYTES = 4 * 1024 * 1024; // 4MB — e.g. PDFs
+
+async function compressImageFile(file: File): Promise<File> {
+  if (!file.type.startsWith("image/") || file.type === "image/gif") {
+    return file;
+  }
+
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(
+      1,
+      MAX_IMAGE_DIMENSION / Math.max(bitmap.width, bitmap.height),
+    );
+
+    // Already small — leave it alone rather than re-encoding for no gain.
+    if (scale >= 1 && file.size <= MAX_NON_IMAGE_FILE_BYTES) return file;
+
+    const targetWidth = Math.max(1, Math.round(bitmap.width * scale));
+    const targetHeight = Math.max(1, Math.round(bitmap.height * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.drawImage(bitmap, 0, 0, targetWidth, targetHeight);
+
+    const blob: Blob | null = await new Promise((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", IMAGE_JPEG_QUALITY),
+    );
+
+    if (!blob) return file;
+
+    const compressedName = file.name.replace(/\.[^.]+$/, "") + ".jpg";
+    return new File([blob], compressedName, { type: "image/jpeg" });
+  } catch {
+    // If compression fails for any reason (unsupported format, etc.),
+    // fall back to the original file rather than blocking the upload.
+    return file;
+  }
+}
+
 const emptyPet = (): PetForm => ({
   pet_name: "",
   breed: "",
@@ -156,6 +207,8 @@ export default function OnboardingTokenPage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [fileError, setFileError] = useState("");
+  const [compressingFile, setCompressingFile] = useState(false);
 
   const [form, setForm] = useState({
     owner_first_name: "",
@@ -359,10 +412,30 @@ export default function OnboardingTokenPage() {
     return petRecordExpiries[`${petIndex}:${typeId}`] ?? "";
   }
 
-  function addPetRecord(petIndex: number, documentType: string, file: File) {
+  async function addPetRecord(petIndex: number, documentType: string, file: File) {
+    setFileError("");
+
+    const isImage = file.type.startsWith("image/");
+
+    if (!isImage && file.size > MAX_NON_IMAGE_FILE_BYTES) {
+      setFileError(
+        `"${file.name}" is ${(file.size / (1024 * 1024)).toFixed(1)}MB, which is too large to upload. Please choose a file under 4MB.`,
+      );
+      return;
+    }
+
+    setCompressingFile(true);
+    const processedFile = isImage ? await compressImageFile(file) : file;
+    setCompressingFile(false);
+
     setPetRecords((prev) => [
       ...prev,
-      { id: crypto.randomUUID(), pet_index: petIndex, document_type: documentType, file },
+      {
+        id: crypto.randomUUID(),
+        pet_index: petIndex,
+        document_type: documentType,
+        file: processedFile,
+      },
     ]);
   }
 
@@ -622,6 +695,16 @@ export default function OnboardingTokenPage() {
             ? "Upload the required documents for this pet."
             : "Upload rabies certificates, vaccine records, vet notes, or PDFs."}
         </p>
+        {compressingFile && (
+          <p className="mt-2 text-xs text-[var(--text-secondary)]">
+            Preparing photo for upload…
+          </p>
+        )}
+        {fileError && (
+          <p className="mt-2 text-xs font-medium text-[var(--error-rose)]">
+            {fileError}
+          </p>
+        )}
 
         {hasCustomTypes ? (
           <div className="mt-4 space-y-4">
@@ -893,7 +976,21 @@ export default function OnboardingTokenPage() {
         body: formData,
       });
 
-      const result = await response.json();
+      // A response can fail to be JSON for reasons that never reach our own
+      // error handling — e.g. the platform rejecting an oversized upload
+      // before it hits this route at all. Parse defensively so that shows
+      // up as a clear message instead of a raw browser parse exception.
+      const rawBody = await response.text();
+      let result: { error?: string } = {};
+      try {
+        result = rawBody ? JSON.parse(rawBody) : {};
+      } catch {
+        throw new Error(
+          response.status === 413
+            ? "Your upload is too large. Try a smaller photo or PDF and submit again."
+            : `Something went wrong submitting the form (error ${response.status}). Please try again with a smaller photo/PDF, or contact your groomer if it keeps happening.`,
+        );
+      }
 
       if (!response.ok) {
         throw new Error(result.error || "Failed to submit onboarding form.");
