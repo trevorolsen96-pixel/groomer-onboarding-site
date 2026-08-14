@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sendSms } from "@/lib/telnyx";
+import { normalizeSmsText } from "@/lib/sms-text";
+import { logOutboundSmsToConversation, logOutboundSmsUsageOnly } from "@/lib/sms-conversation-log";
 
 export async function POST(req: NextRequest) {
   const { requestId, status, clientPhone, businessId: directBusinessId, customerId } = await req.json();
@@ -27,10 +29,45 @@ export async function POST(req: NextRequest) {
     if (!from) return NextResponse.json({ ok: true, skipped: "no_sender_number" });
 
     const businessName = (settings?.business_name as string | null) ?? "Your groomer";
-    const text = `Welcome to ${businessName}! Your profile is set up and you're ready to book. We look forward to seeing your pup!`;
+    const text = normalizeSmsText(
+      `Welcome to ${businessName}! Your profile is set up and you're ready to book. We look forward to seeing your pup!`
+    );
 
     try {
       await sendSms({ from, to: phone, text });
+
+      // Log it against the client's conversation (and therefore the credit
+      // ledger) if their customer record already exists by now -- it
+      // usually does, since this fires right after onboarding creates one.
+      // Best-effort: a lookup/logging failure should never surface as a
+      // failed welcome text, since the SMS itself already went out.
+      try {
+        const { data: matchedCustomer } = await supabaseAdmin
+          .from("customers")
+          .select("id, name, phone, image_url")
+          .eq("business_id", directBusinessId)
+          .eq("phone", phone)
+          .maybeSingle();
+
+        if (matchedCustomer) {
+          await logOutboundSmsToConversation({
+            businessId: directBusinessId,
+            customerId: matchedCustomer.id,
+            customerName: matchedCustomer.name,
+            customerPhone: matchedCustomer.phone,
+            customerImageUrl: matchedCustomer.image_url,
+            body: text,
+          });
+        } else {
+          await logOutboundSmsUsageOnly({
+            businessId: directBusinessId,
+            body: text,
+            eventType: "onboarding_welcome",
+          });
+        }
+      } catch (usageLogError) {
+        console.error("Failed to log welcome SMS usage:", usageLogError);
+      }
     } catch (err) {
       console.error("SMS send failed:", err);
     }
@@ -40,7 +77,7 @@ export async function POST(req: NextRequest) {
   // Load the booking request
   const { data: request, error: reqError } = await supabaseAdmin
     .from("booking_requests")
-    .select("client_phone, client_name, requested_date, requested_time, rescheduled_date, rescheduled_time, business_id, groomer_note")
+    .select("client_phone, client_name, requested_date, requested_time, rescheduled_date, rescheduled_time, business_id, groomer_note, customer_id")
     .eq("id", requestId)
     .maybeSingle();
 
@@ -95,13 +132,42 @@ export async function POST(req: NextRequest) {
   let text: string;
 
   if (status === "approved") {
-    text = `Hi ${firstName}! Your grooming appt with ${businessName} is confirmed for ${dateStr}${timeStr}. See you then!`;
+    text = normalizeSmsText(
+      `Hi ${firstName}! Your grooming appt with ${businessName} is confirmed for ${dateStr}${timeStr}. See you then!`
+    );
   } else {
-    text = `Hi ${firstName}, ${businessName} can't confirm your grooming request for ${dateStr}. Please reach out to reschedule.`;
+    text = normalizeSmsText(
+      `Hi ${firstName}, ${businessName} can't confirm your grooming request for ${dateStr}. Please reach out to reschedule.`
+    );
   }
 
   try {
     await sendSms({ from, to: phone, text });
+
+    // Same best-effort logging as the welcome text above -- counts toward
+    // credits either way, and shows in Messages when we know the customer.
+    try {
+      const resolvedCustomerId = (request.customer_id as string | null) ?? customerId ?? null;
+
+      if (resolvedCustomerId) {
+        await logOutboundSmsToConversation({
+          businessId: request.business_id as string,
+          customerId: resolvedCustomerId,
+          customerName: (request.client_name as string | null) ?? "Client",
+          customerPhone: phone,
+          body: text,
+        });
+      } else {
+        await logOutboundSmsUsageOnly({
+          businessId: request.business_id as string,
+          body: text,
+          eventType: `booking_${status}`,
+        });
+      }
+    } catch (usageLogError) {
+      console.error("Failed to log booking notification SMS usage:", usageLogError);
+    }
+
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("SMS send failed:", err);

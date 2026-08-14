@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sendSms } from "@/lib/telnyx";
+import { normalizeSmsText } from "@/lib/sms-text";
+import { logOutboundSmsUsageOnly } from "@/lib/sms-conversation-log";
 
 function cleanText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -74,11 +76,25 @@ export async function POST(request: NextRequest) {
 
     const fromPhone = normalizePhone(smsSetup.phone_number);
 
-    await sendSms({
-      from: fromPhone,
-      to: toPhone,
-      text: `Hi ${staffName || "there"}, you have been invited to join Wagzly. Create your staff account here: ${inviteLink}`,
-    });
+    const text = normalizeSmsText(
+      `Hi ${staffName || "there"}, you have been invited to join Wagzly. Create your staff account here: ${inviteLink}`
+    );
+
+    const providerMessageId = await sendSms({ from: fromPhone, to: toPhone, text });
+
+    // No customer on the other end of a staff invite, so there's no
+    // conversation to attach it to -- log straight to the credit ledger
+    // instead (best-effort; the invite already sent successfully either way).
+    try {
+      await logOutboundSmsUsageOnly({
+        businessId,
+        body: text,
+        eventType: "staff_invite",
+        providerMessageId,
+      });
+    } catch (usageLogError) {
+      console.error("Failed to log staff invite SMS usage:", usageLogError);
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {

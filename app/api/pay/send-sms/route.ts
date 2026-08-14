@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "../../../../lib/supabase-admin";
 import { sendSms } from "../../../../lib/telnyx";
+import { normalizeSmsText } from "../../../../lib/sms-text";
+import { logOutboundSmsToConversation } from "../../../../lib/sms-conversation-log";
 
 function normalizePhone(value: string): string {
   const digits = value.replace(/\D/g, "");
@@ -68,7 +70,7 @@ export async function POST(request: Request) {
 
     const { data: customer } = await supabaseAdmin
       .from("customers")
-      .select("phone")
+      .select("name, phone, image_url")
       .eq("id", appointment.customer_id)
       .maybeSingle();
 
@@ -80,9 +82,25 @@ export async function POST(request: Request) {
     const toPhone = normalizePhone(customer.phone);
 
     // Keep message under 160 chars (1 SMS segment)
-    const message = `Your grooming payment is ready. Pay securely: ${paymentUrl}`;
+    const message = normalizeSmsText(`Your grooming payment is ready. Pay securely: ${paymentUrl}`);
 
     await sendSms({ from: fromPhone, to: toPhone, text: message });
+
+    // Best-effort: log it to the customer's Messages thread + credit ledger,
+    // same treatment as every other outbound text. Never blocks the actual
+    // response -- the payment link already sent successfully either way.
+    try {
+      await logOutboundSmsToConversation({
+        businessId,
+        customerId: appointment.customer_id as string,
+        customerName: (customer.name as string | null) ?? "Client",
+        customerPhone: customer.phone,
+        customerImageUrl: customer.image_url,
+        body: message,
+      });
+    } catch (usageLogError) {
+      console.error("Failed to log payment SMS usage:", usageLogError);
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {

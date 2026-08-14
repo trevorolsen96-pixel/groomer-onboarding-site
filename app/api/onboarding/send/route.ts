@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sendSms } from "@/lib/telnyx";
 import { normalizeSmsText, smsSegments } from "@/lib/sms-text";
+import { logOutboundSmsUsageOnly } from "@/lib/sms-conversation-log";
 
 function cleanText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -141,6 +142,21 @@ export async function POST(request: Request) {
       to_phone: toPhone,
       created_at: now,
     });
+
+    // This invite usually goes to a brand-new prospect who has no customer
+    // record yet, so there's no conversation to attach it to -- log it
+    // straight to the credit ledger instead so it still counts (best-effort;
+    // the SMS itself already sent successfully either way).
+    try {
+      await logOutboundSmsUsageOnly({
+        businessId,
+        body: messageBody,
+        eventType: "onboarding_invite",
+        providerMessageId,
+      });
+    } catch (usageLogError) {
+      console.error("Failed to log onboarding invite SMS usage:", usageLogError);
+    }
 
     return NextResponse.json({ ok: true, providerMessageId });
   } catch (error) {
