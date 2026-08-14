@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "../../../../lib/supabase-admin";
+import { sendSms } from "../../../../lib/telnyx";
 import { normalizeSmsText, smsSegments } from "../../../../lib/sms-text";
+import { logOutboundSmsToConversation } from "../../../../lib/sms-conversation-log";
 
 type SmsAction =
   | "schedule_reminder"
@@ -90,37 +92,73 @@ async function deletePendingAppointmentReminders({
     .eq("status", "pending");
 }
 
-async function queueImmediateSms({
+// Sends an appointment-related text right now, synchronously -- as opposed
+// to a *reminder*, which genuinely needs to fire at a future time and stays
+// on the sms_outbound_queue + 5-minute cron. Confirmations, reschedules,
+// cancellations, and review requests were previously routed through that
+// same queue for simplicity, but that meant something meant to be
+// immediate could sit for up to 5 minutes waiting on the next cron sweep --
+// noticeably slower than a manually-typed message, which already sends
+// synchronously. This brings those in line with manual sends, and as a
+// bonus surfaces a real Telnyx failure back to the app immediately instead
+// of silently marking a queue row "failed" after the app already thinks it
+// succeeded.
+async function sendImmediateSms({
   businessId,
   customerId,
+  customerName,
+  customerPhone,
+  customerImageUrl,
   appointmentId,
   messageType,
+  fromPhone,
   toPhone,
   message,
 }: {
   businessId: string;
   customerId: string;
+  customerName: string;
+  customerPhone: string;
+  customerImageUrl?: string | null;
   appointmentId: string;
   messageType: string;
+  fromPhone: string;
   toPhone: string;
   message: string;
-}) {
-  const now = new Date().toISOString();
+}): Promise<string> {
+  const providerMessageId = await sendSms({ from: fromPhone, to: toPhone, text: message });
 
-  await supabaseAdmin.from("sms_outbound_queue").insert({
+  const nowIso = new Date().toISOString();
+
+  await supabaseAdmin.from("sms_events").insert({
     business_id: businessId,
-    customer_id: customerId,
     appointment_id: appointmentId,
-    message_type: messageType,
-    rule_type: "immediate",
+    customer_id: customerId,
+    direction: "outbound",
+    event_type: messageType,
+    message_body: message,
+    from_phone: fromPhone,
     to_phone: toPhone,
-    body_rendered: message,
-    scheduled_for_utc: now,
-    status: "pending",
-    dedupe_key: `${appointmentId}:${messageType}:${Date.now()}`,
-    attempt_count: 0,
-    updated_at: now,
+    created_at: nowIso,
   });
+
+  // Best-effort: log to the customer's Messages thread + credit ledger.
+  // Never blocks the caller -- the SMS itself already sent successfully
+  // by the time this runs.
+  try {
+    await logOutboundSmsToConversation({
+      businessId,
+      customerId,
+      customerName,
+      customerPhone,
+      customerImageUrl,
+      body: message,
+    });
+  } catch (usageLogError) {
+    console.error(`Failed to log ${messageType} SMS usage:`, usageLogError);
+  }
+
+  return providerMessageId;
 }
 
 async function upsertAppointmentReminder({
@@ -494,11 +532,15 @@ export async function POST(request: Request) {
 
       await assertSmsCreditsAvailable(businessId, segments);
 
-      await queueImmediateSms({
+      await sendImmediateSms({
         businessId,
         customerId: customer.id,
+        customerName: customer.name,
+        customerPhone: customer.phone,
+        customerImageUrl: customer.image_url,
         appointmentId,
         messageType: "appointment_reschedule",
+        fromPhone: smsSetup.phone_number,
         toPhone,
         message,
       });
@@ -530,7 +572,7 @@ export async function POST(request: Request) {
 
       return NextResponse.json({
         ok: true,
-        status: "queued",
+        status: "sent",
         reminderStatus: reminderResult.status,
         queuedCount: reminderResult.queuedCount,
       });
@@ -550,18 +592,22 @@ export async function POST(request: Request) {
 
       await deletePendingAppointmentReminders({ businessId, appointmentId });
 
-      await queueImmediateSms({
+      await sendImmediateSms({
         businessId,
         customerId: customer.id,
+        customerName: customer.name,
+        customerPhone: customer.phone,
+        customerImageUrl: customer.image_url,
         appointmentId,
         messageType: "appointment_cancellation",
+        fromPhone: smsSetup.phone_number,
         toPhone,
         message,
       });
 
       return NextResponse.json({
         ok: true,
-        status: "queued",
+        status: "sent",
         reminderStatus: "cancelled",
       });
     }
@@ -576,16 +622,20 @@ export async function POST(request: Request) {
       const segments = smsSegments(message);
       await assertSmsCreditsAvailable(businessId, segments);
 
-      await queueImmediateSms({
+      await sendImmediateSms({
         businessId,
         customerId: customer.id,
+        customerName: customer.name,
+        customerPhone: customer.phone,
+        customerImageUrl: customer.image_url,
         appointmentId,
         messageType: "appointment_created",
+        fromPhone: smsSetup.phone_number,
         toPhone,
         message,
       });
 
-      return NextResponse.json({ ok: true, status: "queued" });
+      return NextResponse.json({ ok: true, status: "sent" });
     }
 
     if (action === "send_review_request") {
@@ -606,16 +656,20 @@ export async function POST(request: Request) {
       const segments = smsSegments(message);
       await assertSmsCreditsAvailable(businessId, segments);
 
-      await queueImmediateSms({
+      await sendImmediateSms({
         businessId,
         customerId: customer.id,
+        customerName: customer.name,
+        customerPhone: customer.phone,
+        customerImageUrl: customer.image_url,
         appointmentId,
         messageType: "review_request",
+        fromPhone: smsSetup.phone_number,
         toPhone,
         message,
       });
 
-      return NextResponse.json({ ok: true, status: "queued" });
+      return NextResponse.json({ ok: true, status: "sent" });
     }
 
     return NextResponse.json(
