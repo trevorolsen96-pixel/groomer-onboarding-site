@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "../../../../lib/supabase-admin";
 import { sendSms } from "../../../../lib/telnyx";
+import { normalizeSmsText, smsSegments, splitLongSmsMessage } from "../../../../lib/sms-text";
 
 const ATTACHMENT_BUCKET = "message-attachments";
 const ATTACHMENT_LINK_TTL_SECONDS = 72 * 60 * 60; // 72 hours
@@ -129,19 +130,13 @@ function normalizePhone(value: string) {
   return `+1${digits}`;
 }
 
-function smsSegmentsForText(body: string) {
-  return Math.max(1, Math.ceil(body.length / 160));
-}
-
 async function assertSmsCreditsAvailable({
   businessId,
-  body,
+  neededCredits,
 }: {
   businessId: string;
-  body: string;
+  neededCredits: number;
 }) {
-  const neededCredits = smsSegmentsForText(body);
-
   const { data, error } = await supabaseAdmin.rpc("get_sms_credit_summary", {
     p_business_id: businessId,
   });
@@ -250,11 +245,11 @@ export async function POST(request: Request) {
     }
 
     const fromPhone = normalizePhone(smsSetup.phone_number);
+    const now = () => new Date().toISOString();
 
-    let attachmentPath: string | null = null;
-    let attachmentExpiresAt: string | null = null;
-    let outgoingText = messageBody;
-
+    // Photo messages can't sensibly be split across two texts — validate
+    // the (normalized) caption + link fits in one message and send as a
+    // single outbound item, same as before.
     if (imageBase64) {
       const uploaded = await uploadMessageAttachment({
         businessId,
@@ -268,61 +263,121 @@ export async function POST(request: Request) {
         attachmentPath: uploaded.path,
       });
 
-      attachmentPath = uploaded.path;
-      attachmentExpiresAt = shortLink.expiresAt;
-      outgoingText = messageBody
-        ? `${messageBody}\n${shortLink.url}`
+      const cleanCaption = normalizeSmsText(messageBody);
+      const outgoingText = cleanCaption
+        ? `${cleanCaption}\n${shortLink.url}`
         : `Photo: ${shortLink.url}`;
+
+      if (smsSegments(outgoingText) > 10) {
+        return NextResponse.json(
+          {
+            error:
+              "Your photo caption is too long to send. Please shorten it and try again.",
+          },
+          { status: 400 }
+        );
+      }
+
+      await assertSmsCreditsAvailable({
+        businessId,
+        neededCredits: smsSegments(outgoingText),
+      });
+
+      const providerMessageId = await sendSms({
+        from: fromPhone,
+        to: toPhone,
+        text: outgoingText,
+      });
+
+      const nowIso = now();
+
+      await supabaseAdmin.from("message_items").insert({
+        business_id: businessId,
+        conversation_id: conversationId,
+        customer_id: customerId,
+        direction: "outbound",
+        body: outgoingText,
+        status: "sent",
+        provider: "telnyx",
+        created_at: nowIso,
+        attachment_path: uploaded.path,
+        attachment_expires_at: shortLink.expiresAt,
+        // Kept separately from `body` (which stores the literal text that
+        // went out over SMS, link included) so the app's own message
+        // history can show just the caption + a rendered image, without
+        // needing to parse the signed URL back out of the sent text.
+        attachment_caption: cleanCaption || null,
+      });
+
+      await supabaseAdmin
+        .from("message_conversations")
+        .update({ last_message_body: "📷 Photo", last_message_at: nowIso })
+        .eq("id", conversationId);
+
+      await supabaseAdmin.from("sms_events").insert({
+        business_id: businessId,
+        customer_id: customerId,
+        direction: "outbound",
+        event_type: "manual_message",
+        message_body: outgoingText,
+        from_phone: fromPhone,
+        to_phone: toPhone,
+        created_at: nowIso,
+      });
+
+      return NextResponse.json({ ok: true, providerMessageId });
     }
 
-    await assertSmsCreditsAvailable({ businessId, body: outgoingText });
+    // Plain text — clean up autocorrect typography, then send as one text
+    // if it fits, split into two if it's moderately over the limit, or
+    // reject with a clear reason if it's too long even for that.
+    const splitResult = splitLongSmsMessage(messageBody);
 
-    const providerMessageId = await sendSms({
-      from: fromPhone,
-      to: toPhone,
-      text: outgoingText,
-    });
+    if (splitResult.error) {
+      return NextResponse.json({ error: splitResult.error }, { status: 400 });
+    }
 
-    const now = new Date().toISOString();
+    const parts = splitResult.parts;
+    const totalCredits = parts.reduce((sum, part) => sum + smsSegments(part), 0);
 
-    await supabaseAdmin.from("message_items").insert({
-      business_id: businessId,
-      conversation_id: conversationId,
-      customer_id: customerId,
-      direction: "outbound",
-      body: outgoingText,
-      status: "sent",
-      provider: "telnyx",
-      created_at: now,
-      attachment_path: attachmentPath,
-      attachment_expires_at: attachmentExpiresAt,
-      // Kept separately from `body` (which stores the literal text that
-      // went out over SMS, link included) so the app's own message history
-      // can show just the caption + a rendered image, without needing to
-      // parse the signed URL back out of the sent text.
-      attachment_caption: attachmentPath ? messageBody || null : null,
-    });
+    await assertSmsCreditsAvailable({ businessId, neededCredits: totalCredits });
 
-    await supabaseAdmin
-      .from("message_conversations")
-      .update({
-        last_message_body: attachmentPath ? "📷 Photo" : outgoingText,
-        last_message_at: now,
-      })
-      .eq("id", conversationId);
+    let lastProviderMessageId: string | null = null;
 
-    await supabaseAdmin.from("sms_events").insert({
-      business_id: businessId,
-      customer_id: customerId,
-      direction: "outbound",
-      event_type: "manual_message",
-      message_body: outgoingText,
-      from_phone: fromPhone,
-      to_phone: toPhone,
-      created_at: now,
-    });
+    for (const part of parts) {
+      lastProviderMessageId = await sendSms({ from: fromPhone, to: toPhone, text: part });
 
-    return NextResponse.json({ ok: true, providerMessageId });
+      const nowIso = now();
+
+      await supabaseAdmin.from("message_items").insert({
+        business_id: businessId,
+        conversation_id: conversationId,
+        customer_id: customerId,
+        direction: "outbound",
+        body: part,
+        status: "sent",
+        provider: "telnyx",
+        created_at: nowIso,
+      });
+
+      await supabaseAdmin
+        .from("message_conversations")
+        .update({ last_message_body: part, last_message_at: nowIso })
+        .eq("id", conversationId);
+
+      await supabaseAdmin.from("sms_events").insert({
+        business_id: businessId,
+        customer_id: customerId,
+        direction: "outbound",
+        event_type: "manual_message",
+        message_body: part,
+        from_phone: fromPhone,
+        to_phone: toPhone,
+        created_at: nowIso,
+      });
+    }
+
+    return NextResponse.json({ ok: true, providerMessageId: lastProviderMessageId });
   } catch (error) {
     return NextResponse.json(
       {

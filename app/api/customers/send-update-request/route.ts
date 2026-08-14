@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sendSms } from "@/lib/telnyx";
+import { normalizeSmsText } from "@/lib/sms-text";
 
 function cleanText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -127,7 +128,9 @@ export async function POST(request: Request) {
     }
 
     const onboardingUrl = `https://www.wagzly.com/onboarding/${onboardingToken}`;
-    const smsText = `Hi ${customer.name.split(" ")[0] || "there"}, ${businessName} has sent you a link to update your client information. Please review and update here: ${onboardingUrl}`;
+    const smsText = normalizeSmsText(
+      `Hi ${customer.name.split(" ")[0] || "there"}, ${businessName} has sent you a link to update your client information. Please review and update here: ${onboardingUrl}`
+    );
 
     // Send SMS if available
     if (smsActive) {

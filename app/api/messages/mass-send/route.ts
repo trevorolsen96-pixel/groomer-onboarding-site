@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "../../../../lib/supabase-admin";
+import { smsSegments, splitLongSmsMessage } from "../../../../lib/sms-text";
 
 function cleanText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -13,8 +14,16 @@ function normalizePhone(value: string) {
   return null;
 }
 
-function smsSegments(body: string) {
-  return Math.max(1, Math.ceil(body.length / 160));
+// Total segments a single send of this message actually costs, accounting
+// for the auto-split into two texts when it's over the 10-segment limit
+// (10 + 10 always covers up to 20 — see lib/sms-text.ts).
+function totalSegmentsForMessage(messageBody: string): { segments: number; error?: string } {
+  if (!messageBody) return { segments: 1 };
+
+  const result = splitLongSmsMessage(messageBody);
+  if (result.error) return { segments: 0, error: result.error };
+
+  return { segments: result.parts.reduce((sum, part) => sum + smsSegments(part), 0) };
 }
 
 async function getAuth(request: Request) {
@@ -61,7 +70,7 @@ export async function GET(request: Request) {
     });
 
     const recipientCount = eligible.length;
-    const segments = messageBody ? smsSegments(messageBody) : 1;
+    const { segments, error: lengthError } = totalSegmentsForMessage(messageBody);
     const creditsNeeded = segments * recipientCount;
 
     // Get remaining credits
@@ -76,7 +85,9 @@ export async function GET(request: Request) {
       segments,
       creditsNeeded,
       remainingCredits,
-      canSend: remainingCredits >= creditsNeeded,
+      canSend: !lengthError && remainingCredits >= creditsNeeded,
+      error: lengthError,
+      willSplit: segments > 10,
     });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Error" }, { status: 500 });
@@ -136,8 +147,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No active clients with phone numbers found." }, { status: 400 });
     }
 
-    const segments = smsSegments(messageBody);
-    const creditsNeeded = segments * eligible.length;
+    // Clean up autocorrect typography, and split into two texts if needed
+    // (or reject outright if it's too long even for that) — same rule as
+    // a manually-typed 1:1 message.
+    const splitResult = splitLongSmsMessage(messageBody);
+
+    if (splitResult.error) {
+      return NextResponse.json({ error: splitResult.error }, { status: 400 });
+    }
+
+    const parts = splitResult.parts;
+    const segmentsPerRecipient = parts.reduce((sum, part) => sum + smsSegments(part), 0);
+    const creditsNeeded = segmentsPerRecipient * eligible.length;
 
     // Check credits — hard block
     const { data: creditData, error: creditError } = await supabaseAdmin.rpc("get_sms_credit_summary", {
@@ -158,21 +179,26 @@ export async function POST(request: Request) {
     const now = new Date().toISOString();
     const fromPhone = smsSetup.phone_number as string;
 
-    // Queue one SMS per customer
-    const queueRows = eligible.map((customer) => ({
-      business_id: businessId,
-      customer_id: customer.id,
-      appointment_id: null,
-      message_type: "mass_message",
-      rule_type: "immediate",
-      to_phone: customer.normalizedPhone,
-      body_rendered: messageBody,
-      scheduled_for_utc: now,
-      status: "pending",
-      dedupe_key: `mass:${businessId}:${customer.id}:${Date.now()}`,
-      attempt_count: 0,
-      updated_at: now,
-    }));
+    // Queue one row per (recipient, part) — a message that needed to split
+    // into 2 texts gets 2 queue rows per recipient, each sent independently
+    // by the same queue processor that already handles every other SMS
+    // type, so nothing downstream needs to know splitting happened at all.
+    const queueRows = eligible.flatMap((customer) =>
+      parts.map((part, partIndex) => ({
+        business_id: businessId,
+        customer_id: customer.id,
+        appointment_id: null,
+        message_type: "mass_message",
+        rule_type: "immediate",
+        to_phone: customer.normalizedPhone,
+        body_rendered: part,
+        scheduled_for_utc: now,
+        status: "pending",
+        dedupe_key: `mass:${businessId}:${customer.id}:${Date.now()}:${partIndex}`,
+        attempt_count: 0,
+        updated_at: now,
+      }))
+    );
 
     await supabaseAdmin.from("sms_outbound_queue").insert(queueRows);
 

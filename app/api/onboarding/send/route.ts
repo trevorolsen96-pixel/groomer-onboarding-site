@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sendSms } from "@/lib/telnyx";
+import { normalizeSmsText, smsSegments } from "@/lib/sms-text";
 
 function cleanText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -14,10 +15,6 @@ function normalizePhone(value: string) {
   return `+1${digits}`;
 }
 
-function smsSegmentsForText(body: string) {
-  return Math.max(1, Math.ceil(body.length / 160));
-}
-
 async function assertSmsCreditsAvailable({
   businessId,
   body,
@@ -25,7 +22,7 @@ async function assertSmsCreditsAvailable({
   businessId: string;
   body: string;
 }) {
-  const neededCredits = smsSegmentsForText(body);
+  const neededCredits = smsSegments(body);
 
   const { data, error } = await supabaseAdmin.rpc("get_sms_credit_summary", {
     p_business_id: businessId,
@@ -110,7 +107,9 @@ export async function POST(request: Request) {
     const businessName =
       cleanText(settingsRow?.business_name) || "your groomer";
 
-    const messageBody = `${businessName} sent you a secure Wagzly onboarding form. Please complete it here: ${link}`;
+    const messageBody = normalizeSmsText(
+      `${businessName} sent you a secure Wagzly onboarding form. Please complete it here: ${link}`
+    );
 
     await assertSmsCreditsAvailable({ businessId, body: messageBody });
 

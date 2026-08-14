@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "../../../../lib/supabase-admin";
+import { normalizeSmsText, smsSegments } from "../../../../lib/sms-text";
 
 type SmsAction =
   | "schedule_reminder"
@@ -186,6 +187,7 @@ async function upsertAppointmentReminder({
       `${petPossessive} grooming appt is ${appointmentDate}. ` +
       `Reply YES to confirm or NO to cancel.`;
   }
+  message = normalizeSmsText(message);
 
   const nowIso = new Date().toISOString();
   let queuedCount = 0;
@@ -235,12 +237,6 @@ async function upsertAppointmentReminder({
   }
 
   return { status: "refreshed", queuedCount };
-}
-
-function calculateSmsSegments(message: string) {
-  const length = message.trim().length;
-  if (length <= 0) return 1;
-  return Math.ceil(length / 160);
 }
 
 async function assertSmsCreditsAvailable(
@@ -492,8 +488,9 @@ export async function POST(request: Request) {
           `${petPossessive} grooming appt is now ${appointmentDate}. ` +
           `Reply YES to confirm or NO to cancel.`;
       }
+      message = normalizeSmsText(message);
 
-      const segments = calculateSmsSegments(message);
+      const segments = smsSegments(message);
 
       await assertSmsCreditsAvailable(businessId, segments);
 
@@ -541,12 +538,13 @@ export async function POST(request: Request) {
 
     if (action === "cancellation") {
       const appointmentDate = formatDateTime(appointmentDateTime, businessTimezone);
-      const message =
+      const message = normalizeSmsText(
         `Hi ${customerName}, this is ${businessName}. ` +
         `${petPossessive} grooming appt on ${appointmentDate} has been cancelled. ` +
-        `Questions? Reply here.`;
+        `Questions? Reply here.`
+      );
 
-      const segments = calculateSmsSegments(message);
+      const segments = smsSegments(message);
 
       await assertSmsCreditsAvailable(businessId, segments);
 
@@ -570,11 +568,12 @@ export async function POST(request: Request) {
 
     if (action === "appointment_created") {
       const createdApptDate = formatDateTime(appointmentDateTime, businessTimezone);
-      const message =
+      const message = normalizeSmsText(
         `Hi ${customerName}! ${petPossessive} grooming appointment with ${businessName} ` +
-        `is booked for ${createdApptDate}. We look forward to seeing you!`;
+        `is booked for ${createdApptDate}. We look forward to seeing you!`
+      );
 
-      const segments = calculateSmsSegments(message);
+      const segments = smsSegments(message);
       await assertSmsCreditsAvailable(businessId, segments);
 
       await queueImmediateSms({
@@ -599,11 +598,12 @@ export async function POST(request: Request) {
         );
       }
 
-      const message =
+      const message = normalizeSmsText(
         `Hi ${customerName}! Thanks for choosing ${businessName} today 🐾 ` +
-        `We'd love your feedback — ${reviewLink}. See you next time!`;
+        `We'd love your feedback — ${reviewLink}. See you next time!`
+      );
 
-      const segments = calculateSmsSegments(message);
+      const segments = smsSegments(message);
       await assertSmsCreditsAvailable(businessId, segments);
 
       await queueImmediateSms({

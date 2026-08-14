@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "../../../../lib/supabase-admin";
 import { sendSms } from "../../../../lib/telnyx";
-
-function smsSegmentsForText(body: string) {
-  return Math.max(1, Math.ceil(body.length / 160));
-}
+import { normalizeSmsText, smsSegments } from "../../../../lib/sms-text";
 
 async function assertSmsCreditsAvailable({
   businessId,
@@ -13,7 +10,7 @@ async function assertSmsCreditsAvailable({
   businessId: string;
   body: string;
 }) {
-  const neededCredits = smsSegmentsForText(body);
+  const neededCredits = smsSegments(body);
 
   const { data, error } = await supabaseAdmin.rpc("get_sms_credit_summary", {
     p_business_id: businessId,
@@ -50,7 +47,10 @@ export async function GET() {
 
     for (const row of queueRows ?? []) {
       try {
-        const messageBody = String(row.body_rendered ?? "").trim();
+        // Normalizing here (not just at each queue-writer) guarantees every
+        // send is cleaned up regardless of which route queued it — cheap
+        // and a no-op if the text is already plain ASCII.
+        const messageBody = normalizeSmsText(String(row.body_rendered ?? "").trim());
 
         if (!messageBody) {
           await supabaseAdmin
