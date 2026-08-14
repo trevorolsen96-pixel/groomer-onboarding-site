@@ -21,7 +21,7 @@ function totalSegmentsForMessage(messageBody: string): { segments: number; error
   if (!messageBody) return { segments: 1 };
 
   const result = splitLongSmsMessage(messageBody);
-  if (result.error) return { segments: 0, error: result.error };
+  if (!result.ok) return { segments: 0, error: result.error };
 
   return { segments: result.parts.reduce((sum, part) => sum + smsSegments(part), 0) };
 }
@@ -152,7 +152,7 @@ export async function POST(request: Request) {
     // a manually-typed 1:1 message.
     const splitResult = splitLongSmsMessage(messageBody);
 
-    if (splitResult.error) {
+    if (!splitResult.ok) {
       return NextResponse.json({ error: splitResult.error }, { status: 400 });
     }
 

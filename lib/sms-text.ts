@@ -97,9 +97,12 @@ export function smsSegments(rawText: string): number {
 export const MAX_SINGLE_MESSAGE_SEGMENTS = 10;
 export const MAX_TOTAL_SEGMENTS = 20;
 
+// A literal-tagged discriminated union (not an "optional property" shape)
+// so `if (!result.ok)` / `if (result.ok)` always narrows correctly in
+// TypeScript, with no ambiguity about whether `parts` is defined.
 export type SmsSplitResult =
-  | { parts: string[]; error?: undefined }
-  | { parts?: undefined; error: string };
+  | { ok: true; parts: string[] }
+  | { ok: false; error: string };
 
 function findWordBoundary(text: string, maxChars: number): number {
   if (text.length <= maxChars) return text.length;
@@ -124,11 +127,12 @@ export function splitLongSmsMessage(rawText: string): SmsSplitResult {
   const totalSegments = smsSegments(text);
 
   if (totalSegments <= MAX_SINGLE_MESSAGE_SEGMENTS) {
-    return { parts: [text] };
+    return { ok: true, parts: [text] };
   }
 
   if (totalSegments > MAX_TOTAL_SEGMENTS) {
     return {
+      ok: false,
       error: `This message is too long to send (about ${totalSegments} SMS segments). Please shorten it to about ${MAX_TOTAL_SEGMENTS} segments or fewer.`,
     };
   }
@@ -144,6 +148,7 @@ export function splitLongSmsMessage(rawText: string): SmsSplitResult {
 
   if (!firstHalf || !secondHalf) {
     return {
+      ok: false,
       error:
         "This message can't be split cleanly under the per-text segment limit. Please shorten it a bit and try again.",
     };
@@ -157,10 +162,11 @@ export function splitLongSmsMessage(rawText: string): SmsSplitResult {
     smsSegments(part2) > MAX_SINGLE_MESSAGE_SEGMENTS
   ) {
     return {
+      ok: false,
       error:
         "This message can't be split cleanly under the per-text segment limit. Please shorten it a bit and try again.",
     };
   }
 
-  return { parts: [part1, part2] };
+  return { ok: true, parts: [part1, part2] };
 }

@@ -333,7 +333,7 @@ export async function POST(request: Request) {
     // reject with a clear reason if it's too long even for that.
     const splitResult = splitLongSmsMessage(messageBody);
 
-    if (splitResult.error) {
+    if (!splitResult.ok) {
       return NextResponse.json({ error: splitResult.error }, { status: 400 });
     }
 
