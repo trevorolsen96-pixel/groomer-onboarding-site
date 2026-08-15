@@ -248,7 +248,7 @@ export async function GET(
 
       const { data: pets } = await supabaseAdmin
         .from("pets")
-        .select("id, name, breed, age, weight, sex, pet_type, temperament")
+        .select("id, name, breed, age, birthday, weight, sex, pet_type, temperament")
         .eq("customer_id", requestRow.customer_id)
         .eq("is_active", true)
         .order("created_at");
@@ -335,6 +335,7 @@ export async function GET(
             pet_name: p.name ?? "",
             breed: p.breed ?? "",
             age: p.age ?? "",
+            birthday: p.birthday ?? "",
             weight_lbs: p.weight ?? "",
             sex: p.sex ?? "",
             pet_type: p.pet_type ?? "",
@@ -657,6 +658,8 @@ if (requiredRecordTypes.length > 0) {
           name: (pet as any).pet_name?.trim() || "",
           breed: (pet as any).breed?.trim() || "",
           age: (pet as any).age?.trim() || "",
+          // Date column -- empty string isn't valid, use null instead.
+          birthday: (pet as any).birthday?.trim() || null,
           weight: (pet as any).weight_lbs?.trim() || "",
           sex: (pet as any).sex?.trim() || "",
           pet_type: (pet as any).pet_type?.trim() || "",

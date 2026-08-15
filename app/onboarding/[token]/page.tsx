@@ -8,6 +8,9 @@ type PetForm = {
   pet_name: string;
   breed: string;
   age: string;
+  // Optional. When set, this becomes the source of truth for age in the
+  // app (computed live), rather than the free-text age field above.
+  birthday: string; // "YYYY-MM-DD" or ""
   weight_lbs: string;
   sex: string;
   pet_type: string;
@@ -166,11 +169,30 @@ const emptyPet = (): PetForm => ({
   pet_name: "",
   breed: "",
   age: "",
+  birthday: "",
   weight_lbs: "",
   sex: "",
   pet_type: "",
   temperament: "",
 });
+
+// "3 yr 4 mo" / "3 yr" / "7 mo" -- mirrors Pet.computeAgeFromBirthday in
+// the Flutter app so the age shown here matches what the app will show.
+function computeAgeFromBirthday(birthday: string): string {
+  const parsed = new Date(`${birthday}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return "";
+
+  const now = new Date();
+  let totalMonths = (now.getFullYear() - parsed.getFullYear()) * 12 + (now.getMonth() - parsed.getMonth());
+  if (now.getDate() < parsed.getDate()) totalMonths -= 1;
+  if (totalMonths < 0) totalMonths = 0;
+
+  if (totalMonths < 12) return `${totalMonths} mo`;
+
+  const years = Math.floor(totalMonths / 12);
+  const remainderMonths = totalMonths % 12;
+  return remainderMonths === 0 ? `${years} yr` : `${years} yr ${remainderMonths} mo`;
+}
 
 function buildEmptyAnswers(questions: OnboardingQuestion[]): QuestionAnswer[] {
   return questions.map((question) => ({
@@ -337,6 +359,21 @@ export default function OnboardingTokenPage() {
     setPets((prev) => {
       const next = [...prev];
       next[index] = { ...next[index], [key]: value };
+      return next;
+    });
+  }
+
+  // Setting a birthday also auto-fills (and keeps) Age in sync with it --
+  // same behavior as the app's pet editor. Clearing the birthday leaves
+  // whatever Age was last computed, editable again.
+  function updatePetBirthday(index: number, value: string) {
+    setPets((prev) => {
+      const next = [...prev];
+      next[index] = {
+        ...next[index],
+        birthday: value,
+        age: value ? computeAgeFromBirthday(value) : next[index].age,
+      };
       return next;
     });
   }
@@ -1159,7 +1196,23 @@ export default function OnboardingTokenPage() {
                   <div className="grid gap-4 sm:grid-cols-2">
                     <input placeholder="Pet name" value={pet.pet_name} onChange={(e) => updatePetField(index, "pet_name", e.target.value)} required />
                     <input placeholder="Breed" value={pet.breed} onChange={(e) => updatePetField(index, "breed", e.target.value)} required />
-                    <input placeholder="Age" value={pet.age} onChange={(e) => updatePetField(index, "age", e.target.value)} required />
+                    <input
+                      placeholder="Age"
+                      value={pet.age}
+                      onChange={(e) => updatePetField(index, "age", e.target.value)}
+                      readOnly={!!pet.birthday}
+                      title={pet.birthday ? "Computed from birthday" : undefined}
+                      required
+                    />
+                    <label className="flex flex-col gap-1 text-sm text-[var(--text-secondary)]">
+                      Birthday (optional)
+                      <input
+                        type="date"
+                        value={pet.birthday}
+                        max={new Date().toISOString().split("T")[0]}
+                        onChange={(e) => updatePetBirthday(index, e.target.value)}
+                      />
+                    </label>
                     <input placeholder="Weight (lbs)" type="number" min="0" step="0.1" value={pet.weight_lbs} onChange={(e) => updatePetField(index, "weight_lbs", e.target.value)} required />
                     <select value={pet.pet_type} onChange={(e) => updatePetField(index, "pet_type", e.target.value)} required>
                       <option value="">Select pet type</option>
