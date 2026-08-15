@@ -30,10 +30,11 @@ type ThemeStyle = {
   textSecondary: string;
   chipBackground: string;
   chipText: string;
-  // Small decorative touch shown next to the business name -- kept
-  // subtle (one emoji, not an illustrated background) so it reads as
-  // festive without needing real design iteration to get right.
+  // Small decorative touch shown next to the business name.
   accentEmoji?: string;
+  // 2-3 icons cycled through for the scattered background splash --
+  // falls back to [accentEmoji] if not set.
+  decorEmojis?: string[];
 };
 
 const THEMES: Record<string, ThemeStyle> = {
@@ -46,6 +47,8 @@ const THEMES: Record<string, ThemeStyle> = {
     textSecondary: "#7a6b74",
     chipBackground: "#f7e6ec",
     chipText: "#8a5a6c",
+    accentEmoji: "🐾",
+    decorEmojis: ["🐾", "✨"],
   },
   new_years: {
     background: "linear-gradient(160deg, #f5eeda 0%, #faf5e8 55%, #fffbf0 100%)",
@@ -57,6 +60,7 @@ const THEMES: Record<string, ThemeStyle> = {
     chipBackground: "#ecd9a0",
     chipText: "#8a6f10",
     accentEmoji: "🎉",
+    decorEmojis: ["🎉", "✨", "🥂"],
   },
   st_patricks_day: {
     background: "linear-gradient(160deg, #dcf0d8 0%, #eef8ec 55%, #f8fdf6 100%)",
@@ -68,6 +72,7 @@ const THEMES: Record<string, ThemeStyle> = {
     chipBackground: "#c8e8c0",
     chipText: "#1f6b2a",
     accentEmoji: "☘️",
+    decorEmojis: ["☘️", "🍀"],
   },
   memorial_day: {
     background: "linear-gradient(160deg, #e6e9f0 0%, #f0f2f7 55%, #f9fafc 100%)",
@@ -79,6 +84,7 @@ const THEMES: Record<string, ThemeStyle> = {
     chipBackground: "#d3d8e6",
     chipText: "#3f4a66",
     accentEmoji: "🎖️",
+    decorEmojis: ["🎖️", "⭐"],
   },
   halloween: {
     background: "linear-gradient(160deg, #ffe0c2 0%, #fff0dc 55%, #fff8f0 100%)",
@@ -90,6 +96,7 @@ const THEMES: Record<string, ThemeStyle> = {
     chipBackground: "#f7d3ad",
     chipText: "#8a3d0f",
     accentEmoji: "🎃",
+    decorEmojis: ["🎃", "🦇", "👻"],
   },
   thanksgiving: {
     background: "linear-gradient(160deg, #f3e3d0 0%, #f8ede0 55%, #fdf7f0 100%)",
@@ -101,6 +108,7 @@ const THEMES: Record<string, ThemeStyle> = {
     chipBackground: "#e8cfb0",
     chipText: "#7a4a24",
     accentEmoji: "🍂",
+    decorEmojis: ["🍂", "🍁", "🦃"],
   },
   winter_holiday: {
     background: "linear-gradient(160deg, #f7e3e3 0%, #fbeeee 55%, #fdf7f5 100%)",
@@ -112,6 +120,7 @@ const THEMES: Record<string, ThemeStyle> = {
     chipBackground: "#d7e8d9",
     chipText: "#2f6b4f",
     accentEmoji: "❄️",
+    decorEmojis: ["❄️", "✨"],
   },
   valentines_day: {
     background: "linear-gradient(160deg, #fbe1ea 0%, #fdedf2 55%, #fef7fa 100%)",
@@ -123,6 +132,7 @@ const THEMES: Record<string, ThemeStyle> = {
     chipBackground: "#f8d3e0",
     chipText: "#c23864",
     accentEmoji: "💕",
+    decorEmojis: ["💕", "💗"],
   },
   july_fourth: {
     background: "linear-gradient(160deg, #dde6f5 0%, #eef2fa 55%, #f8fafd 100%)",
@@ -134,8 +144,32 @@ const THEMES: Record<string, ThemeStyle> = {
     chipBackground: "#cdd8ef",
     chipText: "#2a4488",
     accentEmoji: "⭐",
+    decorEmojis: ["⭐", "🎆"],
   },
 };
+
+// Fixed scatter layout (percentage-based position, rotation, size, opacity)
+// for the background splash -- reused across every theme so only the
+// emoji + color change, not the composition. Enough spread to read as a
+// full background, not just a couple of corner accents.
+const SPLASH_POSITIONS: Array<{
+  top: string;
+  left: string;
+  rotate: number;
+  remSize: number;
+  opacity: number;
+}> = [
+  { top: "4%", left: "6%", rotate: -18, remSize: 3.2, opacity: 0.16 },
+  { top: "8%", left: "82%", rotate: 15, remSize: 2.6, opacity: 0.14 },
+  { top: "24%", left: "-2%", rotate: 8, remSize: 2.2, opacity: 0.12 },
+  { top: "20%", left: "94%", rotate: -12, remSize: 3, opacity: 0.15 },
+  { top: "42%", left: "4%", rotate: 22, remSize: 2, opacity: 0.13 },
+  { top: "48%", left: "90%", rotate: -20, remSize: 2.8, opacity: 0.14 },
+  { top: "65%", left: "-1%", rotate: 12, remSize: 2.4, opacity: 0.12 },
+  { top: "70%", left: "88%", rotate: -8, remSize: 2.6, opacity: 0.13 },
+  { top: "85%", left: "10%", rotate: 18, remSize: 2.2, opacity: 0.15 },
+  { top: "90%", left: "78%", rotate: -15, remSize: 3, opacity: 0.12 },
+];
 
 function themeFor(key: string): ThemeStyle {
   return THEMES[key] ?? THEMES.wagzly_classic;
@@ -235,32 +269,52 @@ export default function ReportCardPage() {
   const theme = themeFor(report.theme);
   const expiryText = formatExpiry(report.expires_at);
   const hasBothPhotos = report.before_photo_url && report.after_photo_url;
+  const decorEmojis = theme.decorEmojis ?? (theme.accentEmoji ? [theme.accentEmoji] : []);
 
   return (
     <div
       style={{ background: theme.background }}
       className="relative min-h-screen overflow-hidden px-4 py-10 sm:px-6"
     >
-      {/* Large, low-opacity accent emoji floating in the page background --
-          a subtle "wallpaper" touch behind the card rather than an
-          illustrated background, which would need real design iteration
-          to get right. Hidden entirely on the evergreen default theme. */}
-      {theme.accentEmoji ? (
-        <>
+      {/* Soft blurred color blobs behind everything -- gives the
+          background real depth/"splash" instead of a flat gradient. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full sm:h-96 sm:w-96"
+        style={{ backgroundColor: theme.accent, opacity: 0.16, filter: "blur(70px)" }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -bottom-32 -right-16 h-80 w-80 rounded-full sm:h-[26rem] sm:w-[26rem]"
+        style={{ backgroundColor: theme.accent, opacity: 0.14, filter: "blur(90px)" }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute right-1/4 top-1/3 h-56 w-56 rounded-full"
+        style={{ backgroundColor: theme.accentSoft, opacity: 0.22, filter: "blur(60px)" }}
+      />
+
+      {/* Scattered themed icons across the whole page -- the actual
+          "splash art" -- cycling through each theme's 2-3 decorEmojis at
+          fixed positions/rotations/opacities so it reads as an organic
+          background pattern rather than a repeated grid. */}
+      {decorEmojis.length > 0 &&
+        SPLASH_POSITIONS.map((pos, index) => (
           <div
+            key={index}
             aria-hidden
-            className="pointer-events-none absolute -left-6 -top-6 select-none text-[7rem] leading-none opacity-[0.12] sm:text-[9rem]"
+            className="pointer-events-none absolute select-none leading-none"
+            style={{
+              top: pos.top,
+              left: pos.left,
+              fontSize: `${pos.remSize}rem`,
+              opacity: pos.opacity,
+              transform: `rotate(${pos.rotate}deg)`,
+            }}
           >
-            {theme.accentEmoji}
+            {decorEmojis[index % decorEmojis.length]}
           </div>
-          <div
-            aria-hidden
-            className="pointer-events-none absolute -right-6 top-16 select-none text-[6rem] leading-none opacity-[0.10] sm:text-[8rem]"
-          >
-            {theme.accentEmoji}
-          </div>
-        </>
-      ) : null}
+        ))}
 
       <div className="relative mx-auto max-w-lg">
         {/* Business header */}
