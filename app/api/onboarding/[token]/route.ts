@@ -248,7 +248,7 @@ export async function GET(
 
       const { data: pets } = await supabaseAdmin
         .from("pets")
-        .select("id, name, breed, age, weight, sex, temperament")
+        .select("id, name, breed, age, weight, sex, pet_type, temperament")
         .eq("customer_id", requestRow.customer_id)
         .eq("is_active", true)
         .order("created_at");
@@ -337,6 +337,7 @@ export async function GET(
             age: p.age ?? "",
             weight_lbs: p.weight ?? "",
             sex: p.sex ?? "",
+            pet_type: p.pet_type ?? "",
             temperament: p.temperament ?? "",
           })),
         };
@@ -658,6 +659,7 @@ if (requiredRecordTypes.length > 0) {
           age: (pet as any).age?.trim() || "",
           weight: (pet as any).weight_lbs?.trim() || "",
           sex: (pet as any).sex?.trim() || "",
+          pet_type: (pet as any).pet_type?.trim() || "",
           temperament: (pet as any).temperament?.trim() || "",
         };
 

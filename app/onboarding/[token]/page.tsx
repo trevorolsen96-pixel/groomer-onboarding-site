@@ -10,6 +10,7 @@ type PetForm = {
   age: string;
   weight_lbs: string;
   sex: string;
+  pet_type: string;
   temperament: string;
 };
 
@@ -167,6 +168,7 @@ const emptyPet = (): PetForm => ({
   age: "",
   weight_lbs: "",
   sex: "",
+  pet_type: "",
   temperament: "",
 });
 
@@ -1159,6 +1161,12 @@ export default function OnboardingTokenPage() {
                     <input placeholder="Breed" value={pet.breed} onChange={(e) => updatePetField(index, "breed", e.target.value)} required />
                     <input placeholder="Age" value={pet.age} onChange={(e) => updatePetField(index, "age", e.target.value)} required />
                     <input placeholder="Weight (lbs)" type="number" min="0" step="0.1" value={pet.weight_lbs} onChange={(e) => updatePetField(index, "weight_lbs", e.target.value)} required />
+                    <select value={pet.pet_type} onChange={(e) => updatePetField(index, "pet_type", e.target.value)} required>
+                      <option value="">Select pet type</option>
+                      <option value="dog">Dog</option>
+                      <option value="cat">Cat</option>
+                      <option value="other">Other</option>
+                    </select>
                     <select value={pet.sex} onChange={(e) => updatePetField(index, "sex", e.target.value)} required>
                       <option value="">Select sex</option>
                       <option value="male">Male</option>
