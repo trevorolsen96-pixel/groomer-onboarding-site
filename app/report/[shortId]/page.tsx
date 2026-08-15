@@ -30,10 +30,14 @@ type ThemeStyle = {
   textSecondary: string;
   chipBackground: string;
   chipText: string;
+  // Small decorative touch shown next to the business name -- kept
+  // subtle (one emoji, not an illustrated background) so it reads as
+  // festive without needing real design iteration to get right.
+  accentEmoji?: string;
 };
 
 const THEMES: Record<string, ThemeStyle> = {
-  rose_petal: {
+  wagzly_classic: {
     background: "linear-gradient(160deg, #f7e6ec 0%, #fbf7f8 55%, #fdf9f5 100%)",
     cardBackground: "#ffffff",
     accent: "#c58fa1",
@@ -43,60 +47,65 @@ const THEMES: Record<string, ThemeStyle> = {
     chipBackground: "#f7e6ec",
     chipText: "#8a5a6c",
   },
-  golden_hour: {
-    background: "linear-gradient(160deg, #ffe3c7 0%, #fff2df 55%, #fffaf3 100%)",
+  halloween: {
+    background: "linear-gradient(160deg, #ffe0c2 0%, #fff0dc 55%, #fff8f0 100%)",
     cardBackground: "#ffffff",
-    accent: "#d98a3d",
-    accentSoft: "#fbe3c4",
+    accent: "#c2510f",
+    accentSoft: "#f7d3ad",
+    text: "#2b1810",
+    textSecondary: "#7a5c3e",
+    chipBackground: "#f7d3ad",
+    chipText: "#8a3d0f",
+    accentEmoji: "🎃",
+  },
+  thanksgiving: {
+    background: "linear-gradient(160deg, #f3e3d0 0%, #f8ede0 55%, #fdf7f0 100%)",
+    cardBackground: "#ffffff",
+    accent: "#a85c32",
+    accentSoft: "#e8cfb0",
     text: "#3a2a1a",
     textSecondary: "#8a6f52",
-    chipBackground: "#fbe3c4",
-    chipText: "#8a5a1f",
+    chipBackground: "#e8cfb0",
+    chipText: "#7a4a24",
+    accentEmoji: "🍂",
   },
-  ocean_breeze: {
-    background: "linear-gradient(160deg, #d6f0f4 0%, #eafafb 55%, #f7fdfe 100%)",
+  winter_holiday: {
+    background: "linear-gradient(160deg, #f7e3e3 0%, #fbeeee 55%, #fdf7f5 100%)",
     cardBackground: "#ffffff",
-    accent: "#3f97a8",
-    accentSoft: "#d3eef1",
-    text: "#1f3a3f",
-    textSecondary: "#5c7a80",
-    chipBackground: "#d3eef1",
-    chipText: "#2b6c78",
+    accent: "#c23b3b",
+    accentSoft: "#f0cccc",
+    text: "#2e2020",
+    textSecondary: "#7a6060",
+    chipBackground: "#d7e8d9",
+    chipText: "#2f6b4f",
+    accentEmoji: "❄️",
   },
-  minty_fresh: {
-    background: "linear-gradient(160deg, #dcefd8 0%, #eef7ea 55%, #f9fbf6 100%)",
+  valentines_day: {
+    background: "linear-gradient(160deg, #fbe1ea 0%, #fdedf2 55%, #fef7fa 100%)",
     cardBackground: "#ffffff",
-    accent: "#5f9459",
-    accentSoft: "#dcecd7",
-    text: "#24331f",
-    textSecondary: "#647a5f",
-    chipBackground: "#dcecd7",
-    chipText: "#436b3d",
+    accent: "#e0527a",
+    accentSoft: "#f8d3e0",
+    text: "#3a2430",
+    textSecondary: "#8a6b78",
+    chipBackground: "#f8d3e0",
+    chipText: "#c23864",
+    accentEmoji: "💕",
   },
-  lavender_bloom: {
-    background: "linear-gradient(160deg, #e6dbf3 0%, #f2ebfa 55%, #faf6fd 100%)",
+  july_fourth: {
+    background: "linear-gradient(160deg, #dde6f5 0%, #eef2fa 55%, #f8fafd 100%)",
     cardBackground: "#ffffff",
-    accent: "#8560ae",
-    accentSoft: "#e6daf2",
-    text: "#2c2438",
-    textSecondary: "#786c8a",
-    chipBackground: "#e6daf2",
-    chipText: "#6a4a92",
-  },
-  midnight_paws: {
-    background: "linear-gradient(160deg, #171a26 0%, #232839 55%, #2c3247 100%)",
-    cardBackground: "#262b3d",
-    accent: "#f0b45c",
-    accentSoft: "#3a3450",
-    text: "#f5f2ec",
-    textSecondary: "#b7b3c4",
-    chipBackground: "#33394f",
-    chipText: "#f0b45c",
+    accent: "#3355a4",
+    accentSoft: "#cdd8ef",
+    text: "#1f2a3f",
+    textSecondary: "#5c6a80",
+    chipBackground: "#cdd8ef",
+    chipText: "#2a4488",
+    accentEmoji: "⭐",
   },
 };
 
 function themeFor(key: string): ThemeStyle {
-  return THEMES[key] ?? THEMES.rose_petal;
+  return THEMES[key] ?? THEMES.wagzly_classic;
 }
 
 function formatExpiry(expiresAt: string | null): string {
@@ -160,7 +169,7 @@ export default function ReportCardPage() {
 
   if (loading) {
     return (
-      <div style={{ background: THEMES.rose_petal.background }} className="flex min-h-screen items-center justify-center">
+      <div style={{ background: THEMES.wagzly_classic.background }} className="flex min-h-screen items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-[#c58fa1] border-t-transparent" />
           <p className="text-sm font-medium text-[#7a6b74]">Loading report card...</p>
@@ -172,7 +181,7 @@ export default function ReportCardPage() {
   if (errorKind || !report) {
     const isExpired = errorKind === "expired";
     return (
-      <div style={{ background: THEMES.rose_petal.background }} className="flex min-h-screen items-center justify-center p-6">
+      <div style={{ background: THEMES.wagzly_classic.background }} className="flex min-h-screen items-center justify-center p-6">
         <div className="max-w-sm rounded-[24px] bg-white p-8 text-center shadow-[0_20px_50px_rgba(46,36,48,0.12)]">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#f7e6ec] text-3xl">
             {isExpired ? "\u{1F570}\u{FE0F}" : "\u{1F43E}"}
@@ -210,6 +219,7 @@ export default function ReportCardPage() {
           <span className="text-sm font-semibold tracking-wide" style={{ color: theme.textSecondary }}>
             {report.business_name}
           </span>
+          {theme.accentEmoji ? <span className="text-sm">{theme.accentEmoji}</span> : null}
         </div>
 
         <div
