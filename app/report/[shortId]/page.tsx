@@ -47,6 +47,39 @@ const THEMES: Record<string, ThemeStyle> = {
     chipBackground: "#f7e6ec",
     chipText: "#8a5a6c",
   },
+  new_years: {
+    background: "linear-gradient(160deg, #f5eeda 0%, #faf5e8 55%, #fffbf0 100%)",
+    cardBackground: "#ffffff",
+    accent: "#b8860b",
+    accentSoft: "#ecd9a0",
+    text: "#2b2410",
+    textSecondary: "#7a6f4a",
+    chipBackground: "#ecd9a0",
+    chipText: "#8a6f10",
+    accentEmoji: "🎉",
+  },
+  st_patricks_day: {
+    background: "linear-gradient(160deg, #dcf0d8 0%, #eef8ec 55%, #f8fdf6 100%)",
+    cardBackground: "#ffffff",
+    accent: "#2f8a3e",
+    accentSoft: "#c8e8c0",
+    text: "#1a2e1a",
+    textSecondary: "#5c7a5c",
+    chipBackground: "#c8e8c0",
+    chipText: "#1f6b2a",
+    accentEmoji: "☘️",
+  },
+  memorial_day: {
+    background: "linear-gradient(160deg, #e6e9f0 0%, #f0f2f7 55%, #f9fafc 100%)",
+    cardBackground: "#ffffff",
+    accent: "#5a6b8c",
+    accentSoft: "#d3d8e6",
+    text: "#242938",
+    textSecondary: "#6b7488",
+    chipBackground: "#d3d8e6",
+    chipText: "#3f4a66",
+    accentEmoji: "🎖️",
+  },
   halloween: {
     background: "linear-gradient(160deg, #ffe0c2 0%, #fff0dc 55%, #fff8f0 100%)",
     cardBackground: "#ffffff",
@@ -204,8 +237,32 @@ export default function ReportCardPage() {
   const hasBothPhotos = report.before_photo_url && report.after_photo_url;
 
   return (
-    <div style={{ background: theme.background }} className="min-h-screen px-4 py-10 sm:px-6">
-      <div className="mx-auto max-w-lg">
+    <div
+      style={{ background: theme.background }}
+      className="relative min-h-screen overflow-hidden px-4 py-10 sm:px-6"
+    >
+      {/* Large, low-opacity accent emoji floating in the page background --
+          a subtle "wallpaper" touch behind the card rather than an
+          illustrated background, which would need real design iteration
+          to get right. Hidden entirely on the evergreen default theme. */}
+      {theme.accentEmoji ? (
+        <>
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -left-6 -top-6 select-none text-[7rem] leading-none opacity-[0.12] sm:text-[9rem]"
+          >
+            {theme.accentEmoji}
+          </div>
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -right-6 top-16 select-none text-[6rem] leading-none opacity-[0.10] sm:text-[8rem]"
+          >
+            {theme.accentEmoji}
+          </div>
+        </>
+      ) : null}
+
+      <div className="relative mx-auto max-w-lg">
         {/* Business header */}
         <div className="mb-5 flex items-center justify-center gap-2">
           {report.business_logo_url ? (
@@ -226,6 +283,10 @@ export default function ReportCardPage() {
           className="overflow-hidden rounded-[28px] shadow-[0_24px_60px_rgba(0,0,0,0.10)]"
           style={{ backgroundColor: theme.cardBackground }}
         >
+          {/* Colored accent bar -- gives each theme a distinct identity
+              at a glance, even before reading anything on the card. */}
+          <div className="h-2" style={{ backgroundColor: theme.accent }} />
+
           {/* Pet header */}
           <div className="flex flex-col items-center px-6 pb-2 pt-8 text-center">
             {report.pet_image_url ? (
