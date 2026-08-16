@@ -308,7 +308,9 @@ export async function POST(request: Request) {
     // A secondary contact texting in gets routed to their own thread,
     // separate from the primary contact's — matched by which phone number
     // this message actually came from.
-    const contactTypeForMatch = (item: NonNullable<typeof customer>) =>
+    const contactTypeForMatch = (
+      item: NonNullable<typeof customer>
+    ): "primary" | "secondary" =>
       normalizePhone(item.secondary_contact_phone ?? "") === fromPhone &&
       normalizePhone(item.phone ?? "") !== fromPhone
         ? "secondary"
