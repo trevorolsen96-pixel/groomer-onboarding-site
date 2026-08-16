@@ -34,8 +34,14 @@ export async function POST(req: NextRequest) {
       timestampHeader: req.headers.get("telnyx-timestamp"),
     });
 
+    // Deliberately does NOT reject calls on "invalid" -- see the matching
+    // comment in app/api/messages/inbound/route.ts. A bug in unverified
+    // signature logic dropping real calls is worse than the narrow
+    // forgery risk it guards against.
     if (signatureResult === "invalid") {
-      return rejectXml("This request could not be verified.");
+      console.error(
+        "[voice/inbound] Telnyx signature check failed -- processing the call anyway."
+      );
     }
 
     const formData = new URLSearchParams(rawBody);

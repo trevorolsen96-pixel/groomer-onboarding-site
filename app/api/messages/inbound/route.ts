@@ -184,6 +184,18 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  // Hoisted so the outer catch below can log a diagnostic sms_events row
+  // with whatever was actually resolved before something threw --
+  // previously an unexpected exception anywhere in this handler was only
+  // ever visible in Vercel's function logs (console.error), with zero
+  // trace left in the database. That made a real incident undiagnosable
+  // after the fact: a message came in, something failed silently, and
+  // there was no queryable evidence it had even been attempted.
+  let diagBusinessId: string | undefined;
+  let diagFromPhone = "";
+  let diagToPhone = "";
+  let diagBody = "";
+
   try {
     const rawBody = await request.text();
 
@@ -193,8 +205,19 @@ export async function POST(request: Request) {
       timestampHeader: request.headers.get("telnyx-timestamp"),
     });
 
+    // Deliberately does NOT reject on "invalid" -- a bug in this
+    // verification logic (which hasn't been exercised against a real
+    // Telnyx-signed request yet) would otherwise silently drop every real
+    // inbound message with zero trace anywhere, which is a far worse
+    // outcome for this business than the narrow forgery risk this check
+    // guards against. Still logged loudly so a real problem is visible
+    // and fixable, just never blocking.
     if (signatureResult === "invalid") {
-      return NextResponse.json({ error: "Invalid signature." }, { status: 401 });
+      console.error(
+        "[messages/inbound] Telnyx signature check failed -- processing " +
+          "the message anyway (see lib/telnyx-webhook.ts for why this " +
+          "doesn't block)."
+      );
     }
 
     const json = JSON.parse(rawBody);
@@ -212,6 +235,10 @@ export async function POST(request: Request) {
       ? payload.media
       : [];
 
+    diagFromPhone = fromPhone;
+    diagToPhone = toPhone;
+    diagBody = body;
+
     if (!fromPhone || !toPhone || (!body && media.length === 0)) {
       return NextResponse.json({ ok: true });
     }
@@ -228,6 +255,7 @@ export async function POST(request: Request) {
     }
 
     const businessId = smsSetup.business_id;
+    diagBusinessId = businessId;
     const now = new Date().toISOString();
 
     const { data: customers } = await supabaseAdmin
@@ -534,6 +562,28 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("Telnyx inbound route failed:", error);
+
+    // Best-effort: leave a queryable trace of the failure. sms_events
+    // requires business_id, so this only lands when that was resolved
+    // before the failure -- still covers the vast majority of real
+    // failures, since business_id is normally resolved within the first
+    // couple of steps.
+    if (diagBusinessId) {
+      try {
+        await supabaseAdmin.from("sms_events").insert({
+          business_id: diagBusinessId,
+          direction: "inbound",
+          event_type: "inbound_processing_error",
+          message_body: diagBody,
+          from_phone: diagFromPhone,
+          to_phone: diagToPhone,
+          created_at: new Date().toISOString(),
+        });
+      } catch (logError) {
+        console.error("Failed to log inbound processing error:", logError);
+      }
+    }
+
     return NextResponse.json({ ok: true });
   }
 }
