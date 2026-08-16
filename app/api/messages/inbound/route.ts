@@ -222,14 +222,19 @@ export async function POST(request: Request) {
       )
       .eq("business_id", businessId);
 
-    const customer = (customers ?? []).find((item) => {
+    // A phone number matching MORE than one customer record isn't rare --
+    // it happens any time a household shares a number (one person's own
+    // phone is also registered as someone else's secondary contact,
+    // roommates, family, etc). Collect every match instead of taking the
+    // first one blindly.
+    const matches = (customers ?? []).filter((item) => {
       return (
         normalizePhone(item.phone ?? "") === fromPhone ||
         normalizePhone(item.secondary_contact_phone ?? "") === fromPhone
       );
     });
 
-    if (!customer) {
+    if (matches.length === 0) {
       await supabaseAdmin.from("sms_events").insert({
         business_id: businessId,
         direction: "inbound",
@@ -246,10 +251,64 @@ export async function POST(request: Request) {
     // A secondary contact texting in gets routed to their own thread,
     // separate from the primary contact's — matched by which phone number
     // this message actually came from.
-    const isFromSecondary =
-      normalizePhone(customer.secondary_contact_phone ?? "") === fromPhone &&
-      normalizePhone(customer.phone ?? "") !== fromPhone;
-    const contactType = isFromSecondary ? "secondary" : "primary";
+    const contactTypeForMatch = (item: (typeof matches)[number]) =>
+      normalizePhone(item.secondary_contact_phone ?? "") === fromPhone &&
+      normalizePhone(item.phone ?? "") !== fromPhone
+        ? "secondary"
+        : "primary";
+
+    let customer = matches[0];
+    let contactType: "primary" | "secondary" = contactTypeForMatch(customer);
+
+    if (matches.length > 1) {
+      // Genuinely ambiguous -- this exact number matches more than one
+      // customer record in this business. Picking the "first" one
+      // arbitrarily is what caused a real incident: a client's real
+      // appointment-confirmation "NO" reply got filed under a completely
+      // unrelated customer's thread and never cancelled the actual
+      // appointment, because that unrelated customer happened to come
+      // back first from the database. Break the tie by preferring
+      // whichever match's own conversation thread was texted most
+      // recently -- that's almost always the thread a reply is actually
+      // responding to (e.g. the confirmation request that was just sent).
+      const candidates = matches.map((item) => ({
+        item,
+        contactType: contactTypeForMatch(item),
+      }));
+
+      const { data: conversations } = await supabaseAdmin
+        .from("message_conversations")
+        .select("customer_id, contact_type, last_message_at")
+        .eq("business_id", businessId)
+        .in(
+          "customer_id",
+          candidates.map((c) => c.item.id)
+        );
+
+      let best = candidates[0];
+      let bestTimestamp = -Infinity;
+
+      for (const candidate of candidates) {
+        const conversation = (conversations ?? []).find(
+          (c) =>
+            c.customer_id === candidate.item.id &&
+            c.contact_type === candidate.contactType
+        );
+        const timestamp = conversation?.last_message_at
+          ? new Date(conversation.last_message_at).getTime()
+          : -Infinity;
+
+        if (timestamp > bestTimestamp) {
+          bestTimestamp = timestamp;
+          best = candidate;
+        }
+      }
+
+      customer = best.item;
+      contactType = best.contactType;
+    }
+
+    const isFromSecondary = contactType === "secondary";
 
     await updateLatestAppointmentConfirmation({
       businessId,
