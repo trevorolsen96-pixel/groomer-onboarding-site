@@ -78,10 +78,10 @@ function normalizePhone(value: string) {
   return value;
 }
 
-// A readable placeholder name for a customer auto-created from an inbound
-// text whose number didn't match anyone -- e.g. "+19513731684" becomes
-// "(951) 373-1684". Falls back to the raw value for anything unexpected
-// (non-US numbers, etc) rather than throwing.
+// A readable label for a message thread whose phone number doesn't match
+// any customer -- e.g. "+19513731684" becomes "(951) 373-1684". Falls
+// back to the raw value for anything unexpected (non-US numbers, etc)
+// rather than throwing.
 function formatPhoneForDisplay(e164: string) {
   const digits = e164.replace(/\D/g, "");
   const tenDigit = digits.length === 11 && digits.startsWith("1")
@@ -301,62 +301,18 @@ export async function POST(request: Request) {
     let customer: (typeof matches)[number] | null =
       matches.length > 0 ? matches[0] : null;
 
-    if (matches.length === 0) {
-      // No customer or secondary contact anywhere in the business matches
-      // this number -- previously this just logged a row to sms_events
-      // (an internal table with no UI anywhere) and stopped, so the
-      // message was completely invisible: no conversation, no badge, no
-      // way for the groomer to ever discover it happened short of
-      // querying the database directly. A real inbound text from an
-      // unrecognized number is very often a prospective client, so
-      // dropping it silently is a real loss, not just a display gap.
-      //
-      // Create a minimal customer record from the phone number itself so
-      // the normal conversation/message pipeline picks it up like any
-      // other client -- it shows up in Messages immediately, and the
-      // groomer can rename it (or merge/delete it) once they know who it
-      // actually is.
-      const { data: newCustomer, error: newCustomerError } =
-        await supabaseAdmin
-          .from("customers")
-          .insert({
-            business_id: businessId,
-            name: formatPhoneForDisplay(fromPhone),
-            phone: fromPhone,
-            address: "",
-            notes: "Auto-created from an inbound text message.",
-          })
-          .select("id, name, phone, secondary_contact_name, secondary_contact_phone, image_url")
-          .single();
-
-      if (newCustomerError || !newCustomer) {
-        console.error(
-          "[messages/inbound] failed to auto-create customer for unmatched number:",
-          newCustomerError
-        );
-        await supabaseAdmin.from("sms_events").insert({
-          business_id: businessId,
-          direction: "inbound",
-          event_type: "unmatched_inbound_message",
-          message_body: body,
-          from_phone: fromPhone,
-          to_phone: toPhone,
-          created_at: now,
-        });
-
-        return NextResponse.json({ ok: true });
-      }
-
-      customer = newCustomer;
-    }
-
-    if (!customer) {
-      return NextResponse.json({ ok: true });
-    }
+    // A phone number that doesn't match any existing customer no longer
+    // auto-creates one -- wrong numbers, spam, and one-off inquiries were
+    // permanently cluttering the real Clients list. `customer` just stays
+    // null; the thread still gets created below, labeled by phone number
+    // only, and nothing lands in Clients unless the business explicitly
+    // saves this person as a client later.
 
     // A secondary contact texting in gets routed to their own thread,
     // separate from the primary contact's — matched by which phone number
-    // this message actually came from.
+    // this message actually came from. Only meaningful when we actually
+    // matched a real customer record -- an unrecognized number has no
+    // primary/secondary concept, it's just its own thread.
     const contactTypeForMatch = (
       item: NonNullable<typeof customer>
     ): "primary" | "secondary" =>
@@ -365,7 +321,9 @@ export async function POST(request: Request) {
         ? "secondary"
         : "primary";
 
-    let contactType: "primary" | "secondary" = contactTypeForMatch(customer);
+    let contactType: "primary" | "secondary" = customer
+      ? contactTypeForMatch(customer)
+      : "primary";
 
     if (matches.length > 1) {
       // Genuinely ambiguous -- this exact number matches more than one
@@ -417,19 +375,49 @@ export async function POST(request: Request) {
 
     const isFromSecondary = contactType === "secondary";
 
-    await updateLatestAppointmentConfirmation({
-      businessId,
-      customerId: customer.id,
-      body,
-    });
+    // Whatever gets stored on the conversation/message rows -- a real
+    // customer's name/phone/photo when matched, or just the raw phone
+    // number when this number doesn't belong to anyone yet.
+    const customerId = customer?.id ?? null;
+    const conversationName = customer
+      ? isFromSecondary
+        ? `${cleanText(customer.secondary_contact_name) || "Secondary Contact"} (Secondary)`
+        : customer.name
+      : formatPhoneForDisplay(fromPhone);
+    const conversationPhone = customer
+      ? isFromSecondary
+        ? customer.secondary_contact_phone
+        : customer.phone
+      : fromPhone;
+    const conversationImageUrl =
+      customer && !isFromSecondary ? customer.image_url : null;
 
-    const { data: existingConversation } = await supabaseAdmin
+    if (customerId) {
+      await updateLatestAppointmentConfirmation({
+        businessId,
+        customerId,
+        body,
+      });
+    }
+
+    // message_conversations' uniqueness guarantee (business_id,
+    // customer_id, contact_type) only applies to real customers --
+    // Postgres treats every NULL customer_id as distinct, so an unmatched
+    // number's thread is instead found/deduplicated by phone number.
+    const conversationLookup = supabaseAdmin
       .from("message_conversations")
       .select("*")
-      .eq("business_id", businessId)
-      .eq("customer_id", customer.id)
-      .eq("contact_type", contactType)
-      .maybeSingle();
+      .eq("business_id", businessId);
+
+    const { data: existingConversation } = customerId
+      ? await conversationLookup
+          .eq("customer_id", customerId)
+          .eq("contact_type", contactType)
+          .maybeSingle()
+      : await conversationLookup
+          .is("customer_id", null)
+          .eq("customer_phone", conversationPhone)
+          .maybeSingle();
 
     let conversationId = existingConversation?.id as string | undefined;
 
@@ -439,15 +427,11 @@ export async function POST(request: Request) {
           .from("message_conversations")
           .insert({
             business_id: businessId,
-            customer_id: customer.id,
+            customer_id: customerId,
             contact_type: contactType,
-            customer_name: isFromSecondary
-              ? `${cleanText(customer.secondary_contact_name) || "Secondary Contact"} (Secondary)`
-              : customer.name,
-            customer_phone: isFromSecondary
-              ? customer.secondary_contact_phone
-              : customer.phone,
-            customer_image_url: isFromSecondary ? null : customer.image_url,
+            customer_name: conversationName,
+            customer_phone: conversationPhone,
+            customer_image_url: conversationImageUrl,
             last_message_body: body,
             last_message_at: now,
             unread_count: 1,
@@ -485,7 +469,7 @@ export async function POST(request: Request) {
     await supabaseAdmin.from("message_items").insert({
       business_id: businessId,
       conversation_id: conversationId,
-      customer_id: customer.id,
+      customer_id: customerId,
       direction: "inbound",
       body: displayBody,
       status: "received",
@@ -507,7 +491,7 @@ export async function POST(request: Request) {
 
     await supabaseAdmin.from("sms_events").insert({
       business_id: businessId,
-      customer_id: customer.id,
+      customer_id: customerId,
       direction: "inbound",
       event_type: "manual_message_reply",
       message_body: body,
@@ -571,7 +555,7 @@ export async function POST(request: Request) {
           body: JSON.stringify({
             businessId,
             conversationId,
-            customerName: customer.name,
+            customerName: conversationName,
             messageBody: displayBody,
           }),
         });

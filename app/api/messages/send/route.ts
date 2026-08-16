@@ -174,7 +174,11 @@ export async function POST(request: Request) {
 
     const businessId = cleanText(body.businessId);
     const conversationId = cleanText(body.conversationId);
-    const customerId = cleanText(body.customerId);
+    // Optional now -- a conversation with an unrecognized phone number (no
+    // matching client, deliberately never auto-created into one -- see
+    // app/api/messages/inbound/route.ts) has no customer_id at all, but
+    // replying to it should still work.
+    const customerId = cleanText(body.customerId) || null;
     const messageBody = cleanText(body.body);
     const imageBase64 = cleanText(body.imageBase64);
     const imageFileName = cleanText(body.imageFileName) || "photo.jpg";
@@ -182,7 +186,6 @@ export async function POST(request: Request) {
     if (
       !businessId ||
       !conversationId ||
-      !customerId ||
       (!messageBody && !imageBase64)
     ) {
       return NextResponse.json(
@@ -219,13 +222,15 @@ export async function POST(request: Request) {
       );
     }
 
+    // Keyed off conversationId + businessId only -- customer_id can be
+    // null for a thread with an unrecognized number, so requiring it to
+    // match would 404 every reply on those threads.
     const { data: conversation, error: conversationError } =
       await supabaseAdmin
         .from("message_conversations")
         .select("id, business_id, customer_id, customer_phone")
         .eq("id", conversationId)
         .eq("business_id", businessId)
-        .eq("customer_id", customerId)
         .maybeSingle();
 
     if (conversationError || !conversation) {
