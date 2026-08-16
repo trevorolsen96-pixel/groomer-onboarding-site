@@ -6,6 +6,18 @@ const GOOGLE_API_KEY = process.env.GOOGLE_MAPS_API_KEY ?? "";
 // Calculates total miles for a vehicle on a specific date using
 // non-cancelled appointments via Google Directions API.
 export async function GET(req: NextRequest) {
+  const authHeader = req.headers.get("authorization") ?? "";
+  const token = authHeader.replace("Bearer ", "").trim();
+
+  if (!token) {
+    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  }
+
+  const { data: userData, error: userError } = await supabaseAdmin.auth.getUser(token);
+  if (userError || !userData.user) {
+    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  }
+
   const vehicleId = req.nextUrl.searchParams.get("vehicleId")?.trim();
   const date = req.nextUrl.searchParams.get("date")?.trim(); // YYYY-MM-DD
   const businessId = req.nextUrl.searchParams.get("businessId")?.trim();
@@ -15,6 +27,16 @@ export async function GET(req: NextRequest) {
       { error: "vehicleId, date, and businessId are required." },
       { status: 400 }
     );
+  }
+
+  const { data: profile, error: profileError } = await supabaseAdmin
+    .from("profiles")
+    .select("business_id")
+    .eq("id", userData.user.id)
+    .maybeSingle();
+
+  if (profileError || profile?.business_id !== businessId) {
+    return NextResponse.json({ error: "Not authorized." }, { status: 403 });
   }
 
   // Fetch non-cancelled appointments for this vehicle on this date

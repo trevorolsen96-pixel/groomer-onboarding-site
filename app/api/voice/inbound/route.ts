@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { verifyTelnyxSignature } from "@/lib/telnyx-webhook";
 
 function normalizePhone(value: string) {
   const digits = value.replace(/\D/g, "");
@@ -22,8 +23,22 @@ function rejectXml(message: string) {
 
 export async function POST(req: NextRequest) {
   try {
-    // Telnyx sends form-encoded data
-    const formData = await req.formData();
+    // Telnyx sends form-encoded data. Read the raw body first (rather than
+    // req.formData(), which consumes the stream) so the exact bytes are
+    // available for signature verification below.
+    const rawBody = await req.text();
+
+    const signatureResult = verifyTelnyxSignature({
+      rawBody,
+      signatureHeader: req.headers.get("telnyx-signature-ed25519"),
+      timestampHeader: req.headers.get("telnyx-timestamp"),
+    });
+
+    if (signatureResult === "invalid") {
+      return rejectXml("This request could not be verified.");
+    }
+
+    const formData = new URLSearchParams(rawBody);
     const to = formData.get("To")?.toString() ?? "";
     const from = formData.get("From")?.toString() ?? "";
 

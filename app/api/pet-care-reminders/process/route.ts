@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "../../../../lib/supabase-admin";
+import { verifyCronRequest } from "../../../../lib/cron-auth";
 
 function normalizePhone(value: string) {
   return value.replace(/[^\d+]/g, "");
@@ -244,7 +245,10 @@ async function processBusinessCareReminders({
   return { queuedCount, skippedCount };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const unauthorized = verifyCronRequest(request);
+  if (unauthorized) return unauthorized;
+
   try {
     const { data: setups, error: setupsError } = await supabaseAdmin
       .from("business_sms_setup")

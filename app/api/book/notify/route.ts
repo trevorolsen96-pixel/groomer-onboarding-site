@@ -1,8 +1,64 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sendSms } from "@/lib/telnyx";
-import { normalizeSmsText } from "@/lib/sms-text";
+import { normalizeSmsText, smsSegments } from "@/lib/sms-text";
 import { logOutboundSmsToConversation, logOutboundSmsUsageOnly } from "@/lib/sms-conversation-log";
+
+// This route is only ever called by the app itself (a staff member
+// approving/declining a booking or onboarding request) -- never by the
+// public site -- so it requires a real session, and that session's own
+// business must match whichever business_id this call is acting on. It
+// previously trusted businessId/requestId straight from the request body
+// with no auth at all, which meant anyone who knew (or guessed) a
+// businessId could make that business's real SMS number text an arbitrary
+// phone number, unlimited times, with no credit-limit check.
+async function _authorizeCaller(
+  req: NextRequest
+): Promise<{ businessId: string } | { error: NextResponse }> {
+  const authHeader = req.headers.get("authorization") ?? "";
+  const token = authHeader.replace("Bearer ", "").trim();
+
+  if (!token) {
+    return { error: NextResponse.json({ error: "Not signed in." }, { status: 401 }) };
+  }
+
+  const { data: userData, error: userError } = await supabaseAdmin.auth.getUser(token);
+  if (userError || !userData.user) {
+    return { error: NextResponse.json({ error: "Not signed in." }, { status: 401 }) };
+  }
+
+  const { data: profile, error: profileError } = await supabaseAdmin
+    .from("profiles")
+    .select("business_id")
+    .eq("id", userData.user.id)
+    .maybeSingle();
+
+  if (profileError || !profile?.business_id) {
+    return { error: NextResponse.json({ error: "Not authorized." }, { status: 403 }) };
+  }
+
+  return { businessId: profile.business_id as string };
+}
+
+async function _assertSmsCreditsAvailable(businessId: string, neededCredits: number) {
+  const { data, error } = await supabaseAdmin.rpc("get_sms_credit_summary", {
+    p_business_id: businessId,
+  });
+
+  if (error) {
+    throw new Error("Unable to verify SMS credits.");
+  }
+
+  const summary = Array.isArray(data) ? data[0] : data;
+  const remainingCredits = Number(summary?.remaining_credits ?? 0);
+  const plan = String(summary?.plan ?? "basic").toLowerCase();
+
+  if (remainingCredits < neededCredits) {
+    throw new Error(
+      `sms_credits_exceeded plan=${plan} needed=${neededCredits} remaining=${remainingCredits}`
+    );
+  }
+}
 
 export async function POST(req: NextRequest) {
   const { requestId, status, clientPhone, businessId: directBusinessId, customerId } = await req.json();
@@ -11,11 +67,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "requestId and status are required." }, { status: 400 });
   }
 
+  const authResult = await _authorizeCaller(req);
+  if ("error" in authResult) return authResult.error;
+  const callerBusinessId = authResult.businessId;
+
   // Handle onboarding accepted — uses onboarding_requests table
   if (status === "onboarding_accepted") {
     if (!clientPhone || !directBusinessId) {
       return NextResponse.json({ ok: true, skipped: "no_phone_or_business" });
     }
+
+    if (callerBusinessId !== directBusinessId) {
+      return NextResponse.json({ error: "Not authorized." }, { status: 403 });
+    }
+
     const phone = _toE164(clientPhone);
     if (!phone) return NextResponse.json({ ok: true, skipped: "bad_phone_format" });
 
@@ -34,6 +99,7 @@ export async function POST(req: NextRequest) {
     );
 
     try {
+      await _assertSmsCreditsAvailable(directBusinessId, smsSegments(text));
       await sendSms({ from, to: phone, text });
 
       // Log it against the client's conversation (and therefore the credit
@@ -83,6 +149,10 @@ export async function POST(req: NextRequest) {
 
   if (reqError || !request) {
     return NextResponse.json({ error: "Request not found." }, { status: 404 });
+  }
+
+  if (callerBusinessId !== request.business_id) {
+    return NextResponse.json({ error: "Not authorized." }, { status: 403 });
   }
 
   let rawPhone = request.client_phone as string | null;
@@ -142,6 +212,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    await _assertSmsCreditsAvailable(request.business_id as string, smsSegments(text));
     await sendSms({ from, to: phone, text });
 
     // Same best-effort logging as the welcome text above -- counts toward

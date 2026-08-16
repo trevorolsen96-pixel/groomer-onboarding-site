@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "../../../../lib/supabase-admin";
 import { sendSms } from "../../../../lib/telnyx";
 import { normalizeSmsText, smsSegments } from "../../../../lib/sms-text";
+import { verifyCronRequest } from "../../../../lib/cron-auth";
 
 async function assertSmsCreditsAvailable({
   businessId,
@@ -29,7 +30,10 @@ async function assertSmsCreditsAvailable({
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const unauthorized = verifyCronRequest(request);
+  if (unauthorized) return unauthorized;
+
   try {
     const now = new Date().toISOString();
 

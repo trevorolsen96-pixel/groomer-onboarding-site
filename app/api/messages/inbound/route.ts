@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getVercelOidcToken } from "@vercel/oidc";
 import { supabaseAdmin } from "../../../../lib/supabase-admin";
+import { verifyTelnyxSignature } from "../../../../lib/telnyx-webhook";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -169,7 +170,19 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const json = await request.json();
+    const rawBody = await request.text();
+
+    const signatureResult = verifyTelnyxSignature({
+      rawBody,
+      signatureHeader: request.headers.get("telnyx-signature-ed25519"),
+      timestampHeader: request.headers.get("telnyx-timestamp"),
+    });
+
+    if (signatureResult === "invalid") {
+      return NextResponse.json({ error: "Invalid signature." }, { status: 401 });
+    }
+
+    const json = JSON.parse(rawBody);
 
     const payload = json?.data?.payload;
 

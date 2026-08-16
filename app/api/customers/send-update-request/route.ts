@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { randomInt } from "crypto";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sendSms } from "@/lib/telnyx";
 import { normalizeSmsText } from "@/lib/sms-text";
@@ -15,11 +16,16 @@ function normalizePhone(value: string) {
   return `+1${digits}`;
 }
 
+// This token grants edit access to a customer's PII, so it needs a real
+// CSPRNG -- Math.random() is not cryptographically secure and its output
+// is predictable enough to make brute-forcing/guessing a live concern.
+// randomInt() (unlike a naive randomBytes()-modulo approach) is also free
+// of modulo bias. Same charset/length as before, just a secure source.
 function generateToken(): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
   let token = "";
   for (let i = 0; i < 48; i++) {
-    token += chars.charAt(Math.floor(Math.random() * chars.length));
+    token += chars.charAt(randomInt(chars.length));
   }
   return token;
 }

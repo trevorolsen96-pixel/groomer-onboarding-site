@@ -76,6 +76,7 @@ export default function GroomerBookingPage({
   const [otpSending, setOtpSending] = useState(false);
   const [otpVerifying, setOtpVerifying] = useState(false);
 
+  const [otpId, setOtpId] = useState<string | null>(null);
   const [customerId, setCustomerId] = useState<string | null>(null);
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
@@ -156,6 +157,7 @@ export default function GroomerBookingPage({
     }
 
     if (data.customer) {
+      setOtpId(data.otpId ?? null);
       setCustomerId(data.customer.id);
       setClientName(data.customer.name ?? "");
       setClientPhone(data.customer.phone ?? "");
@@ -222,6 +224,7 @@ export default function GroomerBookingPage({
         clientName,
         clientEmail: email,
         clientPhone,
+        otpId,
       }),
     });
 
