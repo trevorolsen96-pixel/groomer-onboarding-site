@@ -48,6 +48,21 @@ export async function POST(req: NextRequest) {
     const to = formData.get("To")?.toString() ?? "";
     const from = formData.get("From")?.toString() ?? "";
 
+    // Unconditional, best-effort raw hit log -- see the matching comment
+    // in app/api/messages/inbound/route.ts.
+    try {
+      await supabaseAdmin.from("telnyx_webhook_log").insert({
+        route: "voice_inbound",
+        from_phone: from || null,
+        to_phone: to || null,
+        body: null,
+        signature_result: signatureResult,
+        raw_headers: Object.fromEntries(req.headers.entries()),
+      });
+    } catch (logError) {
+      console.error("[voice/inbound] raw webhook log failed:", logError);
+    }
+
     if (!to) {
       return rejectXml("This number is not available.");
     }

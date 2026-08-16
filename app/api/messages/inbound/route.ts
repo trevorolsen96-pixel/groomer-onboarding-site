@@ -205,6 +205,27 @@ export async function POST(request: Request) {
       timestampHeader: request.headers.get("telnyx-timestamp"),
     });
 
+    // Unconditional, best-effort raw hit log -- written before ANY
+    // matching/parsing/business logic that could fail, so there's always
+    // a queryable record that Telnyx actually called this webhook and
+    // what it sent, independent of whether the rest of this handler
+    // succeeds. Parsed loosely here (not the stricter parse below) just
+    // for this log entry, since we want this to survive even a malformed
+    // payload.
+    try {
+      const rawPayload = JSON.parse(rawBody)?.data?.payload;
+      await supabaseAdmin.from("telnyx_webhook_log").insert({
+        route: "sms_inbound",
+        from_phone: rawPayload?.from?.phone_number ?? null,
+        to_phone: rawPayload?.to?.[0]?.phone_number ?? null,
+        body: rawPayload?.text ?? null,
+        signature_result: signatureResult,
+        raw_headers: Object.fromEntries(request.headers.entries()),
+      });
+    } catch (logError) {
+      console.error("[messages/inbound] raw webhook log failed:", logError);
+    }
+
     // Deliberately does NOT reject on "invalid" -- a bug in this
     // verification logic (which hasn't been exercised against a real
     // Telnyx-signed request yet) would otherwise silently drop every real
