@@ -78,6 +78,21 @@ function normalizePhone(value: string) {
   return value;
 }
 
+// A readable placeholder name for a customer auto-created from an inbound
+// text whose number didn't match anyone -- e.g. "+19513731684" becomes
+// "(951) 373-1684". Falls back to the raw value for anything unexpected
+// (non-US numbers, etc) rather than throwing.
+function formatPhoneForDisplay(e164: string) {
+  const digits = e164.replace(/\D/g, "");
+  const tenDigit = digits.length === 11 && digits.startsWith("1")
+    ? digits.slice(1)
+    : digits;
+
+  if (tenDigit.length !== 10) return e164;
+
+  return `(${tenDigit.slice(0, 3)}) ${tenDigit.slice(3, 6)}-${tenDigit.slice(6)}`;
+}
+
 async function updateLatestAppointmentConfirmation({
   businessId,
   customerId,
@@ -234,30 +249,71 @@ export async function POST(request: Request) {
       );
     });
 
-    if (matches.length === 0) {
-      await supabaseAdmin.from("sms_events").insert({
-        business_id: businessId,
-        direction: "inbound",
-        event_type: "unmatched_inbound_message",
-        message_body: body,
-        from_phone: fromPhone,
-        to_phone: toPhone,
-        created_at: now,
-      });
+    let customer: (typeof matches)[number] | null =
+      matches.length > 0 ? matches[0] : null;
 
+    if (matches.length === 0) {
+      // No customer or secondary contact anywhere in the business matches
+      // this number -- previously this just logged a row to sms_events
+      // (an internal table with no UI anywhere) and stopped, so the
+      // message was completely invisible: no conversation, no badge, no
+      // way for the groomer to ever discover it happened short of
+      // querying the database directly. A real inbound text from an
+      // unrecognized number is very often a prospective client, so
+      // dropping it silently is a real loss, not just a display gap.
+      //
+      // Create a minimal customer record from the phone number itself so
+      // the normal conversation/message pipeline picks it up like any
+      // other client -- it shows up in Messages immediately, and the
+      // groomer can rename it (or merge/delete it) once they know who it
+      // actually is.
+      const { data: newCustomer, error: newCustomerError } =
+        await supabaseAdmin
+          .from("customers")
+          .insert({
+            business_id: businessId,
+            name: formatPhoneForDisplay(fromPhone),
+            phone: fromPhone,
+            address: "",
+            notes: "Auto-created from an inbound text message.",
+          })
+          .select("id, name, phone, secondary_contact_name, secondary_contact_phone, image_url")
+          .single();
+
+      if (newCustomerError || !newCustomer) {
+        console.error(
+          "[messages/inbound] failed to auto-create customer for unmatched number:",
+          newCustomerError
+        );
+        await supabaseAdmin.from("sms_events").insert({
+          business_id: businessId,
+          direction: "inbound",
+          event_type: "unmatched_inbound_message",
+          message_body: body,
+          from_phone: fromPhone,
+          to_phone: toPhone,
+          created_at: now,
+        });
+
+        return NextResponse.json({ ok: true });
+      }
+
+      customer = newCustomer;
+    }
+
+    if (!customer) {
       return NextResponse.json({ ok: true });
     }
 
     // A secondary contact texting in gets routed to their own thread,
     // separate from the primary contact's — matched by which phone number
     // this message actually came from.
-    const contactTypeForMatch = (item: (typeof matches)[number]) =>
+    const contactTypeForMatch = (item: NonNullable<typeof customer>) =>
       normalizePhone(item.secondary_contact_phone ?? "") === fromPhone &&
       normalizePhone(item.phone ?? "") !== fromPhone
         ? "secondary"
         : "primary";
 
-    let customer = matches[0];
     let contactType: "primary" | "secondary" = contactTypeForMatch(customer);
 
     if (matches.length > 1) {
