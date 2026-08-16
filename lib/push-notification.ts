@@ -66,12 +66,14 @@ export async function sendPushToBusinessAsync({
       },
       body: JSON.stringify({
         businessId,
-        // Match the field names the Cloud Function already understands
-        customerName: title,
-        messageBody: body,
-        conversationId: null,
-        // Pass our routing data too
-        ...data,
+        title,
+        body,
+        // Everything the app needs to deep-link to the right screen --
+        // the Cloud Function passes this through to FCM's data payload
+        // as-is (see cloud-functions/sendmessagepush/index.js), so any
+        // field added here (appointmentId, customerId, requestId, etc)
+        // reaches the app with no Cloud Function changes needed.
+        data: data ?? {},
       }),
     });
     console.log("[push] Sent successfully to business:", businessId);

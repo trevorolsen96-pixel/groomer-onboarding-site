@@ -63,18 +63,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { error } = await supabaseAdmin.from("booking_requests").insert({
-    business_id: businessId,
-    customer_id: customerId ?? null,
-    pet_ids: petIds,
-    service_id: serviceId,
-    requested_date: requestedDate,
-    requested_time: requestedTime ?? null,
-    client_name: clientName ?? null,
-    client_email: clientEmail.toLowerCase(),
-    client_phone: clientPhone ?? null,
-    status: "pending",
-  });
+  const { data: inserted, error } = await supabaseAdmin
+    .from("booking_requests")
+    .insert({
+      business_id: businessId,
+      customer_id: customerId ?? null,
+      pet_ids: petIds,
+      service_id: serviceId,
+      requested_date: requestedDate,
+      requested_time: requestedTime ?? null,
+      client_name: clientName ?? null,
+      client_email: clientEmail.toLowerCase(),
+      client_phone: clientPhone ?? null,
+      status: "pending",
+    })
+    .select("id")
+    .single();
 
   if (error) {
     return NextResponse.json({ error: "Failed to submit request." }, { status: 500 });
@@ -84,7 +88,11 @@ export async function POST(req: NextRequest) {
     businessId,
     title: "New Booking Request",
     body: `${clientName ?? "A client"} requested an appointment.`,
-    data: { route: "booking_requests", type: "booking_request" },
+    data: {
+      route: "booking_requests",
+      type: "booking_request",
+      requestId: inserted?.id ?? "",
+    },
   });
 
   return NextResponse.json({ ok: true });

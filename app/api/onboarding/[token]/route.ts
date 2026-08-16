@@ -866,7 +866,11 @@ if (requiredRecordTypes.length > 0) {
           businessId: requestRow.business_id,
           title: "Client Info Updated",
           body: `${clientName || "A client"} updated their information.`,
-          data: { route: "customers", type: "client_update" },
+          data: {
+            route: "customers",
+            type: "client_update",
+            customerId: requestRow.customer_id ?? "",
+          },
         }),
       );
     } else {
@@ -890,7 +894,11 @@ if (requiredRecordTypes.length > 0) {
           businessId: requestRow.business_id,
           title: "New Client Submission",
           body: `${clientName || "A client"} completed the onboarding form.`,
-          data: { route: "booking_requests", type: "onboarding_submission" },
+          data: {
+            route: "booking_requests",
+            type: "onboarding_submission",
+            submissionId: requestRow.id,
+          },
         }),
       );
     }

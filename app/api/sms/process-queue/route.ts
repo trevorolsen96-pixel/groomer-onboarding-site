@@ -3,6 +3,41 @@ import { supabaseAdmin } from "../../../../lib/supabase-admin";
 import { sendSms } from "../../../../lib/telnyx";
 import { normalizeSmsText, smsSegments } from "../../../../lib/sms-text";
 import { verifyCronRequest } from "../../../../lib/cron-auth";
+import { sendPushToBusinessAsync } from "../../../../lib/push-notification";
+
+// How long to wait before sending another "you're out of SMS credits"
+// push for the same business -- this cron runs every 5 minutes, and
+// staying over the limit is a persistent state, not a one-off event, so
+// without this a business would get a new push every 5 minutes for as
+// long as they're over.
+const CREDITS_EXHAUSTED_RENOTIFY_HOURS = 12;
+
+async function notifyCreditsExhaustedIfNeeded(businessId: string) {
+  const { data: setup } = await supabaseAdmin
+    .from("business_sms_setup")
+    .select("credits_exhausted_notified_at")
+    .eq("business_id", businessId)
+    .maybeSingle();
+
+  const lastNotified = setup?.credits_exhausted_notified_at
+    ? new Date(setup.credits_exhausted_notified_at).getTime()
+    : 0;
+  const hoursSinceLastNotified = (Date.now() - lastNotified) / (1000 * 60 * 60);
+
+  if (hoursSinceLastNotified < CREDITS_EXHAUSTED_RENOTIFY_HOURS) return;
+
+  await supabaseAdmin
+    .from("business_sms_setup")
+    .update({ credits_exhausted_notified_at: new Date().toISOString() })
+    .eq("business_id", businessId);
+
+  await sendPushToBusinessAsync({
+    businessId,
+    title: "Out of SMS Credits",
+    body: "Appointment reminders and confirmations are not sending because you're out of SMS credits.",
+    data: { type: "sms_credits_exhausted", route: "sms_settings" },
+  });
+}
 
 async function assertSmsCreditsAvailable({
   businessId,
@@ -186,7 +221,7 @@ export async function GET(request: Request) {
         }
 
         sentCount++;
-      } catch {
+      } catch (err) {
         await supabaseAdmin
           .from("sms_outbound_queue")
           .update({
@@ -195,6 +230,11 @@ export async function GET(request: Request) {
             updated_at: new Date().toISOString(),
           })
           .eq("id", row.id);
+
+        const message = err instanceof Error ? err.message : String(err);
+        if (message.includes("sms_credits_exceeded")) {
+          await notifyCreditsExhaustedIfNeeded(row.business_id);
+        }
       }
     }
 

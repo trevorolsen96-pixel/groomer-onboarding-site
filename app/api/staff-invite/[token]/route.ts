@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { sendPushToBusinessAsync } from "@/lib/push-notification";
 
 type SignupPayload = {
   email: string;
@@ -248,6 +249,13 @@ export async function POST(
     if (inviteUpdateError) {
       console.error("Invite accept update error:", inviteUpdateError);
     }
+
+    await sendPushToBusinessAsync({
+      businessId: inviteRow.business_id,
+      title: "Staff Member Joined",
+      body: `${workerRow.display_name} accepted their invite and joined your team.`,
+      data: { type: "staff_invite_accepted", route: "staff_settings" },
+    });
 
     return NextResponse.json({
       success: true,

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { getVercelOidcToken } from "@vercel/oidc";
 import { supabaseAdmin } from "../../../../lib/supabase-admin";
 import { verifyTelnyxSignature } from "../../../../lib/telnyx-webhook";
+import { sendPushToBusinessAsync } from "../../../../lib/push-notification";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -96,10 +96,12 @@ function formatPhoneForDisplay(e164: string) {
 async function updateLatestAppointmentConfirmation({
   businessId,
   customerId,
+  customerName,
   body,
 }: {
   businessId: string;
   customerId: string;
+  customerName: string;
   body: string;
 }) {
   const clean = body.trim().toLowerCase();
@@ -147,6 +149,17 @@ async function updateLatestAppointmentConfirmation({
       message_body: body,
       created_at: now,
     });
+
+    await sendPushToBusinessAsync({
+      businessId,
+      title: "Appointment Confirmed",
+      body: `${customerName} confirmed their appointment.`,
+      data: {
+        type: "appointment_confirmed",
+        route: "schedule",
+        appointmentId: appointment.id,
+      },
+    });
   } else {
     // Client cancelled — cancel the appointment and remove pending reminders
     await supabaseAdmin
@@ -175,6 +188,17 @@ async function updateLatestAppointmentConfirmation({
       event_type: "appointment_cancelled_by_client",
       message_body: body,
       created_at: now,
+    });
+
+    await sendPushToBusinessAsync({
+      businessId,
+      title: "Appointment Cancelled",
+      body: `${customerName} cancelled their appointment.`,
+      data: {
+        type: "appointment_cancelled",
+        route: "schedule",
+        appointmentId: appointment.id,
+      },
     });
   }
 }
@@ -396,6 +420,7 @@ export async function POST(request: Request) {
       await updateLatestAppointmentConfirmation({
         businessId,
         customerId,
+        customerName: conversationName,
         body,
       });
     }
@@ -500,68 +525,17 @@ export async function POST(request: Request) {
       created_at: now,
     });
 
-    try {
-      const pushUrl = process.env.GOOGLE_PUSH_FUNCTION_URL;
-      const pushSecret = process.env.WAGZLY_PUSH_SECRET;
-      const serviceAccountEmail = process.env.GCP_SERVICE_ACCOUNT_EMAIL;
-
-      if (pushUrl && pushSecret && serviceAccountEmail && conversationId) {
-        const vercelToken = await getVercelOidcToken();
-
-        const stsResponse = await fetch("https://sts.googleapis.com/v1/token", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({
-            grant_type:
-              "urn:ietf:params:oauth:grant-type:token-exchange",
-            audience:
-              "//iam.googleapis.com/projects/443606887092/locations/global/workloadIdentityPools/vercel-pool/providers/vercel-provider",
-            scope: "https://www.googleapis.com/auth/cloud-platform",
-            requested_token_type:
-              "urn:ietf:params:oauth:token-type:access_token",
-            subject_token_type:
-              "urn:ietf:params:oauth:token-type:jwt",
-            subject_token: vercelToken,
-          }),
-        });
-
-        const stsJson = await stsResponse.json();
-
-        if (!stsResponse.ok) throw new Error("Google STS token exchange failed");
-
-        const iamResponse = await fetch(
-          `https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${serviceAccountEmail}:generateIdToken`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${stsJson.access_token}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ audience: pushUrl, includeEmail: true }),
-          }
-        );
-
-        const iamJson = await iamResponse.json();
-
-        if (!iamResponse.ok) throw new Error("Google IAM ID token failed");
-
-        await fetch(pushUrl, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${iamJson.token}`,
-            "Content-Type": "application/json",
-            "x-wagzly-push-secret": pushSecret,
-          },
-          body: JSON.stringify({
-            businessId,
-            conversationId,
-            customerName: conversationName,
-            messageBody: displayBody,
-          }),
-        });
-      }
-    } catch (pushError) {
-      console.error("Inbound SMS push notification failed:", pushError);
+    if (conversationId) {
+      await sendPushToBusinessAsync({
+        businessId,
+        title: `New message from ${conversationName}`,
+        body: displayBody,
+        data: {
+          type: "message",
+          route: "messages",
+          conversationId,
+        },
+      });
     }
 
     return NextResponse.json({ ok: true });

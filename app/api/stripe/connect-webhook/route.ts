@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { stripe } from "../../../../lib/stripe";
 import { supabaseAdmin } from "../../../../lib/supabase-admin";
+import { sendPushToBusinessAsync } from "../../../../lib/push-notification";
 
 // Handles events for connected Stripe accounts -- specifically, completed
 // checkouts for appointment payment links. app/api/pay/create-session
@@ -153,5 +154,18 @@ async function handleConnectCheckoutCompleted(
     stripe_checkout_session_id: session.id,
     stripe_payment_intent_id: paymentIntentId,
     stripe_connected_account_id: link.stripe_connected_account_id,
+  });
+
+  const total = Number(link.amount ?? 0) + Number(link.tip_amount ?? 0);
+
+  await sendPushToBusinessAsync({
+    businessId: link.business_id,
+    title: "Payment Received",
+    body: `A client paid $${total.toFixed(2)} online.`,
+    data: {
+      type: "payment_received",
+      route: "schedule",
+      appointmentId: link.appointment_id,
+    },
   });
 }

@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { stripe } from "../../../../lib/stripe";
 import { supabaseAdmin } from "../../../../lib/supabase-admin";
 import { sendPasswordSetupEmail, sendNewAccountNotification } from "../../../../lib/email";
+import { sendPushToBusinessAsync } from "../../../../lib/push-notification";
 
 type StripeSubscriptionItemWithPeriods = Stripe.SubscriptionItem & {
   current_period_start?: number | null;
@@ -440,7 +441,7 @@ async function markPaymentFailed(invoice: Stripe.Invoice) {
   const graceUntil = new Date();
   graceUntil.setDate(graceUntil.getDate() + 3);
 
-  await supabaseAdmin
+  const { data: updatedBusinesses } = await supabaseAdmin
     .from("businesses")
     .update({
       subscription_status: "past_due",
@@ -448,7 +449,18 @@ async function markPaymentFailed(invoice: Stripe.Invoice) {
       app_access_grace_until: graceUntil.toISOString(),
       last_payment_status: "failed",
     })
-    .eq("payment_subscription_id", subscriptionId);
+    .eq("payment_subscription_id", subscriptionId)
+    .select("id");
+
+  const businessId = updatedBusinesses?.[0]?.id;
+  if (businessId) {
+    await sendPushToBusinessAsync({
+      businessId,
+      title: "Payment Failed",
+      body: "Your Wagzly subscription payment failed. Please update your payment method to avoid losing access.",
+      data: { type: "subscription_payment_failed", route: "account_settings" },
+    });
+  }
 }
 
 export async function POST(request: Request) {
