@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { supabaseAdmin } from "../../../../lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
@@ -74,9 +73,7 @@ export default async function PaymentSuccessPage({
           <div className="pt-2">
             <p className="text-xs text-[var(--text-secondary)]">
               Powered by{" "}
-              <Link href="/" className="font-semibold text-[var(--rose-primary)] hover:underline">
-                Wagzly
-              </Link>
+              <span className="font-semibold text-[var(--rose-primary)]">Wagzly</span>
             </p>
           </div>
         </div>

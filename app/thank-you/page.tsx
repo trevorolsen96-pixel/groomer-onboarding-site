@@ -1,9 +1,7 @@
-import Link from "next/link";
-
 export default function ThankYouPage() {
   return (
     <main className="site-shell">
-      <section className="mx-auto flex min-h-[calc(100vh-72px)] w-full max-w-3xl items-center justify-center px-6 py-16">
+      <section className="mx-auto flex min-h-screen w-full max-w-3xl items-center justify-center px-6 py-16">
         <div className="soft-card w-full p-8 text-center sm:p-12">
           <div className="mx-auto flex h-18 w-18 items-center justify-center rounded-full bg-[var(--rose-soft)] text-4xl">
             ✓
@@ -25,12 +23,6 @@ export default function ThankYouPage() {
 
           <div className="mt-8 rounded-2xl border border-[var(--divider-soft)] bg-[var(--soft-surface)] p-5 text-sm leading-6 text-[var(--text-secondary)]">
             You can safely close this page now.
-          </div>
-
-          <div className="mt-8 flex justify-center">
-            <Link href="/" className="secondary-button">
-              Back to Wagzly
-            </Link>
           </div>
         </div>
       </section>

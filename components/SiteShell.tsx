@@ -5,11 +5,34 @@ import Link from "next/link";
 import Image from "next/image";
 import AccountMenu from "./AccountMenu";
 
+// Pages a client reaches via a link Wagzly (or the groomer, on Wagzly's
+// behalf) sends or shares directly -- the marketing site's header/nav/
+// footer (Features, Pricing, Download, Book Online, account menu) has
+// nothing to do with why a client is there, and just gives them a way to
+// wander off into the marketing site instead of finishing what they
+// opened the link for. Only groomers need to know about the website
+// itself; their clients just need the one page they were sent.
+//
+// `/book/` (with a slug) is a specific business's own booking page,
+// shared by that groomer with their clients -- unlike the bare `/book`
+// search page (find-a-groomer), which is a real marketing page and keeps
+// the header.
+const CLIENT_FACING_PREFIXES = [
+  "/onboarding",
+  "/report",
+  "/book/",
+  "/pay",
+  "/thank-you",
+];
+
 export default function SiteShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isAdmin = pathname.startsWith("/admin");
+  const isClientFacing = CLIENT_FACING_PREFIXES.some((prefix) =>
+    pathname.startsWith(prefix)
+  );
 
-  if (isAdmin) {
+  if (isAdmin || isClientFacing) {
     return <>{children}</>;
   }
 
