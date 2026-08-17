@@ -103,9 +103,14 @@ export async function POST(request: Request) {
     const body = await request.json();
     const businessId = cleanText(body.businessId);
     const messageBody = cleanText(body.messageBody);
+    const clientRequestId = cleanText(body.clientRequestId);
 
     if (!businessId || !messageBody) {
       return NextResponse.json({ error: "businessId and messageBody are required." }, { status: 400 });
+    }
+
+    if (!clientRequestId) {
+      return NextResponse.json({ error: "clientRequestId is required." }, { status: 400 });
     }
 
     const { data: profile } = await supabaseAdmin
@@ -116,6 +121,27 @@ export async function POST(request: Request) {
 
     if (!profile || profile.business_id !== businessId) {
       return NextResponse.json({ error: "Not authorized." }, { status: 403 });
+    }
+
+    // Idempotency check — a retried request (network timeout, proxy
+    // resend, etc.) reuses the same clientRequestId. If we've already
+    // processed it, replay the same result instead of sending everything
+    // a second time.
+    const { data: existingSend } = await supabaseAdmin
+      .from("mass_messages")
+      .select("id, recipient_count, credits_used")
+      .eq("business_id", businessId)
+      .eq("client_request_id", clientRequestId)
+      .maybeSingle();
+
+    if (existingSend) {
+      return NextResponse.json({
+        ok: true,
+        massMessageId: existingSend.id,
+        recipientCount: existingSend.recipient_count,
+        creditsUsed: existingSend.credits_used,
+        replayed: true,
+      });
     }
 
     // Check SMS setup
@@ -179,10 +205,54 @@ export async function POST(request: Request) {
     const now = new Date().toISOString();
     const fromPhone = smsSetup.phone_number as string;
 
+    // Claim this send by inserting the mass_messages row first, keyed on
+    // clientRequestId, *before* touching the SMS queue. If two requests
+    // for the same clientRequestId race each other, the unique index lets
+    // exactly one of them through — the loser replays the winner's result
+    // instead of queuing a second copy of every message.
+    const { data: massMsg, error: massMsgError } = await supabaseAdmin
+      .from("mass_messages")
+      .insert({
+        business_id: businessId,
+        message_body: messageBody,
+        recipient_count: eligible.length,
+        credits_used: creditsNeeded,
+        sent_at: now,
+        client_request_id: clientRequestId,
+      })
+      .select("id, recipient_count, credits_used")
+      .single();
+
+    if (massMsgError) {
+      if (massMsgError.code === "23505") {
+        const { data: raceWinner } = await supabaseAdmin
+          .from("mass_messages")
+          .select("id, recipient_count, credits_used")
+          .eq("business_id", businessId)
+          .eq("client_request_id", clientRequestId)
+          .maybeSingle();
+
+        if (raceWinner) {
+          return NextResponse.json({
+            ok: true,
+            massMessageId: raceWinner.id,
+            recipientCount: raceWinner.recipient_count,
+            creditsUsed: raceWinner.credits_used,
+            replayed: true,
+          });
+        }
+      }
+
+      throw new Error("Unable to record mass message send.");
+    }
+
     // Queue one row per (recipient, part) — a message that needed to split
     // into 2 texts gets 2 queue rows per recipient, each sent independently
     // by the same queue processor that already handles every other SMS
     // type, so nothing downstream needs to know splitting happened at all.
+    // dedupe_key is anchored to massMsg.id (stable once claimed above,
+    // unlike a timestamp) so even a retried queue-insert step can't
+    // double-queue the same message.
     const queueRows = eligible.flatMap((customer) =>
       parts.map((part, partIndex) => ({
         business_id: businessId,
@@ -194,26 +264,15 @@ export async function POST(request: Request) {
         body_rendered: part,
         scheduled_for_utc: now,
         status: "pending",
-        dedupe_key: `mass:${businessId}:${customer.id}:${Date.now()}:${partIndex}`,
+        dedupe_key: `mass:${massMsg.id}:${customer.id}:${partIndex}`,
         attempt_count: 0,
         updated_at: now,
       }))
     );
 
-    await supabaseAdmin.from("sms_outbound_queue").insert(queueRows);
-
-    // Insert mass_messages record
-    const { data: massMsg } = await supabaseAdmin
-      .from("mass_messages")
-      .insert({
-        business_id: businessId,
-        message_body: messageBody,
-        recipient_count: eligible.length,
-        credits_used: creditsNeeded,
-        sent_at: now,
-      })
-      .select("id")
-      .single();
+    await supabaseAdmin
+      .from("sms_outbound_queue")
+      .upsert(queueRows, { onConflict: "dedupe_key" });
 
     return NextResponse.json({
       ok: true,
