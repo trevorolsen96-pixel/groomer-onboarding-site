@@ -9,8 +9,9 @@ import { sendPushToBusinessAsync } from "../../../../lib/push-notification";
 // push for the same business -- this cron runs every 5 minutes, and
 // staying over the limit is a persistent state, not a one-off event, so
 // without this a business would get a new push every 5 minutes for as
-// long as they're over.
-const CREDITS_EXHAUSTED_RENOTIFY_HOURS = 12;
+// long as they're over. Once a day is enough to stay actionable without
+// being noisy.
+const CREDITS_EXHAUSTED_RENOTIFY_HOURS = 24;
 
 async function notifyCreditsExhaustedIfNeeded(businessId: string) {
   const { data: setup } = await supabaseAdmin
