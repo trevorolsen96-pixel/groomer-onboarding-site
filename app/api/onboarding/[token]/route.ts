@@ -508,9 +508,31 @@ const { data: customRecordTypes } = await supabaseAdmin
 
 const requiredRecordTypes = (customRecordTypes ?? []).filter((t) => t.is_required);
 
+// Records already on file from a previous submission (update requests
+// only — a new client has no customer/pet yet). Without this, an admin
+// resubmitting an update form gets blocked on a required record type
+// they already satisfied, because body.pet_records only reflects files
+// uploaded in *this* submission.
+let existingRecordsForValidation: { pet_id: string; record_type_id: string | null }[] = [];
+if (requestRow.customer_id) {
+  const validationPetIds = body.pets
+    .map((p) => (p as any).id as string | undefined)
+    .filter((id): id is string => !!id);
+  if (validationPetIds.length > 0) {
+    const today = new Date().toISOString().split("T")[0];
+    const { data: existingDocs } = await supabaseAdmin
+      .from("pet_documents")
+      .select("pet_id, record_type_id")
+      .in("pet_id", validationPetIds)
+      .or(`expires_at.is.null,expires_at.gte.${today}`);
+    existingRecordsForValidation = existingDocs ?? [];
+  }
+}
+
 if (requiredRecordTypes.length > 0) {
   // Validate each required record type per pet
   for (let petIndex = 0; petIndex < body.pets.length; petIndex += 1) {
+    const petId = (body.pets[petIndex] as any).id as string | undefined;
     for (const recordType of requiredRecordTypes) {
       const hasUpload = (body.pet_records ?? []).some(
         (record) =>
@@ -518,7 +540,12 @@ if (requiredRecordTypes.length > 0) {
           record.document_type === recordType.id &&
           record.file_key?.trim(),
       );
-      if (!hasUpload) {
+      const hasExisting = petId
+        ? existingRecordsForValidation.some(
+            (r) => r.pet_id === petId && r.record_type_id === recordType.id,
+          )
+        : false;
+      if (!hasUpload && !hasExisting) {
         return badRequest(
           `Please upload a ${recordType.name} for each pet.`,
         );
@@ -528,10 +555,14 @@ if (requiredRecordTypes.length > 0) {
 } else if (requirePetRecords) {
   // Legacy: no custom types but toggle is on — require at least one record per pet
   for (let petIndex = 0; petIndex < body.pets.length; petIndex += 1) {
+    const petId = (body.pets[petIndex] as any).id as string | undefined;
     const hasRecord = (body.pet_records ?? []).some(
       (record) => record.pet_index === petIndex && record.file_key?.trim(),
     );
-    if (!hasRecord) {
+    const hasExisting = petId
+      ? existingRecordsForValidation.some((r) => r.pet_id === petId)
+      : false;
+    if (!hasRecord && !hasExisting) {
       return badRequest("Please upload at least one record for each pet.");
     }
   }
