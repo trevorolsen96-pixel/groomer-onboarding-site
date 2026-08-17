@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseClient } from "../../lib/supabase-client";
 import MoeGoImporter from "./MoeGoImporter";
 import StripeConnectSection from "./StripeConnectSection";
+import BusinessProfileCard from "./BusinessProfileCard";
 
 type Tab =
   | "overview"
@@ -820,34 +821,11 @@ function AccountPageContent() {
                 </section>
 
                 {/* Business profile */}
-                <section className="soft-card p-6">
-                  <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--rose-primary)]">
-                    Business profile
-                  </p>
-                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                    <Info label="Business name" value={settings?.business_name ?? business?.name} />
-                    <Info label="Business phone" value={settings?.phone} capitalize={false} />
-                    <Info
-                      label="Website"
-                      value={settings?.website}
-                      capitalize={false}
-                      href={settings?.website ? normalizeUrl(settings.website) : undefined}
-                    />
-                    <Info
-                      label="Business type"
-                      value={settings?.business_mode?.replaceAll("_", " ")}
-                    />
-                    <Info label="Timezone" value={settings?.sms_timezone} />
-                    <Info
-                      label="SMS reminders"
-                      value={settings?.sms_enabled ? "Enabled" : "Disabled"}
-                    />
-                  </div>
-                  <p className="mt-4 text-sm leading-6 text-[var(--text-secondary)]">
-                    To edit these details, open the Wagzly app and go to{" "}
-                    <strong className="text-[var(--text-primary)]">Settings → Business Profile</strong>.
-                  </p>
-                </section>
+                <BusinessProfileCard
+                  settings={settings}
+                  fallbackName={business?.name}
+                  onSaved={(updated) => setSettings(updated)}
+                />
 
                 {/* Team */}
                 <section className="soft-card p-6">
@@ -1508,10 +1486,6 @@ function SupportRow({ title, body }: { title: string; body: string }) {
 }
 
 // ── Helpers ──────────────────────────────────────────────
-
-function normalizeUrl(url: string): string {
-  return /^https?:\/\//i.test(url) ? url : `https://${url}`;
-}
 
 function smsStatusColor(status?: string | null): string {
   switch (status) {
