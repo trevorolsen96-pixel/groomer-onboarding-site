@@ -15,6 +15,10 @@ type PetForm = {
   sex: string;
   pet_type: string;
   temperament: string;
+  // Existing photo URL, for update/pre-fill display and required-photo
+  // validation only. A newly picked photo is a separate File upload
+  // (see petPhotos state) — this field is never used to set a new photo.
+  image_url?: string;
 };
 
 type Agreement = {
@@ -107,6 +111,7 @@ type BrandingResponse = {
   pet_questions: OnboardingQuestion[];
   client_questions: OnboardingQuestion[];
   require_pet_records_onboarding: boolean;
+  require_pet_photo_onboarding: boolean;
   pet_record_types: PetRecordType[];
   is_update: boolean;
   customer_id: string | null;
@@ -224,6 +229,10 @@ export default function OnboardingTokenPage() {
   const [requirePetRecords, setRequirePetRecords] = useState(false);
   const [petRecordTypes, setPetRecordTypes] = useState<PetRecordType[]>([]);
   const [petRecords, setPetRecords] = useState<PetRecordUpload[]>([]);
+  const [requirePetPhoto, setRequirePetPhoto] = useState(false);
+  // Keyed by pet_index — a pet without a newly picked photo has no entry.
+  const [petPhotos, setPetPhotos] = useState<Record<number, File>>({});
+  const [petPhotoPreviews, setPetPhotoPreviews] = useState<Record<number, string>>({});
   // key: `${petIndex}:${typeId}` → expiry date string (yyyy-mm-dd)
   const [petRecordExpiries, setPetRecordExpiries] = useState<Record<string, string>>({});
   const [petQuestionnaires, setPetQuestionnaires] = useState<PetQuestionnaire[]>([]);
@@ -275,6 +284,7 @@ export default function OnboardingTokenPage() {
         setClientQuestions(loadedClientQuestions);
         setRequirePetRecords(result.require_pet_records_onboarding ?? false);
         setPetRecordTypes(result.pet_record_types ?? []);
+        setRequirePetPhoto(result.require_pet_photo_onboarding ?? false);
 
         setAgreementAcceptances(
           (result.agreements ?? []).map((agreement) => ({
@@ -482,6 +492,35 @@ export default function OnboardingTokenPage() {
     setPetRecords((prev) => prev.filter((record) => record.id !== recordId));
   }
 
+  async function handlePetPhotoChange(petIndex: number, file: File) {
+    setFileError("");
+    setCompressingFile(true);
+    const processedFile = await compressImageFile(file);
+    setCompressingFile(false);
+
+    setPetPhotoPreviews((prev) => {
+      const old = prev[petIndex];
+      if (old) URL.revokeObjectURL(old);
+      return { ...prev, [petIndex]: URL.createObjectURL(processedFile) };
+    });
+    setPetPhotos((prev) => ({ ...prev, [petIndex]: processedFile }));
+  }
+
+  function removePetPhoto(petIndex: number) {
+    setPetPhotoPreviews((prev) => {
+      const old = prev[petIndex];
+      if (old) URL.revokeObjectURL(old);
+      const next = { ...prev };
+      delete next[petIndex];
+      return next;
+    });
+    setPetPhotos((prev) => {
+      const next = { ...prev };
+      delete next[petIndex];
+      return next;
+    });
+  }
+
   function getPetRecordsForType(petIndex: number, typeId: string) {
     return petRecords.filter(
       (record) => record.pet_index === petIndex && record.document_type === typeId,
@@ -521,6 +560,28 @@ export default function OnboardingTokenPage() {
           pet_index: record.pet_index > index ? record.pet_index - 1 : record.pet_index,
         })),
     );
+
+    setPetPhotoPreviews((prev) => {
+      const next: Record<number, string> = {};
+      Object.entries(prev).forEach(([key, url]) => {
+        const i = Number(key);
+        if (i === index) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        next[i > index ? i - 1 : i] = url;
+      });
+      return next;
+    });
+    setPetPhotos((prev) => {
+      const next: Record<number, File> = {};
+      Object.entries(prev).forEach(([key, file]) => {
+        const i = Number(key);
+        if (i === index) return;
+        next[i > index ? i - 1 : i] = file;
+      });
+      return next;
+    });
   }
 
   function validateRequiredQuestions() {
@@ -575,6 +636,16 @@ export default function OnboardingTokenPage() {
       }
     }
     return null;
+  }
+
+  function validateRequiredPetPhoto(): string | null {
+    if (!requirePetPhoto) return null;
+    const missing = pets.some((pet, petIndex) => {
+      const hasNewPhoto = !!petPhotos[petIndex];
+      const hasExistingPhoto = !!pet.image_url;
+      return !hasNewPhoto && !hasExistingPhoto;
+    });
+    return missing ? "Please add a photo for each pet." : null;
   }
 
   function getPetAnswer(petIndex: number, questionId: string) {
@@ -969,6 +1040,13 @@ export default function OnboardingTokenPage() {
       return;
     }
 
+    const photoError = validateRequiredPetPhoto();
+    if (photoError) {
+      setSubmitError(photoError);
+      setSubmitting(false);
+      return;
+    }
+
     try {
       const uploadPayload = petRecords.map((record, index) => {
         const fileKey = `pet_record_${index}`;
@@ -1008,6 +1086,10 @@ export default function OnboardingTokenPage() {
 
       petRecords.forEach((record, index) => {
         formData.append(`pet_record_${index}`, record.file);
+      });
+
+      Object.entries(petPhotos).forEach(([petIndex, file]) => {
+        formData.append(`pet_photo_${petIndex}`, file);
       });
 
       const response = await fetch(`/api/onboarding/${token}`, {
@@ -1226,6 +1308,56 @@ export default function OnboardingTokenPage() {
                       <option value="female">Female</option>
                     </select>
                     <input placeholder="Temperament" value={pet.temperament} onChange={(e) => updatePetField(index, "temperament", e.target.value)} required />
+                  </div>
+
+                  <div className="mt-4">
+                    <span className="mb-2 flex items-center text-sm font-semibold text-[var(--text-primary)]">
+                      Pet photo
+                      {requirePetPhoto ? (
+                        <span className="text-[var(--rose-primary)]"> *</span>
+                      ) : (
+                        <span className="ml-2 text-xs font-normal text-[var(--text-secondary)]">(optional)</span>
+                      )}
+                    </span>
+                    <div className="flex items-center gap-4">
+                      {petPhotoPreviews[index] || pet.image_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={petPhotoPreviews[index] ?? pet.image_url}
+                          alt={`${pet.pet_name || "Pet"} photo`}
+                          className="h-20 w-20 shrink-0 rounded-2xl object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border border-dashed border-[var(--divider-soft)] text-center text-xs text-[var(--text-secondary)]">
+                          No photo
+                        </div>
+                      )}
+                      <div className="flex flex-col items-start gap-2">
+                        <label className="cursor-pointer rounded-lg border border-[var(--divider-soft)] bg-white px-3 py-2 text-xs font-semibold text-[var(--rose-primary)] transition hover:border-[var(--rose-primary)]">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              handlePetPhotoChange(index, file);
+                              e.currentTarget.value = "";
+                            }}
+                          />
+                          {petPhotoPreviews[index] || pet.image_url ? "Replace photo" : "+ Add photo"}
+                        </label>
+                        {petPhotos[index] ? (
+                          <button
+                            type="button"
+                            onClick={() => removePetPhoto(index)}
+                            className="text-xs font-medium text-[var(--error-rose)]"
+                          >
+                            Remove
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
                   </div>
 
                   {questions.length > 0 ? (

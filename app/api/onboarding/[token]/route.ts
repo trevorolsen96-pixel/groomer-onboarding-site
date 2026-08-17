@@ -10,6 +10,10 @@ type PetPayload = {
   weight_lbs: string;
   sex: string;
   temperament: string;
+  // Existing photo URL echoed back by the client for pets that didn't get
+  // a new upload this submission. Overwritten server-side when a
+  // `pet_photo_${index}` file is present (see photo upload step below).
+  image_url?: string;
 };
 
 type AgreementAcceptancePayload = {
@@ -109,7 +113,7 @@ export async function GET(
 
       const { data: settingsRow, error: settingsError } = await supabaseAdmin
         .from("business_settings")
-        .select("business_name, logo_url, require_pet_records_onboarding")
+        .select("business_name, logo_url, require_pet_records_onboarding, require_pet_photo_onboarding")
         .eq("business_id", businessId)
         .single();
 
@@ -155,6 +159,8 @@ export async function GET(
         client_questions: (questionsRows ?? []).filter((q) => q.applies_to === "client"),
         require_pet_records_onboarding:
           settingsRow.require_pet_records_onboarding ?? false,
+        require_pet_photo_onboarding:
+          settingsRow.require_pet_photo_onboarding ?? false,
         pet_record_types: recordTypesRows ?? [],
         is_update: false,
         customer_id: null,
@@ -184,7 +190,7 @@ export async function GET(
 
     const { data: settingsRow, error: settingsError } = await supabaseAdmin
       .from("business_settings")
-      .select("business_name, logo_url, require_pet_records_onboarding")
+      .select("business_name, logo_url, require_pet_records_onboarding, require_pet_photo_onboarding")
       .eq("business_id", requestRow.business_id)
       .single();
 
@@ -248,7 +254,7 @@ export async function GET(
 
       const { data: pets } = await supabaseAdmin
         .from("pets")
-        .select("id, name, breed, age, birthday, weight, sex, pet_type, temperament")
+        .select("id, name, breed, age, birthday, weight, sex, pet_type, temperament, image_url")
         .eq("customer_id", requestRow.customer_id)
         .eq("is_active", true)
         .order("created_at");
@@ -340,6 +346,7 @@ export async function GET(
             sex: p.sex ?? "",
             pet_type: p.pet_type ?? "",
             temperament: p.temperament ?? "",
+            image_url: p.image_url ?? undefined,
           })),
         };
       }
@@ -356,6 +363,8 @@ export async function GET(
       client_questions: (questionsRows ?? []).filter((q) => q.applies_to === "client"),
       require_pet_records_onboarding:
         settingsRow.require_pet_records_onboarding ?? false,
+      require_pet_photo_onboarding:
+        settingsRow.require_pet_photo_onboarding ?? false,
       pet_record_types: recordTypesRows ?? [],
       is_update: isUpdate,
       customer_id: requestRow.customer_id ?? null,
@@ -475,7 +484,7 @@ if (contentType.includes("multipart/form-data")) {
     const { data: settingsValidationRow, error: settingsValidationError } =
   await supabaseAdmin
     .from("business_settings")
-    .select("require_pet_records_onboarding")
+    .select("require_pet_records_onboarding, require_pet_photo_onboarding")
     .eq("business_id", requestRow.business_id)
     .single();
 
@@ -524,6 +533,20 @@ if (requiredRecordTypes.length > 0) {
     );
     if (!hasRecord) {
       return badRequest("Please upload at least one record for each pet.");
+    }
+  }
+}
+
+const requirePetPhoto =
+  settingsValidationRow.require_pet_photo_onboarding ?? false;
+
+if (requirePetPhoto) {
+  for (let petIndex = 0; petIndex < body.pets.length; petIndex += 1) {
+    const hasNewPhoto = formData?.get(`pet_photo_${petIndex}`) instanceof File;
+    const hasExistingPhoto = !!(body.pets[petIndex] as { image_url?: string })
+      .image_url?.trim();
+    if (!hasNewPhoto && !hasExistingPhoto) {
+      return badRequest("Please add a photo for each pet.");
     }
   }
 }
@@ -610,6 +633,40 @@ if (requiredRecordTypes.length > 0) {
 
     const clientName = `${body.owner_first_name ?? ""} ${body.owner_last_name ?? ""}`.trim();
 
+    // Upload any newly picked pet photos before either write path below —
+    // new-client submissions don't have a pet row yet to attach a file to,
+    // so the photo becomes a plain URL string here and rides along inside
+    // `body.pets[i].image_url`, same as every other pet field.
+    if (formData) {
+      for (let petIndex = 0; petIndex < body.pets.length; petIndex += 1) {
+        const file = formData.get(`pet_photo_${petIndex}`);
+        if (!(file instanceof File)) continue;
+
+        const timestamp = Date.now();
+        const cleanName = cleanFileName(file.name || "photo.jpg");
+        const storagePath = `${requestRow.business_id}/onboarding/${requestRow.id}/pet-${petIndex}-${timestamp}-${cleanName}`;
+
+        const fileBuffer = await file.arrayBuffer();
+        const { error: photoUploadError } = await supabaseAdmin.storage
+          .from("pet-parent-images")
+          .upload(storagePath, fileBuffer, {
+            contentType: file.type || "image/jpeg",
+            upsert: false,
+          });
+
+        if (photoUploadError) {
+          console.error("[pet_photo] upload error:", photoUploadError);
+          continue;
+        }
+
+        const publicUrl = supabaseAdmin.storage
+          .from("pet-parent-images")
+          .getPublicUrl(storagePath).data.publicUrl;
+
+        body.pets[petIndex].image_url = publicUrl;
+      }
+    }
+
     if (requestRow.customer_id) {
       // UPDATE REQUEST — auto-apply changes immediately
 
@@ -664,6 +721,7 @@ if (requiredRecordTypes.length > 0) {
           sex: (pet as any).sex?.trim() || "",
           pet_type: (pet as any).pet_type?.trim() || "",
           temperament: (pet as any).temperament?.trim() || "",
+          image_url: (pet as any).image_url?.trim() || null,
         };
 
         if ((pet as any).id) {
