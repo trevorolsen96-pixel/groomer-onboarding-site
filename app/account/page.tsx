@@ -179,6 +179,7 @@ function smsStatusTitle(status?: string | null) {
       return "Text messaging ready to submit";
     case "pending":
       return "Text messaging setup in progress";
+    case "active":
     case "approved":
       return "Messaging active";
     case "failed":
@@ -1489,9 +1490,15 @@ function SupportRow({ title, body }: { title: string; body: string }) {
 
 function smsStatusColor(status?: string | null): string {
   switch (status) {
-    case "approved": return "green";
-    case "pending": return "amber";
-    case "failed": return "red";
-    default: return "neutral";
+    case "active":
+    case "approved":
+      return "green";
+    case "pending":
+    case "ready_to_submit":
+      return "amber";
+    case "failed":
+      return "red";
+    default:
+      return "neutral";
   }
 }
