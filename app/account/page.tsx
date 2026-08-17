@@ -11,10 +11,7 @@ import StripeConnectSection from "./StripeConnectSection";
 type Tab =
   | "overview"
   | "billing"
-  | "business"
-  | "messaging"
   | "payments"
-  | "staff"
   | "security"
   | "support"
   | "import";
@@ -95,41 +92,12 @@ const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
     ),
   },
   {
-    key: "business",
-    label: "Business",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0">
-        <path d="M3 21h18M9 21V7l3-4 3 4v14M9 12h6M9 16h6" />
-      </svg>
-    ),
-  },
-  {
-    key: "messaging",
-    label: "Messaging",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0">
-        <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
-      </svg>
-    ),
-  },
-  {
     key: "payments",
     label: "Payments",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0">
-        <rect x="2" y="5" width="20" height="14" rx="3" />
-        <path d="M2 10h20" />
-      </svg>
-    ),
-  },
-  {
-    key: "staff",
-    label: "Staff",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0">
-        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
-        <circle cx="9" cy="7" r="4" />
-        <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+        <circle cx="12" cy="12" r="9" />
+        <path d="M9 12l2 2 4-4" />
       </svg>
     ),
   },
@@ -185,9 +153,21 @@ function isTab(value: string | null): value is Tab {
   return tabs.some((tab) => tab.key === value);
 }
 
+const STATUS_LABELS: Record<string, string> = {
+  trialing: "Free trial",
+  active: "Active",
+  past_due: "Payment failed",
+  canceled: "Canceled",
+  incomplete: "Setup incomplete",
+  incomplete_expired: "Setup expired",
+  unpaid: "Payment failed",
+  blocked: "Access blocked",
+  paused: "Paused",
+};
+
 function prettyStatus(value?: string | null) {
   if (!value) return "Unknown";
-  return value.replaceAll("_", " ");
+  return STATUS_LABELS[value] ?? value.replaceAll("_", " ");
 }
 
 function smsStatusTitle(status?: string | null) {
@@ -753,28 +733,6 @@ function AccountPageContent() {
                   <ActionCard
                     icon={
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
-                      </svg>
-                    }
-                    title="Text messaging"
-                    description={smsStatusTitle(smsSetup?.status)}
-                    buttonLabel={
-                      smsSetup?.status === "approved"
-                        ? "View details"
-                        : "Complete setup"
-                    }
-                    buttonVariant={
-                      smsSetup?.status === "needs_info" ||
-                      smsSetup?.status === "failed"
-                        ? "primary"
-                        : "secondary"
-                    }
-                    onClick={() => setActiveTab("messaging")}
-                    statusColor={smsStatusColor(smsSetup?.status)}
-                  />
-                  <ActionCard
-                    icon={
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
                         <rect x="2" y="5" width="20" height="14" rx="3" />
                         <path d="M2 10h20" />
                       </svg>
@@ -800,20 +758,111 @@ function AccountPageContent() {
                         : "neutral"
                     }
                   />
+                  <ActionCard
+                    icon={
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+                        <circle cx="12" cy="12" r="9" />
+                        <path d="M9 12l2 2 4-4" />
+                      </svg>
+                    }
+                    title="Online payments"
+                    description={
+                      business?.plan !== "pro"
+                        ? "Included with Wagzly Pro"
+                        : paymentStatus?.payments_enabled
+                        ? "Active"
+                        : paymentStatus?.connected
+                        ? "Setup incomplete"
+                        : "Not connected"
+                    }
+                    buttonLabel="Manage payments"
+                    buttonVariant={
+                      business?.plan === "pro" && !paymentStatus?.payments_enabled
+                        ? "primary"
+                        : "secondary"
+                    }
+                    onClick={() => setActiveTab("payments")}
+                    statusColor={
+                      paymentStatus?.payments_enabled
+                        ? "green"
+                        : paymentStatus?.connected
+                        ? "amber"
+                        : "neutral"
+                    }
+                  />
                 </div>
 
+                {/* Messaging */}
                 <section className="soft-card p-6">
                   <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--rose-primary)]">
-                    Messaging
+                    Text messaging
                   </p>
                   <div className="mt-4 grid gap-4 sm:grid-cols-2">
                     <StatTile
                       label="Status"
-                      value={smsSetup?.status === "approved" ? "Active" : "Inactive"}
-                      statusColor={smsSetup?.status === "approved" ? "green" : "neutral"}
+                      value={smsStatusTitle(smsSetup?.status)}
+                      statusColor={smsStatusColor(smsSetup?.status)}
                     />
                     <StatTile label="Wagzly phone number" value={smsSetup?.phone_number ?? "Not set"} small />
                   </div>
+                  <p className="mt-4 text-sm leading-6 text-[var(--text-secondary)]">
+                    Messaging setup and settings are managed in the Wagzly app under{" "}
+                    <strong className="text-[var(--text-primary)]">Settings → Messaging</strong>.
+                    {smsSetup?.status === "needs_info" || smsSetup?.status === "failed" ? (
+                      <>
+                        {" "}Need a hand?{" "}
+                        <a href="mailto:support@wagzly.com" className="font-semibold text-[var(--rose-primary)] hover:underline">
+                          Email support
+                        </a>.
+                      </>
+                    ) : null}
+                  </p>
+                </section>
+
+                {/* Business profile */}
+                <section className="soft-card p-6">
+                  <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--rose-primary)]">
+                    Business profile
+                  </p>
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <Info label="Business name" value={settings?.business_name ?? business?.name} />
+                    <Info label="Business phone" value={settings?.phone} capitalize={false} />
+                    <Info
+                      label="Website"
+                      value={settings?.website}
+                      capitalize={false}
+                      href={settings?.website ? normalizeUrl(settings.website) : undefined}
+                    />
+                    <Info
+                      label="Business type"
+                      value={settings?.business_mode?.replaceAll("_", " ")}
+                    />
+                    <Info label="Timezone" value={settings?.sms_timezone} />
+                    <Info
+                      label="SMS reminders"
+                      value={settings?.sms_enabled ? "Enabled" : "Disabled"}
+                    />
+                  </div>
+                  <p className="mt-4 text-sm leading-6 text-[var(--text-secondary)]">
+                    To edit these details, open the Wagzly app and go to{" "}
+                    <strong className="text-[var(--text-primary)]">Settings → Business Profile</strong>.
+                  </p>
+                </section>
+
+                {/* Team */}
+                <section className="soft-card p-6">
+                  <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--rose-primary)]">
+                    Team
+                  </p>
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <StatTile label="Active staff accounts" value={staffCount.toString()} accent />
+                    <StatTile label="Pending invites" value={pendingInviteCount.toString()} />
+                  </div>
+                  <p className="mt-4 text-sm leading-6 text-[var(--text-secondary)]">
+                    Manage staff in the Wagzly app under{" "}
+                    <strong className="text-[var(--text-primary)]">Settings → Staff</strong>.
+                    Staff accounts sign up with an invite link — not through this page.
+                  </p>
                 </section>
 
                 <DownloadAppCard />
@@ -858,10 +907,6 @@ function AccountPageContent() {
                       <Info
                         label="Subscription status"
                         value={prettyStatus(business?.subscription_status)}
-                      />
-                      <Info
-                        label="App access"
-                        value={prettyStatus(business?.app_access_status)}
                       />
                       {isTrialing ? (
                         <Info
@@ -1011,64 +1056,6 @@ function AccountPageContent() {
               </div>
             ) : null}
 
-            {/* ── BUSINESS ── */}
-            {activeTab === "business" ? (
-              <AccountCard title="Business Profile">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Info label="Business name" value={settings?.business_name ?? business?.name} />
-                  <Info label="Business phone" value={settings?.phone} />
-                  <Info label="Website" value={settings?.website} />
-                  <Info
-                    label="Business type"
-                    value={settings?.business_mode?.replaceAll("_", " ")}
-                  />
-                  <Info
-                    label="SMS reminders"
-                    value={settings?.sms_enabled ? "Enabled" : "Disabled"}
-                  />
-                  <Info label="SMS timezone" value={settings?.sms_timezone} />
-                </div>
-
-                <div className="mt-6 flex items-start gap-3 rounded-2xl bg-[var(--soft-surface)] px-4 py-4">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mt-0.5 h-4 w-4 shrink-0 text-[var(--rose-primary)]">
-                    <circle cx="12" cy="12" r="10" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01" />
-                  </svg>
-                  <p className="text-sm leading-6 text-[var(--text-secondary)]">
-                    To edit your business name, phone, timezone, or SMS settings — open the{" "}
-                    <strong className="text-[var(--text-primary)]">Wagzly app</strong> and go to{" "}
-                    <strong className="text-[var(--text-primary)]">Settings → Business Profile</strong>.
-                  </p>
-                </div>
-              </AccountCard>
-            ) : null}
-
-            {/* ── MESSAGING ── */}
-            {activeTab === "messaging" ? (
-              <div className="space-y-6">
-                <AccountCard title="Messaging">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Info
-                      label="Status"
-                      value={smsSetup?.status === "approved" ? "Active" : "Inactive"}
-                    />
-                    <Info label="Wagzly phone number" value={smsSetup?.phone_number} />
-                  </div>
-                  <div className="mt-6 flex items-start gap-3 rounded-2xl bg-[var(--soft-surface)] px-4 py-4">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mt-0.5 h-4 w-4 shrink-0 text-[var(--rose-primary)]">
-                      <circle cx="12" cy="12" r="10" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01" />
-                    </svg>
-                    <p className="text-sm leading-6 text-[var(--text-secondary)]">
-                      Messaging is managed through the <strong className="text-[var(--text-primary)]">Wagzly app</strong>. Contact{" "}
-                      <a href="mailto:support@wagzly.com" className="font-semibold text-[var(--rose-primary)] hover:underline">support@wagzly.com</a>{" "}
-                      if you have questions about your phone number.
-                    </p>
-                  </div>
-                </AccountCard>
-              </div>
-            ) : null}
-
             {/* ── PAYMENTS ── */}
             {activeTab === "payments" ? (
               <StripeConnectSection
@@ -1079,33 +1066,6 @@ function AccountPageContent() {
               />
             ) : null}
 
-            {/* ── STAFF ── */}
-            {activeTab === "staff" ? (
-              <div className="space-y-6">
-                <AccountCard title="Staff">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <StatTile label="Active staff accounts" value={staffCount.toString()} accent />
-                    <StatTile label="Pending invites" value={pendingInviteCount.toString()} />
-                  </div>
-
-                  <div className="mt-6 space-y-4">
-                    <div className="flex items-start gap-3 rounded-2xl border border-[var(--divider-soft)] bg-[var(--soft-surface)] px-5 py-4">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mt-0.5 h-4 w-4 shrink-0 text-[var(--rose-primary)]">
-                        <circle cx="12" cy="12" r="10" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01" />
-                      </svg>
-                      <p className="text-sm leading-6 text-[var(--text-secondary)]">
-                        Manage your staff in the <strong className="text-[var(--text-primary)]">Wagzly app</strong> under{" "}
-                        <strong className="text-[var(--text-primary)]">Settings → Staff</strong>.
-                        Staff accounts receive their own login for the groomer app — they use an invite link to sign up, not this page.
-                      </p>
-                    </div>
-                  </div>
-                </AccountCard>
-
-                <DownloadAppCard />
-              </div>
-            ) : null}
-
             {/* ── SECURITY ── */}
             {activeTab === "security" ? (
               <div className="space-y-6">
@@ -1114,7 +1074,6 @@ function AccountPageContent() {
                     <Info label="Account owner" value={profile?.full_name} />
                     <Info label="Account role" value="Admin" />
                     <Info label="Business" value={businessName} />
-                    <Info label="App access" value={prettyStatus(business?.app_access_status)} />
                   </div>
 
                   <div className="mt-6 border-t border-[var(--divider-soft)] pt-6">
@@ -1279,11 +1238,20 @@ function Info({
   label,
   value,
   warn = false,
+  capitalize = true,
+  href,
 }: {
   label: string;
   value?: string | null;
   warn?: boolean;
+  capitalize?: boolean;
+  href?: string;
 }) {
+  const hasValue = Boolean(value && value.trim());
+  const valueClass = `mt-1.5 font-bold ${capitalize ? "capitalize" : ""} ${
+    warn ? "text-red-700" : "text-[var(--text-primary)]"
+  }`;
+
   return (
     <div
       className={`rounded-2xl p-4 ${
@@ -1295,13 +1263,13 @@ function Info({
       <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[var(--text-secondary)]">
         {label}
       </p>
-      <p
-        className={`mt-1.5 font-bold capitalize ${
-          warn ? "text-red-700" : "text-[var(--text-primary)]"
-        }`}
-      >
-        {value && value.trim() ? value : "Not set"}
-      </p>
+      {hasValue && href ? (
+        <a href={href} className={`${valueClass} block truncate hover:underline`}>
+          {value}
+        </a>
+      ) : (
+        <p className={valueClass}>{hasValue ? value : "Not set"}</p>
+      )}
     </div>
   );
 }
@@ -1541,15 +1509,8 @@ function SupportRow({ title, body }: { title: string; body: string }) {
 
 // ── Helpers ──────────────────────────────────────────────
 
-function smsStatusShort(status?: string | null) {
-  switch (status) {
-    case "approved": return "Active";
-    case "pending": return "In review";
-    case "needs_info": return "Setup needed";
-    case "failed": return "Failed";
-    case "disabled": return "Disabled";
-    default: return "Not set up";
-  }
+function normalizeUrl(url: string): string {
+  return /^https?:\/\//i.test(url) ? url : `https://${url}`;
 }
 
 function smsStatusColor(status?: string | null): string {
