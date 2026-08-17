@@ -34,10 +34,12 @@ export async function POST(req: NextRequest) {
       timestampHeader: req.headers.get("telnyx-timestamp"),
     });
 
-    // Deliberately does NOT reject calls on "invalid" -- see the matching
-    // comment in app/api/messages/inbound/route.ts. A bug in unverified
-    // signature logic dropping real calls is worse than the narrow
-    // forgery risk it guards against.
+    // Deliberately does NOT reject calls on "invalid" yet. The matching
+    // SMS route (app/api/messages/inbound/route.ts) now enforces this,
+    // confirmed safe 2026-08-17 against a real verified inbound text --
+    // but telnyx_webhook_log has no "verified" sample for voice_inbound
+    // specifically yet, only the pre-key "unconfigured" ones. Once a real
+    // call logs a "verified" result here too, flip this the same way.
     if (signatureResult === "invalid") {
       console.error(
         "[voice/inbound] Telnyx signature check failed -- processing the call anyway."

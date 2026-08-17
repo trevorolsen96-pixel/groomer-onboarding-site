@@ -250,19 +250,20 @@ export async function POST(request: Request) {
       console.error("[messages/inbound] raw webhook log failed:", logError);
     }
 
-    // Deliberately does NOT reject on "invalid" -- a bug in this
-    // verification logic (which hasn't been exercised against a real
-    // Telnyx-signed request yet) would otherwise silently drop every real
-    // inbound message with zero trace anywhere, which is a far worse
-    // outcome for this business than the narrow forgery risk this check
-    // guards against. Still logged loudly so a real problem is visible
-    // and fixable, just never blocking.
+    // Now enforced. This used to fail open on "invalid" because the
+    // verification logic hadn't been exercised against real Telnyx traffic
+    // yet -- confirmed working 2026-08-17 against a live signed request
+    // (telnyx_webhook_log shows a real inbound text verifying correctly),
+    // so an unsigned/forged POST here (e.g. someone spoofing a "cancel"
+    // reply for a customer they don't control) is now rejected instead of
+    // processed. Still doesn't reject "unconfigured" -- an environment
+    // that genuinely has no key set (a preview deploy, say) should keep
+    // working rather than silently break inbound messaging.
     if (signatureResult === "invalid") {
       console.error(
-        "[messages/inbound] Telnyx signature check failed -- processing " +
-          "the message anyway (see lib/telnyx-webhook.ts for why this " +
-          "doesn't block)."
+        "[messages/inbound] Telnyx signature check failed -- rejecting."
       );
+      return NextResponse.json({ ok: true });
     }
 
     const json = JSON.parse(rawBody);
