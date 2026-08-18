@@ -443,7 +443,7 @@ export default function HomePage() {
           </p>
           <div className="mt-7 flex flex-wrap items-center justify-center gap-5">
             <a
-              href="https://apps.apple.com"
+              href="https://apps.apple.com/us/app/wagzly/id6775014396"
               target="_blank"
               rel="noopener noreferrer"
               className="flex h-[54px] w-[180px] items-center justify-center"

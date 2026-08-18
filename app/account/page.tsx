@@ -1428,7 +1428,12 @@ function DownloadAppCard() {
       </p>
 
       <div className="mt-6 flex flex-wrap items-center gap-5">
-        <div className="flex h-[54px] w-[180px] items-center justify-center">
+        <a
+          href="https://apps.apple.com/us/app/wagzly/id6775014396"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex h-[54px] w-[180px] items-center justify-center"
+        >
           <Image
             src="/images/store/appstore.svg"
             alt="Download on the App Store"
@@ -1436,9 +1441,14 @@ function DownloadAppCard() {
             height={54}
             className="h-[54px] w-[180px] object-contain"
           />
-        </div>
+        </a>
 
-        <div className="flex h-[54px] w-[180px] items-center justify-center">
+        <a
+          href="https://play.google.com/store/apps/details?id=com.wagzly.app"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex h-[54px] w-[180px] items-center justify-center"
+        >
           <Image
             src="/images/store/googleplay.png"
             alt="Get it on Google Play"
@@ -1446,7 +1456,7 @@ function DownloadAppCard() {
             height={54}
             className="h-[54px] w-[180px] object-contain"
           />
-        </div>
+        </a>
       </div>
     </section>
   );
