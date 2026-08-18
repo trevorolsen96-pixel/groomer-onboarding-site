@@ -102,6 +102,12 @@ export default async function AdminDashboardPage() {
     (authUsers?.data?.users ?? []).map((u) => [u.id, u.email ?? ""])
   );
 
+  // Profile lookup by business ID (fallback when owner_user_id is null)
+  const profileByBizId = new Map(
+    (await supabaseAdmin.from("profiles").select("id, business_id").then(r => r.data ?? []))
+      .map((p) => [p.business_id, p.id])
+  );
+
   // Build lookup maps
   const settingsByBiz = new Map(
     (businessSettings ?? []).map((s) => [s.business_id, s])
@@ -163,9 +169,8 @@ export default async function AdminDashboardPage() {
       ? lastActive < thirtyDaysAgo
       : daysSince(biz.created_at) > 30;
 
-    const email = biz.owner_user_id
-      ? (emailByUserId.get(biz.owner_user_id) ?? "—")
-      : "—";
+    const userId = biz.owner_user_id ?? profileByBizId.get(biz.id) ?? null;
+    const email = userId ? (emailByUserId.get(userId) ?? "—") : "—";
 
     const subStatus = biz.subscription_status ?? "unknown";
     const churned = subStatus === "canceled" || subStatus === "incomplete_expired";
