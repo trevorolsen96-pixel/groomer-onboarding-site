@@ -95,6 +95,17 @@ function isTollFreeNumber(phoneNumber: string): boolean {
   return TOLL_FREE_AREA_CODES.has(areaCode);
 }
 
+// +15555555555 is a placeholder number on the Wagzly Demo Grooming account
+// (used for app store review) -- it's not a real Telnyx number and will
+// permanently fail 10DLC assignment with "not found" no matter how many
+// times it's retried. Skip this specific number rather than trying and
+// failing on it forever.
+const PLACEHOLDER_NUMBERS = new Set(["+15555555555"]);
+
+function isPlaceholderNumber(phoneNumber: string): boolean {
+  return PLACEHOLDER_NUMBERS.has(phoneNumber);
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -110,10 +121,11 @@ function delay(ms: number): Promise<void> {
 export async function assignPhoneNumberToCampaign(
   phoneNumber: string
 ): Promise<{ ok: boolean; error?: string }> {
-  if (isTollFreeNumber(phoneNumber)) {
+  if (isTollFreeNumber(phoneNumber) || isPlaceholderNumber(phoneNumber)) {
     // Nothing to do -- toll-free numbers don't need (or support) 10DLC
-    // campaign assignment. Treating this as "ok" is what stops the retry
-    // cron from trying it again every 15 minutes forever.
+    // campaign assignment, and the placeholder number can never be a real
+    // one. Treating this as "ok" is what stops the retry cron from trying
+    // it again forever.
     return { ok: true };
   }
 
