@@ -77,32 +77,39 @@ export async function searchAvailableNumber(
   return (data?.data?.[0]?.phone_number as string) ?? null;
 }
 
-// Links a newly-purchased number to the 10DLC campaign so it's allowed to
-// carry A2P SMS traffic without any manual step in the Telnyx dashboard.
-// Non-fatal on failure: the number is still usable (and messaging-profile
-// assigned) without this, just at higher risk of carrier filtering until
-// someone notices and links it manually — better than blocking the whole
-// signup/activation over it.
-async function assignPhoneNumberToCampaign(phoneNumber: string): Promise<void> {
+// Links a number to the 10DLC campaign so it's allowed to carry A2P SMS
+// traffic. Exported (rather than just called internally) so callers can
+// retry this on its own -- a newly-ordered number often isn't queryable as
+// a resource by Telnyx's API for a few seconds after the order call
+// returns, so the very first attempt right after purchase can legitimately
+// fail with a "not found" error even though the order itself succeeded.
+// Returns whether it succeeded so callers can persist that outcome and
+// retry later instead of the failure just vanishing into a server log.
+export async function assignPhoneNumberToCampaign(
+  phoneNumber: string
+): Promise<{ ok: boolean; error?: string }> {
   const campaignId = process.env.TELNYX_10DLC_CAMPAIGN_ID;
-  if (!campaignId) return;
+  if (!campaignId) return { ok: false, error: "TELNYX_10DLC_CAMPAIGN_ID is not configured." };
 
   try {
     await telnyxFetch("/10dlc/phone_number_campaigns", {
       method: "POST",
       body: JSON.stringify({ phoneNumber, campaignId }),
     });
+    return { ok: true };
   } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error.";
     console.error(
       `Failed to assign ${phoneNumber} to 10DLC campaign ${campaignId}:`,
       error
     );
+    return { ok: false, error: message };
   }
 }
 
 export async function purchasePhoneNumber(
   phoneNumber: string
-): Promise<{ id: string; phoneNumber: string }> {
+): Promise<{ id: string; phoneNumber: string; campaignAssigned: boolean; campaignAssignmentError?: string }> {
   const messagingProfileId = process.env.TELNYX_MESSAGING_PROFILE_ID;
   const connectionId = process.env.TELNYX_VOICE_CONNECTION_ID;
 
@@ -120,10 +127,16 @@ export async function purchasePhoneNumber(
   const ordered = data.data.phone_numbers?.[0];
   const orderedPhoneNumber = ordered?.phone_number as string;
 
-  await assignPhoneNumberToCampaign(orderedPhoneNumber);
+  // Best-effort immediate attempt -- often still too early (see comment on
+  // assignPhoneNumberToCampaign), which is exactly why callers must persist
+  // campaignAssigned/campaignAssignmentError and a cron retries it later
+  // rather than this being the only chance it gets.
+  const campaignResult = await assignPhoneNumberToCampaign(orderedPhoneNumber);
 
   return {
     id: ordered?.id as string,
     phoneNumber: orderedPhoneNumber,
+    campaignAssigned: campaignResult.ok,
+    campaignAssignmentError: campaignResult.error,
   };
 }

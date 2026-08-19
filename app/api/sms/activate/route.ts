@@ -112,6 +112,9 @@ export async function POST(request: Request) {
           approved_at: now,
           created_at: now,
           updated_at: now,
+          campaign_assigned_at: purchased.campaignAssigned ? now : null,
+          campaign_assignment_last_error:
+            purchased.campaignAssignmentError ?? null,
         },
         { onConflict: "business_id" }
       );

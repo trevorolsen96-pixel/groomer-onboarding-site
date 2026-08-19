@@ -144,6 +144,9 @@ export async function POST(request: Request) {
         submitted_at: now,
         approved_at: now,
         updated_at: now,
+        campaign_assigned_at: purchased.campaignAssigned ? now : null,
+        campaign_assignment_last_error:
+          purchased.campaignAssignmentError ?? null,
       })
       .eq("business_id", safeBusinessId);
 
