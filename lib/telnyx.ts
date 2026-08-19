@@ -77,6 +77,28 @@ export async function searchAvailableNumber(
   return (data?.data?.[0]?.phone_number as string) ?? null;
 }
 
+// Toll-free numbers (800/833/844/855/866/877/888) never go through 10DLC --
+// they use a separate toll-free verification process entirely. Assigning
+// one to a 10DLC campaign can never succeed, so this must be checked before
+// ever attempting it (otherwise a toll-free number retries forever, every
+// cron run, hitting Telnyx's API for something that can never work).
+const TOLL_FREE_AREA_CODES = new Set([
+  "800", "833", "844", "855", "866", "877", "888",
+]);
+
+function isTollFreeNumber(phoneNumber: string): boolean {
+  const digits = phoneNumber.replace(/\D/g, "");
+  const areaCode =
+    digits.length === 11 && digits.startsWith("1")
+      ? digits.slice(1, 4)
+      : digits.slice(0, 3);
+  return TOLL_FREE_AREA_CODES.has(areaCode);
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 // Links a number to the 10DLC campaign so it's allowed to carry A2P SMS
 // traffic. Exported (rather than just called internally) so callers can
 // retry this on its own -- a newly-ordered number often isn't queryable as
@@ -88,6 +110,13 @@ export async function searchAvailableNumber(
 export async function assignPhoneNumberToCampaign(
   phoneNumber: string
 ): Promise<{ ok: boolean; error?: string }> {
+  if (isTollFreeNumber(phoneNumber)) {
+    // Nothing to do -- toll-free numbers don't need (or support) 10DLC
+    // campaign assignment. Treating this as "ok" is what stops the retry
+    // cron from trying it again every 15 minutes forever.
+    return { ok: true };
+  }
+
   const campaignId = process.env.TELNYX_10DLC_CAMPAIGN_ID;
   if (!campaignId) return { ok: false, error: "TELNYX_10DLC_CAMPAIGN_ID is not configured." };
 
@@ -99,12 +128,43 @@ export async function assignPhoneNumberToCampaign(
     return { ok: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error.";
+
+    // Telnyx returns this as an error rather than a no-op success when the
+    // number is already linked to the campaign -- functionally that IS
+    // success (the desired end state already holds), so treat it as one
+    // instead of retrying something that already worked forever.
+    if (/already assigned/i.test(message)) {
+      return { ok: true };
+    }
+
     console.error(
       `Failed to assign ${phoneNumber} to 10DLC campaign ${campaignId}:`,
       error
     );
     return { ok: false, error: message };
   }
+}
+
+// Retries the immediate post-purchase assignment a few times with a short
+// backoff, since the usual cause of failure (Telnyx not yet treating the
+// number as a queryable resource) normally clears within a few seconds --
+// this covers that common case within the same request, so a new business
+// can text right away instead of waiting on the next cron run. The retry
+// cron (app/api/telnyx/retry-campaign-assignment) is still there as a
+// backstop for the rarer case where it takes longer than this window.
+async function assignPhoneNumberToCampaignWithRetry(
+  phoneNumber: string
+): Promise<{ ok: boolean; error?: string }> {
+  const waitsMs = [0, 3000, 6000];
+  let result: { ok: boolean; error?: string } = { ok: false };
+
+  for (const waitMs of waitsMs) {
+    if (waitMs > 0) await delay(waitMs);
+    result = await assignPhoneNumberToCampaign(phoneNumber);
+    if (result.ok) return result;
+  }
+
+  return result;
 }
 
 export async function purchasePhoneNumber(
@@ -127,11 +187,12 @@ export async function purchasePhoneNumber(
   const ordered = data.data.phone_numbers?.[0];
   const orderedPhoneNumber = ordered?.phone_number as string;
 
-  // Best-effort immediate attempt -- often still too early (see comment on
-  // assignPhoneNumberToCampaign), which is exactly why callers must persist
-  // campaignAssigned/campaignAssignmentError and a cron retries it later
-  // rather than this being the only chance it gets.
-  const campaignResult = await assignPhoneNumberToCampaign(orderedPhoneNumber);
+  // Retries a few times over ~9s -- covers the common case where Telnyx
+  // just hasn't caught up to the order yet. Callers must still persist
+  // campaignAssigned/campaignAssignmentError and let the retry cron pick up
+  // the rarer case where even that isn't enough time.
+  const campaignResult =
+    await assignPhoneNumberToCampaignWithRetry(orderedPhoneNumber);
 
   return {
     id: ordered?.id as string,

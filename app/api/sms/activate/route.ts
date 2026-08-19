@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { searchAvailableNumber, purchasePhoneNumber } from "@/lib/telnyx";
 
+// purchasePhoneNumber retries 10DLC campaign assignment a few times
+// (~9s) before giving up for this request -- give the function enough
+// runway so Vercel doesn't cut it off mid-retry.
+export const maxDuration = 30;
+
 function cleanText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }

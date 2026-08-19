@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/telnyx/retry-campaign-assignment",
-      "schedule": "*/15 * * * *"
+      "schedule": "*/5 * * * *"
     }
   ]
 }
