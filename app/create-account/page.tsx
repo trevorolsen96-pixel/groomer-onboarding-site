@@ -14,7 +14,7 @@ const comparisonRows = [
   ["Mileage tracking", "paw", "paw"],
   ["Team accounts", "2 (1 owner + 1 groomer)", "Unlimited"],
   ["Vehicles / vans", "1", "Unlimited"],
-  ["SMS credits", "200/mo", "900/mo"],
+  ["SMS credits", "400/mo", "1500/mo"],
   ["Payment links", "—", "paw"],
   ["Expenses / finance tools", "—", "paw"],
   ["Message pack add-ons", "—", "paw"],
