@@ -13,14 +13,14 @@ const basicFeatures = [
   "Route planning & calendar views",
   "Mileage tracking for tax reporting",
   "Automated appointment reminders",
-  "200 SMS / month",
+  "400 SMS / month",
   "2 accounts (1 business owner + 1 groomer)",
   "1 van",
 ];
 
 const proFeatures = [
   "Everything in Basic",
-  "900 SMS / month",
+  "1500 SMS / month",
   "Unlimited staff accounts & vans",
   "Payment links & invoicing",
   "Expense & tip tracking",
@@ -37,7 +37,7 @@ const comparisonRows = [
   ["Mileage tracking", "🐾", "🐾"],
   ["Team accounts", "2 (1 owner + 1 groomer)", "Unlimited"],
   ["Vehicles / vans", "1", "Unlimited"],
-  ["SMS credits", "200/mo", "900/mo"],
+  ["SMS credits", "400/mo", "1500/mo"],
   ["Payment links", "—", "🐾"],
   ["Expenses / finance tools", "—", "🐾"],
   ["Message pack add-ons", "—", "🐾"],
@@ -166,7 +166,7 @@ export default function PricingPage() {
               },
               {
                 q: "What are SMS credits used for?",
-                a: "SMS credits are used for automated appointment reminders, confirmations, and direct messages to your clients. Basic includes 200/mo and Pro includes 900/mo. Additional packs are available on Pro.",
+                a: "SMS credits are used for automated appointment reminders, confirmations, and direct messages to your clients. Basic includes 400/mo and Pro includes 1500/mo. Additional packs are available on Pro.",
               },
               {
                 q: "I'm switching from MoeGo — can I bring my client data?",

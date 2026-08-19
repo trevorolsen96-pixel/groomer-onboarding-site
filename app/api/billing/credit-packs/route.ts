@@ -29,8 +29,8 @@ async function getAuthenticatedBusiness(request: Request) {
 }
 
 const BASE_SMS_LIMIT: Record<string, number> = {
-  pro: 900,
-  basic: 200,
+  pro: 1500,
+  basic: 400,
 };
 
 async function getUsedCreditsThisPeriod(businessId: string): Promise<number> {

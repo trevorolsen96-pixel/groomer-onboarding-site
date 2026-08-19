@@ -174,7 +174,7 @@ export default function FeaturesPage() {
                   "Automatic SMS appointment reminders",
                   "Appointment confirmation messages",
                   "Care reminders for returning clients",
-                  "200–900+ SMS credits per month depending on plan",
+                  "400–1500+ SMS credits per month depending on plan",
                 ].map((item) => (
                   <li key={item} className="flex items-center gap-2.5 text-sm text-[var(--text-secondary)]">
                     <span className="font-bold text-[var(--rose-primary)]">✓</span> {item}
