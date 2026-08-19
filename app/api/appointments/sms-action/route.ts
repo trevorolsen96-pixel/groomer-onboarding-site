@@ -640,11 +640,23 @@ export async function POST(request: Request) {
     }
 
     if (action === "appointment_created") {
-      const createdApptDate = formatDateTime(appointmentDateTime, businessTimezone);
-      const message = normalizeSmsText(
-        `Hi ${customerName}! ${petPossessive} grooming appointment with ${businessName} ` +
-        `is booked for ${createdApptDate}. We look forward to seeing you!`
-      );
+      let message: string;
+      if (arrivalWindowEnabled && arrivalWindowMinutes > 0) {
+        const endTime = new Date(appointmentDateTime.getTime() + arrivalWindowMinutes * 60 * 1000);
+        const date = formatDateOnly(appointmentDateTime, businessTimezone);
+        const start = formatTimeOnly(appointmentDateTime, businessTimezone);
+        const end = formatTimeOnly(endTime, businessTimezone);
+        message = normalizeSmsText(
+          `Hi ${customerName}! ${petPossessive} grooming appointment with ${businessName} ` +
+          `is booked for ${date}, arrival ${start}-${end}. We look forward to seeing you!`
+        );
+      } else {
+        const createdApptDate = formatDateTime(appointmentDateTime, businessTimezone);
+        message = normalizeSmsText(
+          `Hi ${customerName}! ${petPossessive} grooming appointment with ${businessName} ` +
+          `is booked for ${createdApptDate}. We look forward to seeing you!`
+        );
+      }
 
       const segments = smsSegments(message);
       await assertSmsCreditsAvailable(businessId, segments);
