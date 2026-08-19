@@ -10,7 +10,8 @@ type SmsAction =
   | "cancellation"
   | "cancel_reminder_only"
   | "send_review_request"
-  | "appointment_created";
+  | "appointment_created"
+  | "send_eta";
 
 function cleanText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -59,6 +60,20 @@ function formatTimeOnly(value: Date, timezone: string) {
     parts.find((part) => part.type === type)?.value ?? "";
 
   return `${get("hour")}:${get("minute")} ${get("dayPeriod")}`;
+}
+
+// Formats a plain hour/minute pair (0-23 / 0-59) as "H:MM AM/PM" -- used
+// for the ETA feature, which deals in wall-clock times the groomer picks
+// directly (e.g. "arrive at 11:00, 1.5hr window") rather than a specific
+// calendar date/timezone instant like the rest of this file. No Date
+// object or timezone conversion needed since it's pure minutes-since-
+// midnight arithmetic.
+function formatWallClock(hour: number, minute: number) {
+  const normalizedMinute = ((minute % 60) + 60) % 60;
+  const normalizedHour = ((hour % 24) + 24) % 24;
+  const period = normalizedHour >= 12 ? "PM" : "AM";
+  const hour12 = normalizedHour % 12 === 0 ? 12 : normalizedHour % 12;
+  return `${hour12}:${normalizedMinute.toString().padStart(2, "0")} ${period}`;
 }
 
 function formatDateOnly(value: Date, timezone: string) {
@@ -321,6 +336,18 @@ export async function POST(request: Request) {
     const businessId = cleanText(body.businessId);
     const appointmentId = cleanText(body.appointmentId);
     const action = cleanText(body.action) as SmsAction;
+    // Only used by the "send_eta" action -- wall-clock hour/minute the
+    // groomer picked for their estimated arrival, plus how wide a window
+    // to quote (both in 30-minute increments, enforced client-side).
+    const arrivalHour = Number.isFinite(Number(body.arrivalHour))
+      ? Number(body.arrivalHour)
+      : null;
+    const arrivalMinute = Number.isFinite(Number(body.arrivalMinute))
+      ? Number(body.arrivalMinute)
+      : null;
+    const windowMinutes = Number.isFinite(Number(body.windowMinutes))
+      ? Number(body.windowMinutes)
+      : null;
 
     if (!businessId || !appointmentId || !action) {
       return NextResponse.json(
@@ -390,7 +417,7 @@ export async function POST(request: Request) {
 
     const { data: appointment } = await supabaseAdmin
       .from("appointments")
-      .select("id, business_id, customer_id, scheduled_at")
+      .select("id, business_id, customer_id, scheduled_at, worker_id")
       .eq("id", appointmentId)
       .eq("business_id", businessId)
       .maybeSingle();
@@ -407,7 +434,7 @@ export async function POST(request: Request) {
 
     // For reminders and reschedules, skip if the appointment is in the past
     // Cancellations and review requests should still send regardless of appointment time
-    if (isPastAppointment && action !== "cancellation" && action !== "send_review_request" && action !== "appointment_created") {
+    if (isPastAppointment && action !== "cancellation" && action !== "send_review_request" && action !== "appointment_created" && action !== "send_eta") {
       await deletePendingAppointmentReminders({ businessId, appointmentId });
 
       return NextResponse.json({
@@ -630,6 +657,70 @@ export async function POST(request: Request) {
         customerImageUrl: customer.image_url,
         appointmentId,
         messageType: "appointment_created",
+        fromPhone: smsSetup.phone_number,
+        toPhone,
+        message,
+      });
+
+      return NextResponse.json({ ok: true, status: "sent" });
+    }
+
+    if (action === "send_eta") {
+      if (
+        arrivalHour === null ||
+        arrivalHour < 0 ||
+        arrivalHour > 23 ||
+        arrivalMinute === null ||
+        arrivalMinute < 0 ||
+        arrivalMinute > 59 ||
+        windowMinutes === null ||
+        windowMinutes <= 0
+      ) {
+        return NextResponse.json(
+          { error: "Missing or invalid ETA details." },
+          { status: 400 }
+        );
+      }
+
+      let groomerLabel = "We";
+      if (appointment.worker_id) {
+        const { data: worker } = await supabaseAdmin
+          .from("workers")
+          .select("display_name")
+          .eq("id", appointment.worker_id)
+          .eq("business_id", businessId)
+          .maybeSingle();
+
+        const displayName = cleanText(worker?.display_name);
+        if (displayName) {
+          // First name only, matching the customer-name convention used
+          // elsewhere in this file -- keeps the text short.
+          groomerLabel = displayName.split(/\s+/)[0] || "We";
+        }
+      }
+
+      const startLabel = formatWallClock(arrivalHour, arrivalMinute);
+      const endTotalMinutes = arrivalHour * 60 + arrivalMinute + windowMinutes;
+      const endHour = Math.floor(endTotalMinutes / 60) % 24;
+      const endMinute = endTotalMinutes % 60;
+      const endLabel = formatWallClock(endHour, endMinute);
+
+      const message = normalizeSmsText(
+        `Hi ${customerName}, this is ${businessName}. ` +
+        `${groomerLabel} ${groomerLabel === "We" ? "are" : "is"} estimated to arrive between ${startLabel} and ${endLabel}.`
+      );
+
+      const segments = smsSegments(message);
+      await assertSmsCreditsAvailable(businessId, segments);
+
+      await sendImmediateSms({
+        businessId,
+        customerId: customer.id,
+        customerName: customer.name,
+        customerPhone: customer.phone,
+        customerImageUrl: customer.image_url,
+        appointmentId,
+        messageType: "appointment_eta",
         fromPhone: smsSetup.phone_number,
         toPhone,
         message,
