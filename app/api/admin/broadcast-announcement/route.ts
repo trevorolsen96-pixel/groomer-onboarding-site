@@ -16,6 +16,9 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const title = url.searchParams.get("title")?.trim();
   const body = url.searchParams.get("body")?.trim();
+  // Optional -- targets a single business (e.g. for testing) instead of
+  // broadcasting to every active business.
+  const onlyBusinessId = url.searchParams.get("businessId")?.trim();
 
   if (!title || !body) {
     return NextResponse.json(
@@ -24,16 +27,22 @@ export async function GET(request: Request) {
     );
   }
 
-  const { data: setups, error } = await supabaseAdmin
-    .from("business_sms_setup")
-    .select("business_id")
-    .in("status", ["active", "approved"]);
+  let businessIds: string[];
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (onlyBusinessId) {
+    businessIds = [onlyBusinessId];
+  } else {
+    const { data: setups, error } = await supabaseAdmin
+      .from("business_sms_setup")
+      .select("business_id")
+      .in("status", ["active", "approved"]);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    businessIds = (setups ?? []).map((row) => row.business_id as string);
   }
-
-  const businessIds = (setups ?? []).map((row) => row.business_id as string);
 
   for (const businessId of businessIds) {
     await sendPushToBusinessAsync({
