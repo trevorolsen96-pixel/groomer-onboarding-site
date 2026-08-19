@@ -108,8 +108,15 @@ export async function POST(request: Request) {
     const businessName =
       cleanText(settingsRow?.business_name) || "your groomer";
 
+    // Deliberately avoids "secure"/"onboarding" and other phishing-flavored
+    // template language -- confirmed via live testing that this exact
+    // wording (identical across every business, paired with a link) was
+    // triggering carrier spam filters (Telnyx error 40002) even on a
+    // properly 10DLC-vetted, otherwise-healthy sending number. A plain
+    // text from the same number to the same recipient delivered fine
+    // moments apart from a failed send of the old wording.
     const messageBody = normalizeSmsText(
-      `${businessName} sent you a secure Wagzly onboarding form. Please complete it here: ${link}`
+      `${businessName} here! Please fill out this quick client form to get started: ${link}`
     );
 
     await assertSmsCreditsAvailable({ businessId, body: messageBody });

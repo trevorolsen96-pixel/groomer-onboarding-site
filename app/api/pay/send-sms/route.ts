@@ -81,8 +81,11 @@ export async function POST(request: Request) {
     const fromPhone = normalizePhone(smsSetup.phone_number);
     const toPhone = normalizePhone(customer.phone);
 
-    // Keep message under 160 chars (1 SMS segment)
-    const message = normalizeSmsText(`Your grooming payment is ready. Pay securely: ${paymentUrl}`);
+    // Keep message under 160 chars (1 SMS segment). Deliberately no
+    // "securely" -- that word next to a payment link is a strong carrier
+    // spam-filter trigger (see the onboarding-invite fix for the confirmed
+    // real-world case of this exact pattern getting blocked).
+    const message = normalizeSmsText(`Your grooming payment is ready: ${paymentUrl}`);
 
     await sendSms({ from: fromPhone, to: toPhone, text: message });
 
