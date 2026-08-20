@@ -83,18 +83,43 @@ export default function SiteShell({ children }: { children: React.ReactNode }) {
       {children}
 
       <footer className="border-t border-[var(--divider-soft)] bg-[rgba(255,255,255,0.72)]">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-6 py-8 text-sm text-[var(--text-secondary)] sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
+        <div className="mx-auto grid w-full max-w-6xl gap-10 px-6 py-10 sm:grid-cols-3">
+          <div>
             <Image
               src="/images/logo/WagzlyCompact1.png"
               alt="Wagzly"
-              width={60}
-              height={60}
+              width={56}
+              height={56}
             />
+            <p className="mt-3 max-w-[240px] text-sm text-[var(--text-secondary)]">
+              Scheduling, clients, and payments — built for mobile groomers.
+            </p>
+            <p className="mt-4 text-xs text-[var(--text-secondary)]">
+              &copy; {new Date().getFullYear()} Wagzly. All rights reserved.
+            </p>
           </div>
-          <div className="flex flex-wrap items-center gap-4">
-            <Link href="/terms" className="footer-link">Terms of Service</Link>
-            <Link href="/privacy" className="footer-link">Privacy Policy</Link>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
+              Product
+            </p>
+            <nav className="mt-3 flex flex-col gap-2 text-sm">
+              <Link href="/features" className="footer-link">Features</Link>
+              <Link href="/pricing" className="footer-link">Pricing</Link>
+              <Link href="/book" className="footer-link">Book Online</Link>
+              <Link href="/create-account" className="footer-link">Create Account</Link>
+            </nav>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
+              Support
+            </p>
+            <nav className="mt-3 flex flex-col gap-2 text-sm">
+              <a href="mailto:support@wagzly.com" className="footer-link">
+                support@wagzly.com
+              </a>
+              <Link href="/privacy" className="footer-link">Privacy Policy</Link>
+              <Link href="/terms" className="footer-link">Terms of Service</Link>
+            </nav>
           </div>
         </div>
       </footer>

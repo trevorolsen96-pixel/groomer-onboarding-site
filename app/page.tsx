@@ -474,24 +474,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── Footer ── */}
-      <footer className="mt-8 border-t border-[var(--divider-soft)]">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-8 text-sm text-[var(--text-secondary)]">
-          <p>&copy; {new Date().getFullYear()} Wagzly. All rights reserved.</p>
-          <nav className="flex flex-wrap items-center gap-6">
-            <Link href="/privacy" className="hover:text-[var(--text-primary)]">
-              Privacy Policy
-            </Link>
-            <Link href="/terms" className="hover:text-[var(--text-primary)]">
-              Terms of Service
-            </Link>
-            <a href="mailto:support@wagzly.com" className="hover:text-[var(--text-primary)]">
-              support@wagzly.com
-            </a>
-          </nav>
-        </div>
-      </footer>
-
     </main>
   );
 }
