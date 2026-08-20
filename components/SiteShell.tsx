@@ -86,9 +86,9 @@ export default function SiteShell({ children }: { children: React.ReactNode }) {
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-6 py-8 text-sm text-[var(--text-secondary)] sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <Image
-              src="/images/logo/WagzlyCompact.png"
+              src="/images/logo/WagzlyCompact1.png"
               alt="Wagzly"
-              width={120}
+              width={60}
               height={60}
             />
           </div>
