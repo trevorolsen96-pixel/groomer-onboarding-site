@@ -98,10 +98,11 @@ function formatPhoneForDisplay(e164: string) {
 
 // Builds the list of profiles who should be pushed for a new inbound
 // message: every admin in the business, plus whichever staff member(s)
-// are actually allowed to message this specific client -- the customer's
-// one assigned worker if they have one, or every messaging-enabled worker
-// if the client is unassigned ("All"). Returns [] (not the whole business)
-// when nothing resolves, e.g. an unmatched phone number with no customer.
+// are actually allowed to message this specific client, per their
+// messaging_access ('unassigned' -- no staff at all, admin-only; 'all' --
+// every messaging-enabled worker; 'assigned' -- just the one worker in
+// assigned_worker_id). Returns [] (not the whole business) when nothing
+// resolves, e.g. an unmatched phone number with no customer.
 async function resolveMessagePushProfileIds({
   businessId,
   customerId,
@@ -121,10 +122,15 @@ async function resolveMessagePushProfileIds({
 
   const { data: customerRow } = await supabaseAdmin
     .from("customers")
-    .select("assigned_worker_id")
+    .select("assigned_worker_id, messaging_access")
     .eq("id", customerId)
     .eq("business_id", businessId)
     .maybeSingle();
+
+  // No staff should be notified at all for an admin-only client.
+  if (!customerRow || customerRow.messaging_access === "unassigned") {
+    return profileIds;
+  }
 
   let workerQuery = supabaseAdmin
     .from("workers")
@@ -134,9 +140,10 @@ async function resolveMessagePushProfileIds({
     .eq("can_message_clients", true)
     .not("profile_id", "is", null);
 
-  workerQuery = customerRow?.assigned_worker_id
-    ? workerQuery.eq("id", customerRow.assigned_worker_id)
-    : workerQuery;
+  workerQuery =
+    customerRow.messaging_access === "assigned" && customerRow.assigned_worker_id
+      ? workerQuery.eq("id", customerRow.assigned_worker_id)
+      : workerQuery;
 
   const { data: workers } = await workerQuery;
 

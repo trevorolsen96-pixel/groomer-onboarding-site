@@ -251,17 +251,22 @@ export async function POST(request: Request) {
       const { data: targetCustomer, error: targetCustomerError } =
         await supabaseAdmin
           .from("customers")
-          .select("assigned_worker_id")
+          .select("assigned_worker_id, messaging_access")
           .eq("id", targetCustomerId)
           .eq("business_id", businessId)
           .maybeSingle();
 
-      if (
-        targetCustomerError ||
-        !targetCustomer ||
-        (targetCustomer.assigned_worker_id &&
-          targetCustomer.assigned_worker_id !== worker.id)
-      ) {
+      // messaging_access is a 3-way choice: 'unassigned' (admin-only, no
+      // staff at all), 'all' (any messaging-enabled staff), or 'assigned'
+      // (only the one worker in assigned_worker_id).
+      const canMessageThisClient =
+        !!targetCustomer &&
+        targetCustomer.messaging_access !== "unassigned" &&
+        (targetCustomer.messaging_access === "all" ||
+          (targetCustomer.messaging_access === "assigned" &&
+            targetCustomer.assigned_worker_id === worker.id));
+
+      if (targetCustomerError || !canMessageThisClient) {
         return NextResponse.json(
           { error: "This client isn't assigned to you." },
           { status: 403 }
