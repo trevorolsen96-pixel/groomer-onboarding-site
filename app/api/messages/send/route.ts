@@ -204,6 +204,73 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Not authorized." }, { status: 403 });
     }
 
+    // Admins can message any client in their business, same as always. A
+    // non-admin (staff/groomer) sender must have messaging explicitly
+    // enabled on their own worker row, and the conversation's customer
+    // must be assigned to them specifically or left unassigned ("All").
+    // Resolved worker id (if any) is recorded as sent_by_worker_id below
+    // so the admin's thread view can show who actually sent it.
+    let sentByWorkerId: string | null = null;
+
+    if (profile.role !== "admin") {
+      const { data: worker, error: workerError } = await supabaseAdmin
+        .from("workers")
+        .select("id, active, can_message_clients")
+        .eq("profile_id", userData.user.id)
+        .eq("business_id", businessId)
+        .maybeSingle();
+
+      if (
+        workerError ||
+        !worker ||
+        !worker.active ||
+        !worker.can_message_clients
+      ) {
+        return NextResponse.json(
+          { error: "You don't have permission to message clients." },
+          { status: 403 }
+        );
+      }
+
+      const { data: conversationForPermCheck } = await supabaseAdmin
+        .from("message_conversations")
+        .select("customer_id")
+        .eq("id", conversationId)
+        .eq("business_id", businessId)
+        .maybeSingle();
+
+      const targetCustomerId = conversationForPermCheck?.customer_id ?? null;
+
+      if (!targetCustomerId) {
+        return NextResponse.json(
+          { error: "Not authorized." },
+          { status: 403 }
+        );
+      }
+
+      const { data: targetCustomer, error: targetCustomerError } =
+        await supabaseAdmin
+          .from("customers")
+          .select("assigned_worker_id")
+          .eq("id", targetCustomerId)
+          .eq("business_id", businessId)
+          .maybeSingle();
+
+      if (
+        targetCustomerError ||
+        !targetCustomer ||
+        (targetCustomer.assigned_worker_id &&
+          targetCustomer.assigned_worker_id !== worker.id)
+      ) {
+        return NextResponse.json(
+          { error: "This client isn't assigned to you." },
+          { status: 403 }
+        );
+      }
+
+      sentByWorkerId = worker.id;
+    }
+
     const { data: smsSetup, error: smsSetupError } = await supabaseAdmin
       .from("business_sms_setup")
       .select("status, phone_number")
@@ -312,6 +379,9 @@ export async function POST(request: Request) {
         // history can show just the caption + a rendered image, without
         // needing to parse the signed URL back out of the sent text.
         attachment_caption: cleanCaption || null,
+        // Null when the admin/owner sent it -- only set for staff sends,
+        // so the app's thread view can attribute the bubble.
+        sent_by_worker_id: sentByWorkerId,
       });
 
       await supabaseAdmin
@@ -363,6 +433,7 @@ export async function POST(request: Request) {
         status: "sent",
         provider: "telnyx",
         created_at: nowIso,
+        sent_by_worker_id: sentByWorkerId,
       });
 
       await supabaseAdmin

@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "../../../../lib/supabase-admin";
 import { verifyTelnyxSignature } from "../../../../lib/telnyx-webhook";
-import { sendPushToBusinessAsync } from "../../../../lib/push-notification";
+import {
+  sendPushToBusinessAsync,
+  sendPushToProfilesAsync,
+} from "../../../../lib/push-notification";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -91,6 +94,57 @@ function formatPhoneForDisplay(e164: string) {
   if (tenDigit.length !== 10) return e164;
 
   return `(${tenDigit.slice(0, 3)}) ${tenDigit.slice(3, 6)}-${tenDigit.slice(6)}`;
+}
+
+// Builds the list of profiles who should be pushed for a new inbound
+// message: every admin in the business, plus whichever staff member(s)
+// are actually allowed to message this specific client -- the customer's
+// one assigned worker if they have one, or every messaging-enabled worker
+// if the client is unassigned ("All"). Returns [] (not the whole business)
+// when nothing resolves, e.g. an unmatched phone number with no customer.
+async function resolveMessagePushProfileIds({
+  businessId,
+  customerId,
+}: {
+  businessId: string;
+  customerId: string | null;
+}): Promise<string[]> {
+  const { data: admins } = await supabaseAdmin
+    .from("profiles")
+    .select("id")
+    .eq("business_id", businessId)
+    .eq("role", "admin");
+
+  const profileIds = (admins ?? []).map((row) => row.id as string);
+
+  if (!customerId) return profileIds;
+
+  const { data: customerRow } = await supabaseAdmin
+    .from("customers")
+    .select("assigned_worker_id")
+    .eq("id", customerId)
+    .eq("business_id", businessId)
+    .maybeSingle();
+
+  let workerQuery = supabaseAdmin
+    .from("workers")
+    .select("profile_id")
+    .eq("business_id", businessId)
+    .eq("active", true)
+    .eq("can_message_clients", true)
+    .not("profile_id", "is", null);
+
+  workerQuery = customerRow?.assigned_worker_id
+    ? workerQuery.eq("id", customerRow.assigned_worker_id)
+    : workerQuery;
+
+  const { data: workers } = await workerQuery;
+
+  for (const worker of workers ?? []) {
+    if (worker.profile_id) profileIds.push(worker.profile_id as string);
+  }
+
+  return profileIds;
 }
 
 async function updateLatestAppointmentConfirmation({
@@ -527,16 +581,38 @@ export async function POST(request: Request) {
     });
 
     if (conversationId) {
-      await sendPushToBusinessAsync({
+      const pushProfileIds = await resolveMessagePushProfileIds({
         businessId,
-        title: `New message from ${conversationName}`,
-        body: displayBody,
-        data: {
-          type: "message",
-          route: "messages",
-          conversationId,
-        },
+        customerId,
       });
+
+      if (pushProfileIds.length) {
+        await sendPushToProfilesAsync({
+          businessId,
+          profileIds: pushProfileIds,
+          title: `New message from ${conversationName}`,
+          body: displayBody,
+          data: {
+            type: "message",
+            route: "messages",
+            conversationId,
+          },
+        });
+      } else {
+        // No customer resolved (unrecognized number) or no admins/workers
+        // found -- fall back to the original whole-business broadcast
+        // rather than silently sending nothing.
+        await sendPushToBusinessAsync({
+          businessId,
+          title: `New message from ${conversationName}`,
+          body: displayBody,
+          data: {
+            type: "message",
+            route: "messages",
+            conversationId,
+          },
+        });
+      }
     }
 
     return NextResponse.json({ ok: true });
