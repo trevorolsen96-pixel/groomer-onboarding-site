@@ -3,7 +3,16 @@
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import { useEffect, useState } from "react";
 import AccountMenu from "./AccountMenu";
+import { useSession } from "../lib/use-session";
+
+const NAV_LINKS = [
+  { href: "/features", label: "Features" },
+  { href: "/pricing", label: "Pricing" },
+  { href: "/#download", label: "Download" },
+  { href: "/book", label: "Book Online" },
+];
 
 // Pages a client reaches via a link Wagzly (or the groomer, on Wagzly's
 // behalf) sends or shares directly -- the marketing site's header/nav/
@@ -32,13 +41,44 @@ export default function SiteShell({ children }: { children: React.ReactNode }) {
     pathname.startsWith(prefix)
   );
 
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const [showMobileCta, setShowMobileCta] = useState(false);
+  const { loading: sessionLoading, loggedIn } = useSession();
+
+  useEffect(() => {
+    function handleScroll() {
+      const y = window.scrollY;
+      setScrolled(y > 8);
+
+      const nearBottom =
+        y + window.innerHeight > document.documentElement.scrollHeight - 240;
+      setShowMobileCta(y > 480 && !nearBottom);
+    }
+
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   if (isAdmin || isClientFacing) {
     return <>{children}</>;
   }
 
+  function isActive(href: string) {
+    if (href.startsWith("/#")) return false;
+    return href === "/" ? pathname === "/" : pathname.startsWith(href);
+  }
+
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-30 border-b border-[var(--divider-soft)] bg-[rgba(251,247,248,0.82)] backdrop-blur">
+      <header
+        className={`sticky top-0 z-30 border-b backdrop-blur transition-shadow duration-300 ${
+          scrolled
+            ? "border-[var(--divider-soft)] bg-[rgba(251,247,248,0.92)] shadow-[0_8px_24px_rgba(46,36,48,0.06)]"
+            : "border-transparent bg-[rgba(251,247,248,0.7)]"
+        }`}
+      >
         <div className="mx-auto flex h-[64px] w-full max-w-6xl items-center justify-between px-4 md:h-[82px] md:px-6">
           <Link href="/" className="flex items-center">
             <Image
@@ -61,26 +101,90 @@ export default function SiteShell({ children }: { children: React.ReactNode }) {
 
           <nav className="flex items-center gap-2">
             <div className="hidden md:flex items-center gap-1">
-              <Link href="/features" className="nav-link">Features</Link>
-              <Link href="/pricing" className="nav-link">Pricing</Link>
-              <Link href="/#download" className="nav-link">Download</Link>
-              <Link href="/book" className="nav-link">Book Online</Link>
+              {NAV_LINKS.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={`nav-link ${isActive(link.href) ? "nav-link-active" : ""}`}
+                >
+                  {link.label}
+                </Link>
+              ))}
             </div>
-            <Link
-              href="/book"
-              className="flex items-center gap-1.5 rounded-xl bg-[var(--rose-primary)] px-3 py-2 text-sm font-bold text-white md:hidden"
+
+            <button
+              type="button"
+              onClick={() => setMenuOpen((o) => !o)}
+              aria-expanded={menuOpen}
+              aria-label={menuOpen ? "Close menu" : "Open menu"}
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--divider-soft)] bg-white text-[var(--text-primary)] md:hidden"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
-                <path d="M21 10c0 6-9 13-9 13S3 16 3 10a9 9 0 0118 0z" /><circle cx="12" cy="10" r="3" />
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+                {menuOpen ? (
+                  <path d="M6 6l12 12M18 6L6 18" />
+                ) : (
+                  <path d="M4 7h16M4 12h16M4 17h16" />
+                )}
               </svg>
-              Book Online
-            </Link>
+            </button>
+
             <AccountMenu />
           </nav>
+        </div>
+
+        <div
+          className={`mobile-menu ${menuOpen ? "is-open" : ""}`}
+          inert={!menuOpen}
+        >
+          <div>
+            <nav className="flex flex-col gap-1 px-4 pb-4 pt-1">
+              {NAV_LINKS.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setMenuOpen(false)}
+                  className={`nav-link !justify-start ${isActive(link.href) ? "nav-link-active" : ""}`}
+                >
+                  {link.label}
+                </Link>
+              ))}
+              {!sessionLoading && !loggedIn ? (
+                <Link
+                  href="/create-account"
+                  onClick={() => setMenuOpen(false)}
+                  className="primary-button mt-2 justify-center"
+                >
+                  Start 14-day trial
+                </Link>
+              ) : null}
+            </nav>
+          </div>
         </div>
       </header>
 
       {children}
+
+      {!sessionLoading ? (
+        <div
+          className={`mobile-cta-bar ${showMobileCta ? "is-shown" : ""}`}
+          inert={!showMobileCta}
+        >
+          {loggedIn ? (
+            <Link href="/account" className="primary-button flex-1 justify-center">
+              Go to my account
+            </Link>
+          ) : (
+            <>
+              <Link href="/create-account" className="primary-button flex-1 justify-center">
+                Start 14-day trial
+              </Link>
+              <Link href="/login" className="secondary-button justify-center">
+                Log in
+              </Link>
+            </>
+          )}
+        </div>
+      ) : null}
 
       <footer className="border-t border-[var(--divider-soft)] bg-[rgba(255,255,255,0.72)]">
         <div className="mx-auto grid w-full max-w-6xl gap-10 px-6 py-10 sm:grid-cols-3">
@@ -92,7 +196,7 @@ export default function SiteShell({ children }: { children: React.ReactNode }) {
               height={56}
             />
             <p className="mt-3 max-w-[240px] text-sm text-[var(--text-secondary)]">
-              Scheduling, clients, and payments — built for mobile groomers.
+              Scheduling, clients, and payments, built for mobile groomers.
             </p>
             <p className="mt-4 text-xs text-[var(--text-secondary)]">
               &copy; {new Date().getFullYear()} Wagzly. All rights reserved.

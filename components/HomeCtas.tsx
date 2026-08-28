@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { supabaseClient } from "../lib/supabase-client";
+import { useSession } from "../lib/use-session";
 
 type HomeCtasProps = {
   demoBookingUrl: string;
@@ -13,35 +12,7 @@ export default function HomeCtas({
   demoBookingUrl,
   showDemoCard = true,
 }: HomeCtasProps) {
-  const [loading, setLoading] = useState(true);
-  const [loggedIn, setLoggedIn] = useState(false);
-
-  useEffect(() => {
-    let mounted = true;
-
-    async function loadSession() {
-      const { data } = await supabaseClient.auth.getSession();
-
-      if (!mounted) return;
-
-      setLoggedIn(Boolean(data.session?.user));
-      setLoading(false);
-    }
-
-    loadSession();
-
-    const {
-      data: { subscription },
-    } = supabaseClient.auth.onAuthStateChange((_event, session) => {
-      setLoggedIn(Boolean(session?.user));
-      setLoading(false);
-    });
-
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
-  }, []);
+  const { loading, loggedIn } = useSession();
 
   if (loading) {
     return (
@@ -69,6 +40,14 @@ export default function HomeCtas({
         )}
       </div>
 
+      {!loggedIn ? (
+        <ul className="trust-row">
+          <li>14-day free trial</li>
+          <li>No setup fees</li>
+          <li>Cancel anytime</li>
+        </ul>
+      ) : null}
+
       {showDemoCard ? (
         <div className="max-w-xl rounded-3xl border border-[var(--divider-soft)] bg-white/75 p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--rose-primary)]">
@@ -81,7 +60,7 @@ export default function HomeCtas({
 
           <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
             See scheduling, client management, onboarding, and reminders in
-            action — with someone who can answer your questions live.
+            action, with someone who can answer your questions live.
           </p>
 
           <a

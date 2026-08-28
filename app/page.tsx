@@ -1,53 +1,90 @@
 import Image from "next/image";
 import Link from "next/link";
 import HomeCtas from "../components/HomeCtas";
+import Reveal from "../components/Reveal";
+import FaqAccordion from "../components/FaqAccordion";
+import { faqs } from "../lib/faq-data";
 
 const demoBookingUrl = "https://calendar.app.google/wwNEKQs1KnJEaxbz6";
+
+const faqJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: faqs.map(({ q, a }) => ({
+    "@type": "Question",
+    name: q,
+    acceptedAnswer: {
+      "@type": "Answer",
+      text: a,
+    },
+  })),
+};
 
 export default function HomePage() {
   return (
     <main className="site-shell">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+      />
 
       {/* ── Hero ── */}
-      <section className="mx-auto max-w-6xl px-6 pb-12 pt-8 lg:pb-20 lg:pt-12">
-        <div className="grid items-center gap-12 lg:grid-cols-2">
-          <div>
-            <div className="mb-6">
-              <Image
-                src="/images/logo/WagzlyHLarge.png"
-                alt="Wagzly"
-                width={320}
-                height={90}
-                priority
-              />
+      <section className="relative overflow-hidden">
+        <div
+          className="bg-blob h-72 w-72 opacity-25"
+          style={{ top: "-4rem", left: "-6rem", background: "var(--mauve-secondary)" }}
+        />
+        <div
+          className="bg-blob h-96 w-96 opacity-20"
+          style={{ top: "2rem", right: "-8rem", background: "var(--rose-primary)" }}
+        />
+
+        <div className="relative z-10 mx-auto max-w-6xl px-6 pb-12 pt-8 lg:pb-24 lg:pt-14">
+          <div className="grid items-center gap-12 lg:grid-cols-2">
+            <div>
+              <div className="mb-6">
+                <Image
+                  src="/images/logo/WagzlyHLarge.png"
+                  alt="Wagzly"
+                  width={320}
+                  height={90}
+                  priority
+                />
+              </div>
+
+              <p className="eyebrow">Mobile Grooming Software</p>
+
+              <h1 className="mt-4 text-4xl font-extrabold leading-[1.05] tracking-tight text-[var(--text-primary)] sm:text-5xl lg:text-6xl">
+                Run your grooming business{" "}
+                <span className="gradient-text">without the chaos</span>
+              </h1>
+
+              <p className="mt-6 max-w-lg text-lg leading-8 text-[var(--text-secondary)]">
+                Wagzly helps mobile groomers manage schedules, clients,
+                onboarding, reminders, and payments, all in one clean,
+                simple app.
+              </p>
+
+              <HomeCtas demoBookingUrl={demoBookingUrl} />
             </div>
 
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--rose-primary)]">
-              Mobile Grooming Software
-            </p>
+            <div className="relative flex items-center justify-center">
+              <Image
+                src="/images/app/banner.png"
+                alt="Wagzly app in action"
+                width={640}
+                height={360}
+                className="w-full rounded-3xl shadow-2xl"
+                priority
+              />
 
-            <h1 className="mt-4 text-3xl font-bold leading-tight text-[var(--text-primary)] sm:text-4xl lg:text-5xl">
-              Run your grooming business without the chaos
-            </h1>
-
-            <p className="mt-6 text-lg leading-8 text-[var(--text-secondary)]">
-              Wagzly helps mobile groomers manage schedules, clients,
-              onboarding, reminders, and payments &mdash; all in one clean,
-              simple app.
-            </p>
-
-            <HomeCtas demoBookingUrl={demoBookingUrl} />
-          </div>
-
-          <div className="flex items-center justify-center">
-            <Image
-              src="/images/app/banner.png"
-              alt="Wagzly app in action"
-              width={640}
-              height={360}
-              className="w-full rounded-3xl shadow-2xl"
-              priority
-            />
+              <div className="float-chip -bottom-4 left-2 max-w-[85%] text-xs sm:-bottom-6 sm:left-4 sm:max-w-none sm:text-sm">
+                <span className="float-dot shrink-0" />
+                <span className="font-semibold text-[var(--text-primary)]">
+                  Reminder confirmed by client
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -55,17 +92,15 @@ export default function HomePage() {
       {/* ── Find a Groomer CTA ── */}
       <div className="bg-[var(--soft-surface)]">
         <section className="mx-auto max-w-6xl px-6 py-14">
-          <div className="soft-card overflow-hidden p-0">
+          <Reveal className="soft-card overflow-hidden p-0">
             <div className="grid items-center gap-0 lg:grid-cols-2">
               <div className="p-8 lg:p-12">
-                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--rose-primary)]">
-                  For pet owners
-                </p>
+                <p className="eyebrow">For pet owners</p>
                 <h2 className="mt-3 text-3xl font-bold leading-tight text-[var(--text-primary)]">
                   Find a mobile groomer near you
                 </h2>
                 <p className="mt-4 text-[var(--text-secondary)] leading-7">
-                  Browse Wagzly-powered groomers in your area, view their services, and request an appointment — all online.
+                  Browse Wagzly-powered groomers in your area, view their services, and request an appointment, entirely online.
                 </p>
                 <div className="mt-7 flex flex-wrap gap-4">
                   <Link
@@ -98,33 +133,39 @@ export default function HomePage() {
                   </div>
                   <p className="mt-5 text-xl font-bold text-[var(--text-primary)]">Your dog deserves the best</p>
                   <p className="mt-2 text-sm text-[var(--text-secondary)]">
-                    Mobile groomers come to you — no travel stress for your pet.
+                    Mobile groomers come to you, with no travel stress for your pet.
                   </p>
                 </div>
               </div>
             </div>
-          </div>
+          </Reveal>
         </section>
       </div>
 
       {/* ── Features ── */}
       <div className="bg-[var(--soft-surface)]">
         <section id="features" className="mx-auto max-w-6xl px-6 py-16">
-          <h2 className="text-center text-3xl font-bold text-[var(--text-primary)]">
-            Everything you need to run your grooming business
-          </h2>
+          <Reveal className="text-center">
+            <p className="eyebrow justify-center">What&apos;s inside</p>
+            <h2 className="mt-3 text-3xl font-bold text-[var(--text-primary)] sm:text-4xl">
+              Everything you need to run your grooming business
+            </h2>
+          </Reveal>
 
           <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-
-            {features.map(({ title, desc, icon }) => (
-
-              <div key={title} className="rounded-3xl bg-white p-5 shadow-sm">
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--soft-surface)] text-[var(--rose-primary)]">
+            {bentoFeatures.map(({ title, desc, icon, span, preview }, i) => (
+              <Reveal
+                key={title}
+                delay={i * 80}
+                className={`bento-card p-6 ${span ?? ""}`}
+              >
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--soft-surface)] text-[var(--rose-primary)]">
                   {icon}
                 </div>
-                <h3 className="mt-4 text-lg font-semibold text-[var(--text-primary)]">{title}</h3>
-                <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">{desc}</p>
-              </div>
+                <h3 className="mt-4 text-lg font-bold text-[var(--text-primary)]">{title}</h3>
+                <p className="mt-2 max-w-md text-sm leading-6 text-[var(--text-secondary)]">{desc}</p>
+                {preview}
+              </Reveal>
             ))}
           </div>
 
@@ -141,15 +182,15 @@ export default function HomePage() {
 
       {/* ── App screenshots ── */}
       <section className="mx-auto max-w-6xl px-6 py-16">
-        <p className="text-center text-sm font-semibold uppercase tracking-[0.2em] text-[var(--rose-primary)]">
-          The app
-        </p>
-        <h2 className="mt-3 text-center text-3xl font-bold text-[var(--text-primary)]">
-          See Wagzly in action
-        </h2>
-        <p className="mx-auto mt-3 max-w-xl text-center text-[var(--text-secondary)]">
-          A clean, focused experience built for busy grooming days.
-        </p>
+        <Reveal className="text-center">
+          <p className="eyebrow justify-center">The app</p>
+          <h2 className="mt-3 text-3xl font-bold text-[var(--text-primary)] sm:text-4xl">
+            See Wagzly in action
+          </h2>
+          <p className="mx-auto mt-3 max-w-xl text-[var(--text-secondary)]">
+            A clean, focused experience built for busy grooming days.
+          </p>
+        </Reveal>
 
         {/* Mobile: horizontal scroll carousel */}
         <div className="mt-14 sm:hidden">
@@ -196,22 +237,22 @@ export default function HomePage() {
       {/* ── How it works ── */}
       <div className="bg-[var(--soft-surface)]">
         <section className="mx-auto max-w-6xl px-6 py-16">
-          <p className="text-center text-sm font-semibold uppercase tracking-[0.2em] text-[var(--rose-primary)]">
-            Getting started
-          </p>
-          <h2 className="mt-3 text-center text-3xl font-bold text-[var(--text-primary)]">
-            Up and running in minutes
-          </h2>
+          <Reveal className="text-center">
+            <p className="eyebrow justify-center">Getting started</p>
+            <h2 className="mt-3 text-3xl font-bold text-[var(--text-primary)] sm:text-4xl">
+              Up and running in minutes
+            </h2>
+          </Reveal>
 
           <div className="mt-12 grid gap-6 sm:grid-cols-3">
-            {steps.map(({ number, title, desc }) => (
-              <div key={number} className="rounded-3xl bg-white p-6 shadow-sm">
+            {steps.map(({ number, title, desc }, i) => (
+              <Reveal key={number} delay={i * 100} className="rounded-3xl bg-white p-6 shadow-sm">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--rose-primary)] text-sm font-bold text-white">
                   {number}
                 </div>
                 <h3 className="mt-4 text-lg font-bold text-[var(--text-primary)]">{title}</h3>
                 <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">{desc}</p>
-              </div>
+              </Reveal>
             ))}
           </div>
         </section>
@@ -219,20 +260,20 @@ export default function HomePage() {
 
       {/* ── Built for Teams ── */}
       <section className="mx-auto max-w-6xl px-6 py-16">
-        <p className="text-center text-sm font-semibold uppercase tracking-[0.2em] text-[var(--rose-primary)]">
-          Two roles, one platform
-        </p>
-        <h2 className="mt-3 text-center text-3xl font-bold text-[var(--text-primary)]">
-          Built for how grooming businesses actually work
-        </h2>
-        <p className="mx-auto mt-4 max-w-2xl text-center text-[var(--text-secondary)]">
-          The business owner manages everything. The groomer sees only what they
-          need to get through their day. Each person gets their own login with the
-          right level of access.
-        </p>
+        <Reveal className="text-center">
+          <p className="eyebrow justify-center">Two roles, one platform</p>
+          <h2 className="mt-3 text-3xl font-bold text-[var(--text-primary)] sm:text-4xl">
+            Built for how grooming businesses actually work
+          </h2>
+          <p className="mx-auto mt-4 max-w-2xl text-[var(--text-secondary)]">
+            The business owner manages everything. The groomer sees only what they
+            need to get through their day. Each person gets their own login with the
+            right level of access.
+          </p>
+        </Reveal>
 
         <div className="mt-12 grid gap-6 lg:grid-cols-2">
-          <div className="soft-card p-8">
+          <Reveal className="soft-card p-8">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--rose-primary)]/10 text-2xl">
               👔
             </div>
@@ -254,15 +295,15 @@ export default function HomePage() {
                 </li>
               ))}
             </ul>
-          </div>
+          </Reveal>
 
-          <div className="soft-card p-8">
+          <Reveal delay={100} className="soft-card p-8">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--rose-primary)]/10 text-2xl">
               ✂️
             </div>
             <h3 className="mt-5 text-xl font-bold text-[var(--text-primary)]">Groomer</h3>
             <p className="mt-2 text-sm text-[var(--text-secondary)]">
-              A focused view of their schedule — no distractions, no clutter.
+              A focused view of their schedule, with no distractions or clutter.
             </p>
             <ul className="mt-5 space-y-2.5">
               {[
@@ -278,22 +319,24 @@ export default function HomePage() {
                 </li>
               ))}
             </ul>
-          </div>
+          </Reveal>
         </div>
       </section>
 
       {/* ── Pricing ── */}
       <section id="pricing" className="mx-auto max-w-6xl px-6 py-16">
-        <h2 className="text-center text-3xl font-bold text-[var(--text-primary)]">
-          Simple pricing
-        </h2>
-        <p className="mx-auto mt-3 max-w-2xl text-center text-[var(--text-secondary)]">
-          Every Wagzly plan includes the full scheduling system. Basic gives
-          your team the essentials, while Pro adds tools to help you scale.
-        </p>
+        <Reveal className="text-center">
+          <h2 className="text-3xl font-bold text-[var(--text-primary)] sm:text-4xl">
+            Simple pricing
+          </h2>
+          <p className="mx-auto mt-3 max-w-2xl text-[var(--text-secondary)]">
+            Every Wagzly plan includes the full scheduling system. Basic gives
+            your team the essentials, while Pro adds tools to help you scale.
+          </p>
+        </Reveal>
 
         <div className="mt-10 grid gap-6 lg:grid-cols-2">
-          <div className="soft-card p-6">
+          <Reveal className="soft-card p-6">
             <h3 className="text-xl font-bold text-[var(--text-primary)]">Wagzly Basic</h3>
             <p className="mt-2 text-3xl font-bold text-[var(--text-primary)]">$39.99/mo</p>
             <p className="mt-1 text-sm font-bold text-[var(--rose-primary)]">14-day free trial</p>
@@ -305,31 +348,40 @@ export default function HomePage() {
                 </li>
               ))}
             </ul>
-          </div>
+          </Reveal>
 
-          <div className="soft-card border-2 border-[var(--rose-primary)] p-6">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-xl font-bold text-[var(--text-primary)]">Wagzly Pro</h3>
-                <p className="mt-2 text-3xl font-bold text-[var(--text-primary)]">$89.99/mo</p>
-                <p className="mt-1 text-sm font-bold text-[var(--rose-primary)]">14-day free trial</p>
+          <Reveal
+            delay={100}
+            className="relative overflow-hidden rounded-[22px] border-2 border-[var(--rose-primary)] bg-[var(--warm-surface)] p-6 shadow-[0_20px_48px_rgba(197,143,161,0.28)]"
+          >
+            <div
+              className="bg-blob h-40 w-40 opacity-30"
+              style={{ top: "-3rem", right: "-3rem", background: "var(--rose-primary)" }}
+            />
+            <div className="relative z-10">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-xl font-bold text-[var(--text-primary)]">Wagzly Pro</h3>
+                  <p className="mt-2 text-3xl font-bold text-[var(--text-primary)]">$89.99/mo</p>
+                  <p className="mt-1 text-sm font-bold text-[var(--rose-primary)]">14-day free trial</p>
+                </div>
+                <span className="rounded-full bg-[var(--rose-primary)] px-3 py-1 text-xs font-bold text-white">
+                  Most flexible
+                </span>
               </div>
-              <span className="rounded-full bg-[var(--rose-primary)] px-3 py-1 text-xs font-bold text-white">
-                Most flexible
-              </span>
+              <ul className="mt-5 space-y-2.5">
+                {proFeatures.map((f) => (
+                  <li key={f} className="flex items-start gap-2 text-sm text-[var(--text-secondary)]">
+                    <span className="mt-0.5 font-bold text-[var(--rose-primary)]">&#10003;</span>
+                    {f}
+                  </li>
+                ))}
+              </ul>
             </div>
-            <ul className="mt-5 space-y-2.5">
-              {proFeatures.map((f) => (
-                <li key={f} className="flex items-start gap-2 text-sm text-[var(--text-secondary)]">
-                  <span className="mt-0.5 font-bold text-[var(--rose-primary)]">&#10003;</span>
-                  {f}
-                </li>
-              ))}
-            </ul>
-          </div>
+          </Reveal>
         </div>
 
-        <div className="mt-6 overflow-hidden rounded-3xl bg-white/70 shadow-sm">
+        <Reveal delay={150} className="mt-6 overflow-hidden rounded-3xl bg-white/70 shadow-sm">
           <table className="w-full border-collapse text-sm">
             <thead className="bg-[var(--soft-surface)]">
               <tr>
@@ -362,7 +414,7 @@ export default function HomePage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </Reveal>
 
         <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
           <Link href="/create-account" className="primary-button">
@@ -377,12 +429,23 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* ── FAQ ── */}
+      <div className="bg-[var(--soft-surface)]">
+        <section className="mx-auto max-w-6xl px-6 py-16">
+          <Reveal className="text-center">
+            <p className="eyebrow justify-center">Questions</p>
+            <h2 className="mt-3 text-3xl font-bold text-[var(--text-primary)] sm:text-4xl">
+              Frequently asked questions
+            </h2>
+          </Reveal>
+          <FaqAccordion />
+        </section>
+      </div>
+
       {/* ── CTA / Value props ── */}
       <section className="mx-auto max-w-5xl px-6 py-16 text-center">
-        <div className="soft-card p-10">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--rose-primary)]">
-            Built for mobile groomers
-          </p>
+        <Reveal className="soft-card p-10">
+          <p className="eyebrow justify-center">Built for mobile groomers</p>
           <h2 className="mt-3 text-3xl font-bold text-[var(--text-primary)]">
             Ready to simplify your grooming business?
           </h2>
@@ -424,15 +487,13 @@ export default function HomePage() {
           <div className="mt-8 flex justify-center">
             <HomeCtas demoBookingUrl={demoBookingUrl} showDemoCard={false} />
           </div>
-        </div>
+        </Reveal>
       </section>
 
       {/* ── Download ── */}
       <section id="download" className="mx-auto max-w-5xl scroll-mt-28 px-6 pb-16 pt-4 text-center">
-        <div className="soft-card p-8">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--rose-primary)]">
-            iOS and Android
-          </p>
+        <Reveal className="soft-card p-8">
+          <p className="eyebrow justify-center">iOS and Android</p>
           <h2 className="mt-3 text-2xl font-bold text-[var(--text-primary)]">
             Take Wagzly with you on every grooming day.
           </h2>
@@ -471,7 +532,7 @@ export default function HomePage() {
               />
             </a>
           </div>
-        </div>
+        </Reveal>
       </section>
 
     </main>
@@ -541,19 +602,38 @@ const proFeatures = [
   "SMS credit pack add-ons",
 ];
 
-const features: { title: string; desc: string; icon: React.ReactNode }[] = [
+const bentoFeatures: {
+  title: string;
+  desc: string;
+  icon: React.ReactNode;
+  span?: string;
+  preview?: React.ReactNode;
+}[] = [
   {
     title: "Smart Scheduling",
-    desc: "Drag, drop, and manage your day with less effort.",
+    desc: "Drag-and-drop day, week, and list views with conflict checks built in, so you can see your whole team's day at a glance.",
+    span: "sm:col-span-2 lg:col-span-2",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
         <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" />
       </svg>
     ),
+    preview: (
+      <div className="mt-5 space-y-2">
+        <div className="preview-row">
+          <span className="preview-label">9:00</span>
+          <span className="preview-value">Bella · Full Groom · Confirmed</span>
+        </div>
+        <div className="preview-row">
+          <span className="preview-label">11:30</span>
+          <span className="preview-value">Max · Bath &amp; Brush · Checked in</span>
+        </div>
+      </div>
+    ),
   },
   {
     title: "Route Planning",
-    desc: "Know where to go next and stay efficient on the road.",
+    desc: "Live drive-time estimates between stops keep your day realistic, not just idealistic.",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
         <path d="M21 10c0 6-9 13-9 13S3 16 3 10a9 9 0 0118 0z" /><circle cx="12" cy="10" r="3" />
@@ -561,8 +641,8 @@ const features: { title: string; desc: string; icon: React.ReactNode }[] = [
     ),
   },
   {
-    title: "Client Management",
-    desc: "Keep pet details, customer notes, and service history organized.",
+    title: "Client & Pet Profiles",
+    desc: "Breed, notes, behavior flags, and full service history, all before the leash changes hands.",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
         <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
@@ -571,16 +651,24 @@ const features: { title: string; desc: string; icon: React.ReactNode }[] = [
   },
   {
     title: "Automated Reminders",
-    desc: "Reduce no-shows with SMS reminders and appointment confirmations.",
+    desc: "SMS and push reminders go out on their own, with opt-out handled for you.",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
         <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 01-3.46 0" />
       </svg>
     ),
+    preview: (
+      <div className="mt-5 flex items-center gap-2.5 rounded-2xl border border-[var(--divider-soft)] bg-white/90 px-4 py-3">
+        <span className="float-dot" />
+        <span className="text-sm font-semibold text-[var(--text-primary)]">
+          Reminder confirmed
+        </span>
+      </div>
+    ),
   },
   {
     title: "Payment Tracking",
-    desc: "Track collected payments, tips, and outstanding balances.",
+    desc: "Stripe-powered payment links, tips, and outstanding balances tracked automatically.",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
         <rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" />
@@ -588,8 +676,9 @@ const features: { title: string; desc: string; icon: React.ReactNode }[] = [
     ),
   },
   {
-    title: "Designed for Groomers",
+    title: "Designed for Mobile Groomers",
     desc: "Built specifically for mobile grooming businesses, not adapted from something generic.",
+    span: "sm:col-span-2 lg:col-span-3",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
         <circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12" />
