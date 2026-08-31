@@ -87,10 +87,41 @@ export async function GET(request: Request) {
 
     for (const row of queueRows ?? []) {
       try {
+        // A reminder queued with a confirm-asking body may no longer need
+        // to ask by the time it actually fires -- the client could have
+        // already replied YES (or NO) off an earlier reminder for the same
+        // appointment. Checking the *live* confirmation_status here, right
+        // before sending, is what makes "don't ask again if they already
+        // confirmed" work regardless of how many reminders are queued.
+        let effectiveBody = String(row.body_rendered ?? "").trim();
+
+        if (row.message_type === "appointment_reminder" && row.body_rendered_plain) {
+          const { data: appt } = await supabaseAdmin
+            .from("appointments")
+            .select("confirmation_status")
+            .eq("id", row.appointment_id)
+            .maybeSingle();
+
+          if (appt?.confirmation_status === "confirmed") {
+            effectiveBody = String(row.body_rendered_plain).trim();
+          } else if (appt?.confirmation_status === "declined") {
+            // They already said no -- don't keep texting about it.
+            await supabaseAdmin
+              .from("sms_outbound_queue")
+              .update({
+                status: "skipped",
+                attempt_count: (row.attempt_count ?? 0) + 1,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", row.id);
+            continue;
+          }
+        }
+
         // Normalizing here (not just at each queue-writer) guarantees every
         // send is cleaned up regardless of which route queued it — cheap
         // and a no-op if the text is already plain ASCII.
-        const messageBody = normalizeSmsText(String(row.body_rendered ?? "").trim());
+        const messageBody = normalizeSmsText(effectiveBody);
 
         if (!messageBody) {
           await supabaseAdmin

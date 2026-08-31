@@ -209,7 +209,7 @@ async function upsertAppointmentReminder({
   // own dedupe_key, so every one fires independently.
   const { data: enabledRules } = await supabaseAdmin
     .from("business_sms_reminder_rules")
-    .select("rule_type, offset_minutes, enabled")
+    .select("rule_type, offset_minutes, enabled, requires_confirmation")
     .eq("business_id", businessId)
     .eq("enabled", true)
     .order("offset_minutes", { ascending: false });
@@ -223,24 +223,39 @@ async function upsertAppointmentReminder({
     return { status: "no_rule", queuedCount: 0 };
   }
 
-  let message: string;
+  // Two variants of the same reminder: one that asks the client to reply
+  // YES/NO, and a plain heads-up that doesn't. A business can enable
+  // several reminders at once (1 week + 2 days, say) but only wants to
+  // actually *ask* on the ones it picked in Settings -- and even then, the
+  // queue processor swaps a confirm-variant row down to the plain one at
+  // send time if the client already confirmed off an earlier reminder, so
+  // nobody gets asked twice.
+  let confirmMessage: string;
+  let plainMessage: string;
   if (arrivalWindowEnabled && arrivalWindowMinutes > 0) {
     const endTime = new Date(appointmentDateTime.getTime() + arrivalWindowMinutes * 60 * 1000);
     const date = formatDateOnly(appointmentDateTime, businessTimezone);
     const start = formatTimeOnly(appointmentDateTime, businessTimezone);
     const end = formatTimeOnly(endTime, businessTimezone);
-    message =
+    confirmMessage =
       `Hi ${customerName}, this is ${businessName}. ` +
       `${petPossessive} appt: ${date}, arrival ${start}-${end}. ` +
       `Reply YES to confirm or NO to cancel.`;
+    plainMessage =
+      `Hi ${customerName}, this is ${businessName}. ` +
+      `Just a reminder: ${petPossessive} appt is ${date}, arrival ${start}-${end}.`;
   } else {
     const appointmentDate = formatDateTime(appointmentDateTime, businessTimezone);
-    message =
+    confirmMessage =
       `Hi ${customerName}, this is ${businessName}. ` +
       `${petPossessive} grooming appt is ${appointmentDate}. ` +
       `Reply YES to confirm or NO to cancel.`;
+    plainMessage =
+      `Hi ${customerName}, this is ${businessName}. ` +
+      `Just a reminder: ${petPossessive} grooming appt is ${appointmentDate}.`;
   }
-  message = normalizeSmsText(message);
+  confirmMessage = normalizeSmsText(confirmMessage);
+  plainMessage = normalizeSmsText(plainMessage);
 
   const nowIso = new Date().toISOString();
   let queuedCount = 0;
@@ -256,6 +271,8 @@ async function upsertAppointmentReminder({
     // other enabled rules that are still upcoming still get queued.
     if (scheduledFor.getTime() <= Date.now()) continue;
 
+    const asksConfirmation = rule.requires_confirmation !== false;
+
     const { error: queueError } = await supabaseAdmin
       .from("sms_outbound_queue")
       .upsert(
@@ -266,7 +283,11 @@ async function upsertAppointmentReminder({
           message_type: "appointment_reminder",
           rule_type: rule.rule_type,
           to_phone: toPhone,
-          body_rendered: message,
+          body_rendered: asksConfirmation ? confirmMessage : plainMessage,
+          // Only a confirm-asking rule needs a plain fallback on hand for
+          // the queue processor to swap to -- a rule that never asks has
+          // nothing to fall back from.
+          body_rendered_plain: asksConfirmation ? plainMessage : null,
           scheduled_for_utc: scheduledFor.toISOString(),
           status: "pending",
           dedupe_key: `${appointmentId}:${rule.rule_type}`,
