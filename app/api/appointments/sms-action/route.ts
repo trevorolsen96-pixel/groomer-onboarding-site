@@ -565,14 +565,12 @@ export async function POST(request: Request) {
         const end = formatTimeOnly(endTime, businessTimezone);
         message =
           `Hi ${customerName}, this is ${businessName}. ` +
-          `${petPossessive} updated appt: ${date}, arrival ${start}-${end}. ` +
-          `Reply YES to confirm or NO to cancel.`;
+          `${petPossessive} appt has been rescheduled to ${date}, arrival ${start}-${end}.`;
       } else {
         const appointmentDate = formatDateTime(appointmentDateTime, businessTimezone);
         message =
           `Hi ${customerName}, this is ${businessName}. ` +
-          `${petPossessive} grooming appt is now ${appointmentDate}. ` +
-          `Reply YES to confirm or NO to cancel.`;
+          `${petPossessive} grooming appt has been rescheduled to ${appointmentDate}.`;
       }
       message = normalizeSmsText(message);
 
