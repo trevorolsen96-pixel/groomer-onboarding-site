@@ -61,6 +61,10 @@ type PetRecordType = {
   has_expiry: boolean;
   is_required: boolean;
   sort_order: number;
+  // Null = required for every pet. Set = only required for pets younger
+  // than this many months (e.g. 12, for a vaccine record that's only
+  // needed from puppies not yet fully vaccinated).
+  required_under_age_months: number | null;
 };
 
 type PetRecordUpload = {
@@ -181,16 +185,25 @@ const emptyPet = (): PetForm => ({
   temperament: "",
 });
 
-// "3 yr 4 mo" / "3 yr" / "7 mo" -- mirrors Pet.computeAgeFromBirthday in
-// the Flutter app so the age shown here matches what the app will show.
-function computeAgeFromBirthday(birthday: string): string {
+// Null when there's no usable birthday -- callers should treat that as
+// "age unknown" (e.g. skip an age-conditional requirement rather than
+// wrongly assuming the pet is very young because totalMonths would
+// otherwise read 0).
+function computeAgeInMonths(birthday: string): number | null {
   const parsed = new Date(`${birthday}T00:00:00`);
-  if (Number.isNaN(parsed.getTime())) return "";
+  if (Number.isNaN(parsed.getTime())) return null;
 
   const now = new Date();
   let totalMonths = (now.getFullYear() - parsed.getFullYear()) * 12 + (now.getMonth() - parsed.getMonth());
   if (now.getDate() < parsed.getDate()) totalMonths -= 1;
-  if (totalMonths < 0) totalMonths = 0;
+  return totalMonths < 0 ? 0 : totalMonths;
+}
+
+// "3 yr 4 mo" / "3 yr" / "7 mo" -- mirrors Pet.computeAgeFromBirthday in
+// the Flutter app so the age shown here matches what the app will show.
+function computeAgeFromBirthday(birthday: string): string {
+  const totalMonths = computeAgeInMonths(birthday);
+  if (totalMonths === null) return "";
 
   if (totalMonths < 12) return `${totalMonths} mo`;
 
@@ -623,7 +636,18 @@ export default function OnboardingTokenPage() {
     const requiredTypes = petRecordTypes.filter((t) => t.is_required);
     for (let petIndex = 0; petIndex < pets.length; petIndex++) {
       const petId = (pets[petIndex] as any).id as string | undefined;
+      // Unknown birthday can't be confirmed old enough to skip an
+      // age-limited requirement, so it stays required rather than assumed
+      // exempt -- only a birthday that's actually >= the threshold clears it.
+      const ageMonths = computeAgeInMonths(pets[petIndex].birthday);
       for (const type of requiredTypes) {
+        if (
+          type.required_under_age_months != null &&
+          ageMonths !== null &&
+          ageMonths >= type.required_under_age_months
+        ) {
+          continue;
+        }
         const hasUpload = getPetRecordsForType(petIndex, type.id).length > 0;
         const hasExisting = petId
           ? existingRecords.some(
@@ -788,7 +812,17 @@ export default function OnboardingTokenPage() {
 
   function renderRecordsSection(petIndex: number) {
     const hasCustomTypes = petRecordTypes.length > 0;
-    const hasRequiredTypes = petRecordTypes.some((t) => t.is_required);
+    const petAgeMonths = computeAgeInMonths(pets[petIndex]?.birthday ?? "");
+    // Mirrors validateRequiredRecordTypes: unknown age can't be confirmed
+    // old enough to be exempt, so it's treated as still required.
+    const isEffectivelyRequired = (type: PetRecordType) =>
+      type.is_required &&
+      !(
+        type.required_under_age_months != null &&
+        petAgeMonths !== null &&
+        petAgeMonths >= type.required_under_age_months
+      );
+    const hasRequiredTypes = petRecordTypes.some(isEffectivelyRequired);
 
     if (!hasCustomTypes && !requirePetRecords) return null;
 
@@ -837,14 +871,21 @@ export default function OnboardingTokenPage() {
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-sm font-semibold text-[var(--text-primary)]">
                       {recordType.name}
-                      {recordType.is_required && (
+                      {isEffectivelyRequired(recordType) && (
                         <span className="text-[var(--rose-primary)]"> *</span>
                       )}
-                      {!recordType.is_required && (
+                      {!isEffectivelyRequired(recordType) && (
                         <span className="ml-2 text-xs font-normal text-[var(--text-secondary)]">
                           (optional)
                         </span>
                       )}
+                      {recordType.is_required &&
+                        recordType.required_under_age_months != null && (
+                          <span className="ml-2 block text-xs font-normal text-[var(--text-secondary)]">
+                            Required for pets under{" "}
+                            {recordType.required_under_age_months} months old
+                          </span>
+                        )}
                     </span>
                     <label className="cursor-pointer rounded-lg border border-[var(--divider-soft)] bg-white px-3 py-2 text-xs font-semibold text-[var(--rose-primary)] transition hover:border-[var(--rose-primary)]">
                       <input

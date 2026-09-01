@@ -7,6 +7,9 @@ type PetPayload = {
   pet_name: string;
   breed: string;
   age: string;
+  // Optional -- when set, this is the source of truth for age (including
+  // for age-conditional required record types below), same as the app.
+  birthday?: string;
   weight_lbs: string;
   sex: string;
   temperament: string;
@@ -66,6 +69,22 @@ type SubmissionPayload = {
 
 function badRequest(message: string) {
   return NextResponse.json({ error: message }, { status: 400 });
+}
+
+// Mirrors computeAgeInMonths in the onboarding page -- kept in sync so a
+// pet the client-side form treats as exempt from an age-limited required
+// record can't turn around and get rejected by this server-side re-check.
+// Null means "age unknown" -- treated as not old enough to be exempt.
+function computeAgeInMonths(birthday: string | null | undefined): number | null {
+  if (!birthday) return null;
+  const parsed = new Date(`${birthday}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  const now = new Date();
+  let totalMonths =
+    (now.getFullYear() - parsed.getFullYear()) * 12 + (now.getMonth() - parsed.getMonth());
+  if (now.getDate() < parsed.getDate()) totalMonths -= 1;
+  return totalMonths < 0 ? 0 : totalMonths;
 }
 
 function normalizeToken(token: string) {
@@ -142,7 +161,7 @@ export async function GET(
 
       const { data: recordTypesRows } = await supabaseAdmin
         .from("business_pet_record_types")
-        .select("id, name, has_expiry, sort_order")
+        .select("id, name, has_expiry, sort_order, is_required, required_under_age_months")
         .eq("business_id", businessId)
         .eq("is_active", true)
         .order("sort_order", { ascending: true })
@@ -235,7 +254,7 @@ export async function GET(
 
     const { data: recordTypesRows } = await supabaseAdmin
       .from("business_pet_record_types")
-      .select("id, name, has_expiry, sort_order")
+      .select("id, name, has_expiry, sort_order, is_required, required_under_age_months")
       .eq("business_id", requestRow.business_id)
       .eq("is_active", true)
       .order("sort_order", { ascending: true })
@@ -502,7 +521,7 @@ const requirePetRecords =
 // Load custom record types for this business
 const { data: customRecordTypes } = await supabaseAdmin
   .from("business_pet_record_types")
-  .select("id, name, is_required")
+  .select("id, name, is_required, required_under_age_months")
   .eq("business_id", requestRow.business_id)
   .eq("is_active", true);
 
@@ -533,7 +552,15 @@ if (requiredRecordTypes.length > 0) {
   // Validate each required record type per pet
   for (let petIndex = 0; petIndex < body.pets.length; petIndex += 1) {
     const petId = (body.pets[petIndex] as any).id as string | undefined;
+    const ageMonths = computeAgeInMonths(body.pets[petIndex].birthday);
     for (const recordType of requiredRecordTypes) {
+      if (
+        recordType.required_under_age_months != null &&
+        ageMonths !== null &&
+        ageMonths >= recordType.required_under_age_months
+      ) {
+        continue;
+      }
       const hasUpload = (body.pet_records ?? []).some(
         (record) =>
           record.pet_index === petIndex &&
@@ -997,4 +1024,4 @@ if (requirePetPhoto) {
     console.error("POST onboarding error:", error);
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
-}
+}
