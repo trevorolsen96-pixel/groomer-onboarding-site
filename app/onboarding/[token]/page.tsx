@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 type PetForm = {
@@ -133,6 +133,130 @@ type BrandingResponse = {
 const MAX_IMAGE_DIMENSION = 1600; // px, longest side
 const IMAGE_JPEG_QUALITY = 0.82;
 const MAX_NON_IMAGE_FILE_BYTES = 4 * 1024 * 1024; // 4MB — e.g. PDFs
+
+const US_STATES = [
+  ["AL", "Alabama"], ["AK", "Alaska"], ["AZ", "Arizona"], ["AR", "Arkansas"],
+  ["CA", "California"], ["CO", "Colorado"], ["CT", "Connecticut"], ["DE", "Delaware"],
+  ["DC", "District of Columbia"], ["FL", "Florida"], ["GA", "Georgia"], ["HI", "Hawaii"],
+  ["ID", "Idaho"], ["IL", "Illinois"], ["IN", "Indiana"], ["IA", "Iowa"],
+  ["KS", "Kansas"], ["KY", "Kentucky"], ["LA", "Louisiana"], ["ME", "Maine"],
+  ["MD", "Maryland"], ["MA", "Massachusetts"], ["MI", "Michigan"], ["MN", "Minnesota"],
+  ["MS", "Mississippi"], ["MO", "Missouri"], ["MT", "Montana"], ["NE", "Nebraska"],
+  ["NV", "Nevada"], ["NH", "New Hampshire"], ["NJ", "New Jersey"], ["NM", "New Mexico"],
+  ["NY", "New York"], ["NC", "North Carolina"], ["ND", "North Dakota"], ["OH", "Ohio"],
+  ["OK", "Oklahoma"], ["OR", "Oregon"], ["PA", "Pennsylvania"], ["RI", "Rhode Island"],
+  ["SC", "South Carolina"], ["SD", "South Dakota"], ["TN", "Tennessee"], ["TX", "Texas"],
+  ["UT", "Utah"], ["VT", "Vermont"], ["VA", "Virginia"], ["WA", "Washington"],
+  ["WV", "West Virginia"], ["WI", "Wisconsin"], ["WY", "Wyoming"],
+] as const;
+
+const PET_TEMPERAMENTS = [
+  "Calm / Easygoing",
+  "Friendly / Social",
+  "Energetic / Playful",
+  "Shy / Reserved",
+  "Anxious / Nervous",
+  "Reactive / Aggressive",
+  "Other",
+] as const;
+
+const WEIGHT_OPTIONS_LBS = Array.from({ length: 200 }, (_, i) => i + 1);
+
+function WeightScroller({ value, onChange }: { value: string; onChange: (weight: string) => void }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const selected = value ? Number(value) : null;
+
+  // Grows/lights up whichever number sits under the center capsule right
+  // now, using direct style writes instead of state so a scroll gesture
+  // doesn't trigger a re-render on every frame.
+  function focusNearestToCenter(): number | null {
+    const container = scrollRef.current;
+    if (!container) return null;
+    const centerX = container.getBoundingClientRect().left + container.clientWidth / 2;
+    let nearestWeight: number | null = null;
+    let nearestDist = Infinity;
+
+    container.querySelectorAll<HTMLButtonElement>("button[data-weight]").forEach((btn) => {
+      const bRect = btn.getBoundingClientRect();
+      const dist = Math.abs(bRect.left + bRect.width / 2 - centerX);
+      const closeness = Math.max(0, 1 - dist / 70);
+      btn.style.transform = `scale(${1 + closeness * 0.45})`;
+      btn.style.opacity = String(0.45 + closeness * 0.55);
+      btn.style.color = closeness > 0.6 ? "var(--rose-primary)" : "var(--text-secondary)";
+      btn.style.fontWeight = closeness > 0.6 ? "700" : "500";
+      if (dist < nearestDist) {
+        nearestDist = dist;
+        nearestWeight = Number(btn.dataset.weight);
+      }
+    });
+
+    return nearestWeight;
+  }
+
+  // Scroll the prefilled/selected weight into view once, without fighting
+  // the user's own scroll position on every re-render.
+  useEffect(() => {
+    if (selected) {
+      scrollRef.current
+        ?.querySelector<HTMLElement>(`[data-weight="${selected}"]`)
+        ?.scrollIntoView({ inline: "center", block: "nearest" });
+    }
+    requestAnimationFrame(focusNearestToCenter);
+    return () => {
+      if (settleTimer.current) clearTimeout(settleTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function handleScroll() {
+    requestAnimationFrame(() => {
+      const nearest = focusNearestToCenter();
+      if (nearest == null) return;
+      // Commit the value shortly after scrolling settles, like a native
+      // wheel picker locking onto whatever stopped under the pointer.
+      if (settleTimer.current) clearTimeout(settleTimer.current);
+      settleTimer.current = setTimeout(() => onChange(String(nearest)), 120);
+    });
+  }
+
+  return (
+    <div className="relative">
+      {/* Caret guides marking the pick point -- fixed width, so unlike a
+          filled shape they never clash with wider (100+) numbers. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute left-1/2 top-0 z-20 h-0 w-0 -translate-x-1/2 -translate-y-[1px] border-x-[5px] border-t-[6px] border-x-transparent border-t-[var(--rose-primary)]"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute bottom-0 left-1/2 z-20 h-0 w-0 -translate-x-1/2 translate-y-[1px] border-x-[5px] border-b-[6px] border-x-transparent border-b-[var(--rose-primary)]"
+      />
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="flex snap-x snap-mandatory gap-1 overflow-x-auto scroll-smooth rounded-2xl border border-[var(--divider-soft)] bg-[var(--warm-surface)] px-[calc(50%-22px)] py-3"
+      >
+        {WEIGHT_OPTIONS_LBS.map((weight) => (
+          <button
+            key={weight}
+            type="button"
+            data-weight={weight}
+            onClick={(e) => {
+              onChange(String(weight));
+              e.currentTarget.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+            }}
+            className="relative z-10 snap-center shrink-0 rounded-full px-2 py-1 text-sm transition-[transform,opacity,color] duration-150 ease-out"
+          >
+            {weight}
+          </button>
+        ))}
+      </div>
+      <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-8 rounded-l-2xl bg-gradient-to-r from-[var(--warm-surface)] to-transparent" />
+      <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-8 rounded-r-2xl bg-gradient-to-l from-[var(--warm-surface)] to-transparent" />
+    </div>
+  );
+}
 
 async function compressImageFile(file: File): Promise<File> {
   if (!file.type.startsWith("image/") || file.type === "image/gif") {
@@ -618,6 +742,10 @@ export default function OnboardingTokenPage() {
     return petsOk && clientOk;
   }
 
+  function validateRequiredPetWeight() {
+    return pets.every((pet) => pet.weight_lbs.trim().length > 0);
+  }
+
   function validateRequiredRecordTypes(): string | null {
     if (petRecordTypes.length === 0) {
       if (requirePetRecords) {
@@ -1068,6 +1196,12 @@ export default function OnboardingTokenPage() {
       return;
     }
 
+    if (!validateRequiredPetWeight()) {
+      setSubmitError("Please select a weight for each pet.");
+      setSubmitting(false);
+      return;
+    }
+
     if (!validateRequiredQuestions()) {
       setSubmitError("Please answer all required questionnaire items for each pet.");
       setSubmitting(false);
@@ -1256,7 +1390,12 @@ export default function OnboardingTokenPage() {
               <input className="sm:col-span-2" placeholder="Address line 1" value={form.address_line_1} onChange={(e) => updateOwnerField("address_line_1", e.target.value)} required />
               <input className="sm:col-span-2" placeholder="Address line 2 (optional)" value={form.address_line_2} onChange={(e) => updateOwnerField("address_line_2", e.target.value)} />
               <input placeholder="City" value={form.city} onChange={(e) => updateOwnerField("city", e.target.value)} required />
-              <input placeholder="State" value={form.state} onChange={(e) => updateOwnerField("state", e.target.value)} required />
+              <select value={form.state} onChange={(e) => updateOwnerField("state", e.target.value)} required>
+                <option value="">State</option>
+                {US_STATES.map(([code, name]) => (
+                  <option key={code} value={code}>{name} ({code})</option>
+                ))}
+              </select>
               <input placeholder="ZIP code" value={form.postal_code} onChange={(e) => updateOwnerField("postal_code", e.target.value)} required />
             </div>
 
@@ -1336,7 +1475,10 @@ export default function OnboardingTokenPage() {
                         onChange={(e) => updatePetBirthday(index, e.target.value)}
                       />
                     </label>
-                    <input placeholder="Weight (lbs)" type="number" min="0" step="0.1" value={pet.weight_lbs} onChange={(e) => updatePetField(index, "weight_lbs", e.target.value)} required />
+                    <label className="flex flex-col gap-1 text-sm text-[var(--text-secondary)]">
+                      Weight (lbs)
+                      <WeightScroller value={pet.weight_lbs} onChange={(w) => updatePetField(index, "weight_lbs", w)} />
+                    </label>
                     <select value={pet.pet_type} onChange={(e) => updatePetField(index, "pet_type", e.target.value)} required>
                       <option value="">Select pet type</option>
                       <option value="dog">Dog</option>
@@ -1348,7 +1490,12 @@ export default function OnboardingTokenPage() {
                       <option value="male">Male</option>
                       <option value="female">Female</option>
                     </select>
-                    <input placeholder="Temperament" value={pet.temperament} onChange={(e) => updatePetField(index, "temperament", e.target.value)} required />
+                    <select value={pet.temperament} onChange={(e) => updatePetField(index, "temperament", e.target.value)} required>
+                      <option value="">Select temperament</option>
+                      {PET_TEMPERAMENTS.map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
                   </div>
 
                   <div className="mt-4">
