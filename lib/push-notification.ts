@@ -17,19 +17,22 @@ export async function resolveAdminProfileIds(businessId: string): Promise<string
 }
 
 // Exchanges Vercel's OIDC token for a GCP identity token authorized to call
-// the sendMessagePush Cloud Function. Shared by every push-sending helper
-// below -- returns null (rather than throwing) if any step fails or the
-// required env vars aren't set, so callers can just no-op.
-async function getAuthorizedPushHeaders(): Promise<{
+// a specific Cloud Function -- `pushUrl` doubles as both the fetch target
+// and the token's required audience, so this works for any Cloud Function
+// that trusts the same two invoker identities (see
+// `gcloud run services get-iam-policy`), not just sendMessagePush. Shared
+// by every push-sending helper below -- returns null (rather than
+// throwing) if any step fails or the required env vars aren't set, so
+// callers can just no-op.
+async function getAuthorizedPushHeaders(pushUrl: string | undefined): Promise<{
   pushUrl: string;
   headers: Record<string, string>;
 } | null> {
-  const pushUrl = process.env.GOOGLE_PUSH_FUNCTION_URL;
   const pushSecret = process.env.WAGZLY_PUSH_SECRET;
   const serviceAccountEmail = process.env.GCP_SERVICE_ACCOUNT_EMAIL;
 
   if (!pushUrl || !pushSecret || !serviceAccountEmail) {
-    console.log("[push] Skipped — GOOGLE_PUSH_FUNCTION_URL, WAGZLY_PUSH_SECRET, or GCP_SERVICE_ACCOUNT_EMAIL not set");
+    console.log("[push] Skipped — target URL, WAGZLY_PUSH_SECRET, or GCP_SERVICE_ACCOUNT_EMAIL not set");
     return null;
   }
 
@@ -94,7 +97,7 @@ export async function sendPushToBusinessAsync({
   body: string;
   data?: Record<string, string>;
 }): Promise<void> {
-  const authorized = await getAuthorizedPushHeaders();
+  const authorized = await getAuthorizedPushHeaders(process.env.GOOGLE_PUSH_FUNCTION_URL);
   if (!authorized) return;
 
   try {
@@ -142,7 +145,7 @@ export async function sendPushToProfilesAsync({
   const uniqueProfileIds = Array.from(new Set(profileIds.filter(Boolean)));
   if (!uniqueProfileIds.length) return;
 
-  const authorized = await getAuthorizedPushHeaders();
+  const authorized = await getAuthorizedPushHeaders(process.env.GOOGLE_PUSH_FUNCTION_URL);
   if (!authorized) return;
 
   try {
@@ -165,5 +168,29 @@ export async function sendPushToProfilesAsync({
     );
   } catch (err) {
     console.error("[push] Failed:", err);
+  }
+}
+
+// Called by the /api/badges/refresh route, which in turn is called
+// directly by a Postgres trigger (see
+// supabase/migrations/*_badge_refresh_triggers.sql) whenever something
+// that affects a badge count changes. Reuses the same OIDC-authenticated
+// calling pattern as the two functions above, just against the
+// refreshBadges Cloud Function instead of sendMessagePush -- Postgres
+// itself has no way to generate the Google-signed token that function's
+// IAM policy requires, which is why this hop through Vercel exists at all.
+export async function callRefreshBadges(businessId: string): Promise<void> {
+  const authorized = await getAuthorizedPushHeaders(process.env.GOOGLE_REFRESH_BADGES_FUNCTION_URL);
+  if (!authorized) return;
+
+  try {
+    await fetch(authorized.pushUrl, {
+      method: "POST",
+      headers: authorized.headers,
+      body: JSON.stringify({ businessId }),
+    });
+    console.log("[push] Badge refresh sent for business:", businessId);
+  } catch (err) {
+    console.error("[push] Badge refresh failed:", err);
   }
 }
