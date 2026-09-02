@@ -221,7 +221,7 @@ function WeightScroller({ value, onChange }: { value: string; onChange: (weight:
   }
 
   return (
-    <div className="relative">
+    <div className="relative min-w-0">
       {/* Caret guides marking the pick point -- fixed width, so unlike a
           filled shape they never clash with wider (100+) numbers. */}
       <div
@@ -1475,7 +1475,7 @@ export default function OnboardingTokenPage() {
                         onChange={(e) => updatePetBirthday(index, e.target.value)}
                       />
                     </label>
-                    <label className="flex flex-col gap-1 text-sm text-[var(--text-secondary)]">
+                    <label className="flex min-w-0 flex-col gap-1 text-sm text-[var(--text-secondary)]">
                       Weight (lbs)
                       <WeightScroller value={pet.weight_lbs} onChange={(w) => updatePetField(index, "weight_lbs", w)} />
                     </label>
