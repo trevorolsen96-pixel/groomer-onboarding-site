@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { sendPushToBusinessAsync } from "@/lib/push-notification";
+import { resolveAdminProfileIds, sendPushToProfilesAsync } from "@/lib/push-notification";
 
 type PetPayload = {
   id?: string;
@@ -977,9 +977,16 @@ if (requirePetPhoto) {
       // multi-hop Google Cloud auth chain that was leaving the client's
       // submit button stuck waiting on it. `after` still lets it run to
       // completion, just without holding up what the client sees.
-      after(() =>
-        sendPushToBusinessAsync({
+      // Onboarding submissions aren't assigned to any specific staff member
+      // (they're a pending review item, not a message tied to a customer's
+      // assigned worker) -- admins only.
+      after(async () => {
+        const adminProfileIds = await resolveAdminProfileIds(requestRow.business_id);
+        if (!adminProfileIds.length) return;
+
+        await sendPushToProfilesAsync({
           businessId: requestRow.business_id,
+          profileIds: adminProfileIds,
           title: "Client Info Updated",
           body: `${clientName || "A client"} updated their information.`,
           data: {
@@ -987,8 +994,8 @@ if (requirePetPhoto) {
             type: "client_update",
             customerId: requestRow.customer_id ?? "",
           },
-        }),
-      );
+        });
+      });
     } else {
       // NEW CLIENT — send to pending_approval for groomer review
       const customerNotes = `Onboarding form submitted. Email: ${body.email
@@ -1005,9 +1012,13 @@ if (requirePetPhoto) {
         },
       }).eq("id", requestRow.id);
 
-      after(() =>
-        sendPushToBusinessAsync({
+      after(async () => {
+        const adminProfileIds = await resolveAdminProfileIds(requestRow.business_id);
+        if (!adminProfileIds.length) return;
+
+        await sendPushToProfilesAsync({
           businessId: requestRow.business_id,
+          profileIds: adminProfileIds,
           title: "New Client Submission",
           body: `${clientName || "A client"} completed the onboarding form.`,
           data: {
@@ -1015,8 +1026,8 @@ if (requirePetPhoto) {
             type: "onboarding_submission",
             submissionId: requestRow.id,
           },
-        }),
-      );
+        });
+      });
     }
 
     return NextResponse.json({ ok: true });

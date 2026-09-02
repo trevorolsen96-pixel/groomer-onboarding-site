@@ -1,4 +1,20 @@
 import { getVercelOidcToken } from "@vercel/oidc";
+import { supabaseAdmin } from "./supabase-admin";
+
+// Shared by every notification type that should only ever reach the
+// business's admins/owners -- booking requests and onboarding submissions
+// aren't assigned to any specific staff member, so unlike messages or
+// appointments there's no per-worker scoping to compute; admin-only is the
+// correct default rather than a fallback.
+export async function resolveAdminProfileIds(businessId: string): Promise<string[]> {
+  const { data: admins } = await supabaseAdmin
+    .from("profiles")
+    .select("id")
+    .eq("business_id", businessId)
+    .eq("role", "admin");
+
+  return (admins ?? []).map((row) => row.id as string);
+}
 
 // Exchanges Vercel's OIDC token for a GCP identity token authorized to call
 // the sendMessagePush Cloud Function. Shared by every push-sending helper

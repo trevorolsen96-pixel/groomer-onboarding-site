@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "../../../../lib/supabase-admin";
 import { verifyTelnyxSignature } from "../../../../lib/telnyx-webhook";
 import {
+  resolveAdminProfileIds,
   sendPushToBusinessAsync,
   sendPushToProfilesAsync,
 } from "../../../../lib/push-notification";
@@ -110,13 +111,7 @@ async function resolveMessagePushProfileIds({
   businessId: string;
   customerId: string | null;
 }): Promise<string[]> {
-  const { data: admins } = await supabaseAdmin
-    .from("profiles")
-    .select("id")
-    .eq("business_id", businessId)
-    .eq("role", "admin");
-
-  const profileIds = (admins ?? []).map((row) => row.id as string);
+  const profileIds = await resolveAdminProfileIds(businessId);
 
   if (!customerId) return profileIds;
 
@@ -154,6 +149,35 @@ async function resolveMessagePushProfileIds({
   return profileIds;
 }
 
+// Same idea as resolveMessagePushProfileIds, but for appointment status
+// pushes: admins + whichever single worker this appointment is actually
+// assigned to (if any). A staff member with nothing to do with this
+// appointment shouldn't be buzzed every time some other groomer's booking
+// gets confirmed or cancelled.
+async function resolveAppointmentPushProfileIds({
+  businessId,
+  workerId,
+}: {
+  businessId: string;
+  workerId: string | null;
+}): Promise<string[]> {
+  const profileIds = await resolveAdminProfileIds(businessId);
+
+  if (!workerId) return profileIds;
+
+  const { data: worker } = await supabaseAdmin
+    .from("workers")
+    .select("profile_id")
+    .eq("id", workerId)
+    .eq("business_id", businessId)
+    .eq("active", true)
+    .maybeSingle();
+
+  if (worker?.profile_id) profileIds.push(worker.profile_id as string);
+
+  return profileIds;
+}
+
 async function updateLatestAppointmentConfirmation({
   businessId,
   customerId,
@@ -179,7 +203,7 @@ async function updateLatestAppointmentConfirmation({
 
   const { data: appointments } = await supabaseAdmin
     .from("appointments")
-    .select("id, scheduled_at")
+    .select("id, scheduled_at, worker_id")
     .eq("business_id", businessId)
     .eq("customer_id", customerId)
     .eq("confirmation_status", "pending")
@@ -189,6 +213,11 @@ async function updateLatestAppointmentConfirmation({
 
   const appointment = appointments?.[0];
   if (!appointment?.id) return;
+
+  const appointmentPushProfileIds = await resolveAppointmentPushProfileIds({
+    businessId,
+    workerId: (appointment as { worker_id?: string | null }).worker_id ?? null,
+  });
 
   if (isYes) {
     // Client confirmed — mark confirmed
@@ -211,16 +240,30 @@ async function updateLatestAppointmentConfirmation({
       created_at: now,
     });
 
-    await sendPushToBusinessAsync({
-      businessId,
-      title: "Appointment Confirmed",
-      body: `${customerName} confirmed their appointment.`,
-      data: {
-        type: "appointment_confirmed",
-        route: "schedule",
-        appointmentId: appointment.id,
-      },
-    });
+    if (appointmentPushProfileIds.length) {
+      await sendPushToProfilesAsync({
+        businessId,
+        profileIds: appointmentPushProfileIds,
+        title: "Appointment Confirmed",
+        body: `${customerName} confirmed their appointment.`,
+        data: {
+          type: "appointment_confirmed",
+          route: "schedule",
+          appointmentId: appointment.id,
+        },
+      });
+    } else {
+      await sendPushToBusinessAsync({
+        businessId,
+        title: "Appointment Confirmed",
+        body: `${customerName} confirmed their appointment.`,
+        data: {
+          type: "appointment_confirmed",
+          route: "schedule",
+          appointmentId: appointment.id,
+        },
+      });
+    }
   } else {
     // Client cancelled — cancel the appointment and remove pending reminders
     await supabaseAdmin
@@ -251,16 +294,30 @@ async function updateLatestAppointmentConfirmation({
       created_at: now,
     });
 
-    await sendPushToBusinessAsync({
-      businessId,
-      title: "Appointment Cancelled",
-      body: `${customerName} cancelled their appointment.`,
-      data: {
-        type: "appointment_cancelled",
-        route: "schedule",
-        appointmentId: appointment.id,
-      },
-    });
+    if (appointmentPushProfileIds.length) {
+      await sendPushToProfilesAsync({
+        businessId,
+        profileIds: appointmentPushProfileIds,
+        title: "Appointment Cancelled",
+        body: `${customerName} cancelled their appointment.`,
+        data: {
+          type: "appointment_cancelled",
+          route: "schedule",
+          appointmentId: appointment.id,
+        },
+      });
+    } else {
+      await sendPushToBusinessAsync({
+        businessId,
+        title: "Appointment Cancelled",
+        body: `${customerName} cancelled their appointment.`,
+        data: {
+          type: "appointment_cancelled",
+          route: "schedule",
+          appointmentId: appointment.id,
+        },
+      });
+    }
   }
 }
 

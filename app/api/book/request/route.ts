@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { sendPushToBusinessAsync } from "@/lib/push-notification";
+import { resolveAdminProfileIds, sendPushToProfilesAsync } from "@/lib/push-notification";
 
 // How long a completed OTP verification remains good for submitting a
 // booking request -- generous on purpose, since a client might spend a
@@ -84,16 +84,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Failed to submit request." }, { status: 500 });
   }
 
-  await sendPushToBusinessAsync({
-    businessId,
-    title: "New Booking Request",
-    body: `${clientName ?? "A client"} requested an appointment.`,
-    data: {
-      route: "booking_requests",
-      type: "booking_request",
-      requestId: inserted?.id ?? "",
-    },
-  });
+  // Booking requests aren't assigned to any specific staff member -- they're
+  // a pending item someone has to review/approve -- so this goes to admins
+  // only, not every groomer on the account.
+  const adminProfileIds = await resolveAdminProfileIds(businessId);
+  if (adminProfileIds.length) {
+    await sendPushToProfilesAsync({
+      businessId,
+      profileIds: adminProfileIds,
+      title: "New Booking Request",
+      body: `${clientName ?? "A client"} requested an appointment.`,
+      data: {
+        route: "booking_requests",
+        type: "booking_request",
+        requestId: inserted?.id ?? "",
+      },
+    });
+  }
 
   return NextResponse.json({ ok: true });
 }
