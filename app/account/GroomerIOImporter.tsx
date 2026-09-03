@@ -392,31 +392,29 @@ function GroomerIOImportFlow({ accessToken, onBack }: { accessToken: string; onB
               <ol className="space-y-5">
                 <li className="flex items-start gap-3">
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--rose-primary)]/10 text-xs font-bold text-[var(--rose-primary)]">1</span>
-                  <p className="text-sm leading-6 text-[var(--text-secondary)]">Log in to Groomer.io in your web browser.</p>
+                  <p className="text-sm leading-6 text-[var(--text-secondary)]">
+                    Groomer.io doesn&apos;t have a self-service export button — email{" "}
+                    <a href="mailto:support@groomer.io" className="font-semibold text-[var(--rose-primary)] hover:underline">support@groomer.io</a>{" "}
+                    or call{" "}
+                    <a href="tel:+16504190798" className="font-semibold text-[var(--rose-primary)] hover:underline">650-419-0798</a>{" "}
+                    and ask them to send your client data (a &quot;Client Summary&quot; export).
+                  </p>
                 </li>
                 <li className="flex items-start gap-3">
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--rose-primary)]/10 text-xs font-bold text-[var(--rose-primary)]">2</span>
-                  <p className="text-sm leading-6 text-[var(--text-secondary)]">Go to your <strong>Clients</strong> list and run the <strong>Client Summary</strong> report.</p>
+                  <p className="text-sm leading-6 text-[var(--text-secondary)]">They&apos;ll email you back a CSV file.</p>
                 </li>
                 <li className="flex items-start gap-3">
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--rose-primary)]/10 text-xs font-bold text-[var(--rose-primary)]">3</span>
-                  <p className="text-sm leading-6 text-[var(--text-secondary)]">Export/download it as a <strong>CSV</strong>.</p>
-                </li>
-                <li className="flex items-start gap-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--rose-primary)]/10 text-xs font-bold text-[var(--rose-primary)]">4</span>
-                  <p className="text-sm leading-6 text-[var(--text-secondary)]">Drag the CSV into the upload area below, or click to browse for it.</p>
+                  <p className="text-sm leading-6 text-[var(--text-secondary)]">Drag that CSV into the upload area below, or click to browse for it.</p>
                 </li>
               </ol>
 
               <div className="mt-5 rounded-xl border border-[var(--divider-soft)] bg-white px-4 py-3.5">
                 <p className="text-sm leading-6 text-[var(--text-secondary)]">
-                  <strong className="text-[var(--text-primary)]">Need more than this — full appointment history, groomer notes, everything?</strong>{" "}
-                  The Client Summary report only carries client and pet info. Groomer.io can generate a
-                  custom full-database extraction on request — contact their support at{" "}
-                  <a href="tel:+16504190798" className="font-semibold text-[var(--rose-primary)] hover:underline">650-419-0798</a> or{" "}
-                  <a href="mailto:support@groomer.io" className="font-semibold text-[var(--rose-primary)] hover:underline">support@groomer.io</a>.
-                  Per their terms of service, a highly customized or complete structural report may come with a
-                  database generation fee they charge directly.
+                  <strong className="text-[var(--text-primary)]">Need more than client/pet info — full appointment history, groomer notes, everything?</strong>{" "}
+                  Ask for that when you request your export. Per Groomer.io&apos;s terms of service, a highly
+                  customized or complete structural report may come with a database generation fee they charge directly.
                 </p>
                 <p className="mt-3 text-sm leading-6 text-[var(--text-secondary)]">
                   Stuck at any point, on either end of this? Email{" "}
