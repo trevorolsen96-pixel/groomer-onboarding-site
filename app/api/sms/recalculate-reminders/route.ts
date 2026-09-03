@@ -9,53 +9,74 @@ import {
   upsertAppointmentReminder,
 } from "../../../../lib/sms-reminders";
 
-// TEST SAFETY GATE -- rolling this out one business at a time. Editing a
-// business's reminder rules only ever re-queues the ONE appointment being
-// booked/edited at that moment (see sms-action's schedule_reminder
-// action); every other future appointment on the business keeps whatever
-// reminder schedule was computed under the *old* rules. This endpoint
-// fixes that by re-running the same per-appointment queue logic across
-// every upcoming appointment for a business.
+// Called by a Supabase Database Webhook on business_sms_reminder_rules
+// (insert/update) and business_settings (update) -- see
+// docs/recalculate-reminders-webhook.md for the exact trigger setup.
+// Editing a business's reminder rules only ever re-queued the ONE
+// appointment being booked/edited at that moment (see sms-action's
+// schedule_reminder action); every other future appointment on the
+// business kept whatever reminder schedule was computed under the *old*
+// rules. This re-runs that same per-appointment queue logic across every
+// upcoming appointment for a business, triggered straight off the table
+// write itself so it works no matter which app/app version made it --
+// no client update required.
 //
-// Restricted to Trevor's own business while this is validated against a
-// real queue. Once confirmed correct, delete this block (and the
-// isTestBusiness check below) to open it up to every business.
+// TEST SAFETY GATE -- restricted to Trevor's own business while this is
+// validated against a real queue. Once confirmed correct, delete this
+// block (and the isTestBusiness check below) to open it up to every
+// business.
 const TEST_BUSINESS_ID = "2faf8ba6-67d2-4b67-ac9b-028225f54a60";
 
 export async function POST(request: Request) {
   try {
     const authHeader = request.headers.get("authorization") ?? "";
     const token = authHeader.replace("Bearer ", "").trim();
-
-    if (!token) {
-      return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-    }
-
-    const { data: userData, error: userError } =
-      await supabaseAdmin.auth.getUser(token);
-
-    if (userError || !userData.user) {
-      return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-    }
+    const webhookSecret = process.env.RECALC_REMINDERS_WEBHOOK_SECRET;
 
     const body = await request.json();
-    const businessId = cleanText(body.businessId);
+    let businessId: string;
+
+    if (webhookSecret && token === webhookSecret) {
+      // Trusted call from the Supabase Database Webhook on
+      // business_sms_reminder_rules / business_settings -- fires from the
+      // database itself the instant either table is written, regardless
+      // of which app/app version made the write, so this never depends on
+      // a client being updated. Supabase's webhook payload shape is
+      // {type, table, schema, record, old_record}.
+      businessId = cleanText(
+        (body?.record as { business_id?: string } | undefined)?.business_id
+      );
+    } else {
+      // Fallback: a signed-in business owner calling this directly.
+      if (!token) {
+        return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+      }
+
+      const { data: userData, error: userError } =
+        await supabaseAdmin.auth.getUser(token);
+
+      if (userError || !userData.user) {
+        return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+      }
+
+      businessId = cleanText(body.businessId);
+
+      const { data: profile } = await supabaseAdmin
+        .from("profiles")
+        .select("business_id")
+        .eq("id", userData.user.id)
+        .maybeSingle();
+
+      if (!profile || profile.business_id !== businessId) {
+        return NextResponse.json({ error: "Not authorized." }, { status: 403 });
+      }
+    }
 
     if (!businessId) {
       return NextResponse.json(
         { error: "Missing businessId." },
         { status: 400 }
       );
-    }
-
-    const { data: profile } = await supabaseAdmin
-      .from("profiles")
-      .select("business_id")
-      .eq("id", userData.user.id)
-      .maybeSingle();
-
-    if (!profile || profile.business_id !== businessId) {
-      return NextResponse.json({ error: "Not authorized." }, { status: 403 });
     }
 
     if (businessId !== TEST_BUSINESS_ID) {
