@@ -407,6 +407,23 @@ function GroomerIOImportFlow({ accessToken, onBack }: { accessToken: string; onB
                   <p className="text-sm leading-6 text-[var(--text-secondary)]">Drag the CSV into the upload area below, or click to browse for it.</p>
                 </li>
               </ol>
+
+              <div className="mt-5 rounded-xl border border-[var(--divider-soft)] bg-white px-4 py-3.5">
+                <p className="text-sm leading-6 text-[var(--text-secondary)]">
+                  <strong className="text-[var(--text-primary)]">Need more than this — full appointment history, groomer notes, everything?</strong>{" "}
+                  The Client Summary report only carries client and pet info. Groomer.io can generate a
+                  custom full-database extraction on request — contact their support at{" "}
+                  <a href="tel:+16504190798" className="font-semibold text-[var(--rose-primary)] hover:underline">650-419-0798</a> or{" "}
+                  <a href="mailto:support@groomer.io" className="font-semibold text-[var(--rose-primary)] hover:underline">support@groomer.io</a>.
+                  Per their terms of service, a highly customized or complete structural report may come with a
+                  database generation fee they charge directly.
+                </p>
+                <p className="mt-3 text-sm leading-6 text-[var(--text-secondary)]">
+                  Stuck at any point, on either end of this? Email{" "}
+                  <a href="mailto:support@wagzly.com" className="font-semibold text-[var(--rose-primary)] hover:underline">support@wagzly.com</a>{" "}
+                  and we&apos;ll help you get your data exported and imported.
+                </p>
+              </div>
             </div>
           )}
         </div>
