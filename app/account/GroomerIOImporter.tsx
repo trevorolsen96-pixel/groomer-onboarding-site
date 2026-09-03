@@ -2,21 +2,25 @@
 
 import { useRef, useState } from "react";
 import { parseCSVRecords } from "./csvParser";
-import GroomerIOImportFlow from "./GroomerIOImporter";
 
-type Pet = { name: string; breed: string | null };
+export type GroomerIOPet = {
+  name: string;
+  birthday: string | null;
+  sex: "male" | "female" | null;
+  notes: string | null;
+};
 
-type ParsedRow = {
+export type ParsedRow = {
   firstName: string;
   lastName: string;
   email: string | null;
   primaryPhone: string | null;
-  additionalPhone: string | null;
+  secondaryPhone: string | null;
   address: string;
   notes: string | null;
-  status: string;
-  pets: Pet[];
+  pets: GroomerIOPet[];
   createDate: string | null;
+  lastAppt: string | null;
 };
 
 type ImportResult = {
@@ -25,31 +29,131 @@ type ImportResult = {
   skipped: { name: string; reason: string }[];
 };
 
-type Software = "moego" | "groomerio" | null;
+// Groomer.io's own export is called a "Client Summary" -- these are the
+// columns unique enough to that report to tell it apart from some other
+// CSV someone drags in by mistake.
+const REQUIRED_GROOMERIO_COLUMNS = ["customer_id", "first_name", "last_name", "pets", "full address"];
 
-const REQUIRED_MOEGO_COLUMNS = ["first name", "last name", "primary contact", "pet(breed)", "status"];
-
-function validateMoeGoHeaders(headers: string[]): string | null {
-  const normalized = headers.map((h) => h.toLowerCase().replace(/\s+/g, " ").trim());
-  const missing = REQUIRED_MOEGO_COLUMNS.filter((col) => !normalized.includes(col));
-  if (missing.length > 0) return `This doesn't look like a MoeGo client export. Make sure you export from Clients & Pets → Options → Export clients, not from another section.`;
+function validateGroomerIOHeaders(headers: string[]): string | null {
+  const normalized = headers.map((h) => h.toLowerCase().trim());
+  const missing = REQUIRED_GROOMERIO_COLUMNS.filter((col) => !normalized.includes(col));
+  if (missing.length > 0) {
+    return `This doesn't look like a Groomer.io Client Summary export. Make sure you're uploading that report, not another one.`;
+  }
   return null;
 }
 
-function parsePets(raw: string): Pet[] {
-  if (!raw?.trim()) return [];
-  const pets: Pet[] = [];
-  const parts = raw.split(/,(?![^(]*\))/);
-  for (const part of parts) {
-    const trimmed = part.trim();
-    const match = trimmed.match(/^(.+?)\((.+)\)$/);
-    if (match) {
-      pets.push({ name: match[1].trim(), breed: match[2].trim() || null });
-    } else if (trimmed) {
-      pets.push({ name: trimmed, breed: null });
+function normalizeSex(raw: string): "male" | "female" | null {
+  const value = raw.trim().toLowerCase();
+  if (value === "m") return "male";
+  if (value === "f") return "female";
+  return null;
+}
+
+// "Bonita: 2021-04-18,Champion: 2021-04-18,Coco: N/A" -> name -> date map,
+// skipping "N/A"/blank dates. Matched to pet names by name rather than by
+// position, since a handful of rows have a birthday entry missing or
+// extra for one of their pets.
+function parseBirthdayMap(raw: string): Map<string, string> {
+  const map = new Map<string, string>();
+  if (!raw.trim()) return map;
+  for (const part of raw.split(",")) {
+    const idx = part.indexOf(":");
+    if (idx === -1) continue;
+    const name = part.slice(0, idx).trim();
+    const date = part.slice(idx + 1).trim();
+    if (name && date && date.toUpperCase() !== "N/A" && !Number.isNaN(Date.parse(date))) {
+      map.set(name, date);
     }
   }
-  return pets;
+  return map;
+}
+
+// "pets" is a flat comma list ("Lulu,Luna") with no per-pet delimiter for
+// name vs. anything else, unlike MoeGo's "Name(Breed)" -- groomer.io just
+// doesn't export breed at all.
+function parsePets(petsRaw: string, birthdayRaw: string, genderRaw: string, petNotesRaw: string): GroomerIOPet[] {
+  const names = petsRaw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (names.length === 0) return [];
+
+  const birthdays = parseBirthdayMap(birthdayRaw);
+  // Both gender and the care-notes field are one column per CLIENT ROW,
+  // not per pet -- only safe to attribute either to the pet when there's
+  // exactly one on the row. With more than one, the notes go on the
+  // customer record instead (see buildCustomerNotes) so they aren't lost.
+  const singlePet = names.length === 1;
+  const sex = singlePet ? normalizeSex(genderRaw) : null;
+  const notes = singlePet ? petNotesRaw.trim() || null : null;
+
+  return names.map((name) => ({
+    name,
+    birthday: birthdays.get(name) ?? null,
+    sex,
+    notes,
+  }));
+}
+
+// "Charidan Morales\n546 Maydee Street \nDuarte, CA 91010" -- first line
+// always repeats the client's own name, so drop it and join what's left.
+function parseAddress(raw: string): string {
+  const lines = raw
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  if (lines.length <= 1) return lines.join(", ");
+  return lines.slice(1).join(", ");
+}
+
+// mobile > home > work; first non-empty is primary, next non-empty AND
+// DIFFERENT number becomes the secondary contact number -- several rows
+// in real exports have the same number entered in more than one column,
+// which would otherwise turn into a bogus "secondary contact" that's
+// actually just the primary number again.
+function pickPhones(mobile: string, home: string, work: string): { primaryPhone: string | null; secondaryPhone: string | null } {
+  const candidates = [mobile, home, work].map((v) => v.trim()).filter(Boolean);
+  const primaryPhone = candidates[0] ?? null;
+  const primaryDigits = primaryPhone?.replace(/\D/g, "");
+  const secondaryPhone = candidates.slice(1).find((v) => v.replace(/\D/g, "") !== primaryDigits) ?? null;
+  return { primaryPhone, secondaryPhone };
+}
+
+// Groomer.io's summary has no free-form "client notes only" split the way
+// Wagzly does -- it has client notes, pet-care notes (one field covering
+// every pet on the row), and lifetime stats. All of it lands on the
+// customer's notes field, since a multi-pet row has nowhere else to put
+// per-pet care notes unambiguously; a single-pet row's care notes go on
+// that pet instead (see buildPets below) and aren't duplicated here.
+function buildCustomerNotes({
+  clientNotes,
+  petNotes,
+  singlePet,
+  apptCount,
+  spend,
+  lastAppt,
+}: {
+  clientNotes: string;
+  petNotes: string;
+  singlePet: boolean;
+  apptCount: string;
+  spend: string;
+  lastAppt: string;
+}): string | null {
+  const parts: string[] = [];
+  if (clientNotes) parts.push(clientNotes);
+  if (petNotes && !singlePet) parts.push(`Pet notes: ${petNotes}`);
+
+  const summary: string[] = [];
+  const apptCountNum = parseInt(apptCount, 10);
+  if (apptCountNum > 0) summary.push(`${apptCountNum} past appointment${apptCountNum === 1 ? "" : "s"}`);
+  const spendNum = parseFloat(spend);
+  if (spendNum > 0) summary.push(`$${spendNum.toFixed(2)} total spend`);
+  if (lastAppt && lastAppt.toLowerCase() !== "never serviced") summary.push(`last serviced ${lastAppt}`);
+  if (summary.length > 0) parts.push(`Imported from Groomer.io: ${summary.join(", ")}.`);
+
+  return parts.length > 0 ? parts.join("\n\n") : null;
 }
 
 type ParseCSVResult = { rows: ParsedRow[]; validationError: string | null };
@@ -58,24 +162,29 @@ function parseCSV(text: string): ParseCSVResult {
   const records = parseCSVRecords(text);
   if (records.length < 2) return { rows: [], validationError: null };
 
-  const headers = records[0].map((h) => h.toLowerCase().replace(/\s+/g, " ").trim());
-  const validationError = validateMoeGoHeaders(headers);
+  const rawHeaders = records[0];
+  const headers = rawHeaders.map((h) => h.toLowerCase().trim());
+  const validationError = validateGroomerIOHeaders(headers);
   if (validationError) return { rows: [], validationError };
 
   const col = (name: string) => headers.findIndex((h) => h === name);
 
-  const iFirstName = col("first name");
-  const iLastName = col("last name");
+  const iCreatedAt = col("created_at");
+  const iPets = col("pets");
+  const iFirstName = col("first_name");
+  const iLastName = col("last_name");
+  const iPhoneMobile = col("phone_mobile");
+  const iPhoneHome = col("phone_home");
+  const iPhoneWork = col("phone_work");
   const iEmail = col("email");
-  const iPhone = col("primary contact");
-  const iAdditional = col("additional contact");
-  const iAddress = col("address");
-  const iNotes = col("notes");
-  const iStatus = col("status");
-  const iPets = col("pet(breed)");
-  const iCreateDate = col("create date");
-
-  if (iFirstName === -1 && iLastName === -1) return { rows: [], validationError: null };
+  const iClientNotes = col("client notes");
+  const iBirthday = col("pets birthday");
+  const iGender = col("gender");
+  const iPetNotes = col("pet notes");
+  const iSpend = col("spend");
+  const iApptCount = col("number of appointments");
+  const iLastAppt = col("last appt");
+  const iAddress = col("full address");
 
   const rows: ParsedRow[] = [];
 
@@ -87,24 +196,35 @@ function parseCSV(text: string): ParseCSVResult {
     const lastName = get(iLastName);
     if (!firstName && !lastName) continue;
 
+    const petsRaw = get(iPets);
+    const petNotesRaw = get(iPetNotes);
+    const pets = parsePets(petsRaw, get(iBirthday), get(iGender), petNotesRaw);
+    const lastAppt = get(iLastAppt);
+
     rows.push({
       firstName,
       lastName,
       email: get(iEmail) || null,
-      primaryPhone: get(iPhone) || null,
-      additionalPhone: get(iAdditional) || null,
-      address: get(iAddress),
-      notes: get(iNotes) || null,
-      status: get(iStatus) || "inactive",
-      pets: parsePets(get(iPets)),
-      createDate: get(iCreateDate) || null,
+      ...pickPhones(get(iPhoneMobile), get(iPhoneHome), get(iPhoneWork)),
+      address: parseAddress(get(iAddress)),
+      notes: buildCustomerNotes({
+        clientNotes: get(iClientNotes),
+        petNotes: petNotesRaw,
+        singlePet: pets.length === 1,
+        apptCount: get(iApptCount),
+        spend: get(iSpend),
+        lastAppt,
+      }),
+      pets,
+      createDate: get(iCreatedAt) || null,
+      lastAppt: lastAppt || null,
     });
   }
 
   return { rows, validationError: null };
 }
 
-function MoeGoImportFlow({ accessToken, onBack }: { accessToken: string; onBack: () => void }) {
+function GroomerIOImportFlow({ accessToken, onBack }: { accessToken: string; onBack: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<ParsedRow[] | null>(null);
   const [fileName, setFileName] = useState("");
@@ -175,7 +295,7 @@ function MoeGoImportFlow({ accessToken, onBack }: { accessToken: string; onBack:
 
     try {
       for (const batch of batches) {
-        const response = await fetch("/api/import/moego", {
+        const response = await fetch("/api/import/groomerio", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -218,7 +338,6 @@ function MoeGoImportFlow({ accessToken, onBack }: { accessToken: string; onBack:
 
   return (
     <div className="space-y-6">
-      {/* Header card */}
       <section className="soft-card p-6">
         <button
           type="button"
@@ -232,19 +351,19 @@ function MoeGoImportFlow({ accessToken, onBack }: { accessToken: string; onBack:
         </button>
 
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--rose-primary)]">
-          Import from MoeGo
+          Import from Groomer.io
         </p>
         <h2 className="mt-2 text-2xl font-bold text-[var(--text-primary)]">
           Clients &amp; Pets
         </h2>
         <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-          Upload a MoeGo client export CSV to import your clients and pets into Wagzly.
-          This importer brings in <strong>client profiles and pet information only</strong> — grooming history
-          and notes are not included. Duplicate clients are matched by phone number and reported, not duplicated.
-          Both active and inactive clients will be imported.
+          Upload a Groomer.io Client Summary export to import your clients and pets into Wagzly.
+          This importer brings in <strong>client profiles and pet information only</strong> — past appointment
+          spend/visit counts are added as a note on each client instead, since Groomer.io doesn&apos;t export full
+          appointment history. Duplicate clients are matched by phone number and reported, not duplicated.
+          Every imported client comes in as Active (Groomer.io&apos;s summary doesn&apos;t export an active/inactive status).
         </p>
 
-        {/* How to export instructions */}
         <div className="mt-5 rounded-2xl border border-[var(--divider-soft)] bg-[var(--soft-surface)] overflow-hidden">
           <button
             type="button"
@@ -255,7 +374,7 @@ function MoeGoImportFlow({ accessToken, onBack }: { accessToken: string; onBack:
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4 text-[var(--rose-primary)]">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
               </svg>
-              How to export your clients from MoeGo
+              How to export your clients from Groomer.io
             </span>
             <svg
               viewBox="0 0 24 24"
@@ -273,32 +392,19 @@ function MoeGoImportFlow({ accessToken, onBack }: { accessToken: string; onBack:
               <ol className="space-y-5">
                 <li className="flex items-start gap-3">
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--rose-primary)]/10 text-xs font-bold text-[var(--rose-primary)]">1</span>
-                  <p className="text-sm leading-6 text-[var(--text-secondary)]">Log in to MoeGo at <strong>go.moego.pet</strong> in your web browser (not the mobile app).</p>
+                  <p className="text-sm leading-6 text-[var(--text-secondary)]">Log in to Groomer.io in your web browser.</p>
                 </li>
                 <li className="flex items-start gap-3">
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--rose-primary)]/10 text-xs font-bold text-[var(--rose-primary)]">2</span>
-                  <div className="space-y-2">
-                    <p className="text-sm leading-6 text-[var(--text-secondary)]">In the left sidebar, expand <strong>Customer Center</strong> and click <strong>Clients &amp; Pets</strong>.</p>
-                    <img src="/moego-step1.png" alt="Customer Center sidebar showing Clients & Pets" className="rounded-xl border border-[var(--divider-soft)] max-w-[220px]" />
-                  </div>
+                  <p className="text-sm leading-6 text-[var(--text-secondary)]">Go to your <strong>Clients</strong> list and run the <strong>Client Summary</strong> report.</p>
                 </li>
                 <li className="flex items-start gap-3">
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--rose-primary)]/10 text-xs font-bold text-[var(--rose-primary)]">3</span>
-                  <div className="space-y-2">
-                    <p className="text-sm leading-6 text-[var(--text-secondary)]">Click the <strong>checkbox</strong> at the top of the client list to select all clients.</p>
-                    <img src="/moego-step2.png" alt="Checkbox to select all clients" className="rounded-xl border border-[var(--divider-soft)] max-w-[320px]" />
-                  </div>
+                  <p className="text-sm leading-6 text-[var(--text-secondary)]">Export/download it as a <strong>CSV</strong>.</p>
                 </li>
                 <li className="flex items-start gap-3">
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--rose-primary)]/10 text-xs font-bold text-[var(--rose-primary)]">4</span>
-                  <div className="space-y-2">
-                    <p className="text-sm leading-6 text-[var(--text-secondary)]">Click the <strong>Options</strong> dropdown at the top of the page and select <strong>Export clients</strong>.</p>
-                    <img src="/moego-step3.png" alt="Options dropdown with Export clients highlighted" className="rounded-xl border border-[var(--divider-soft)] max-w-[200px]" />
-                  </div>
-                </li>
-                <li className="flex items-start gap-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--rose-primary)]/10 text-xs font-bold text-[var(--rose-primary)]">5</span>
-                  <p className="text-sm leading-6 text-[var(--text-secondary)]">A CSV file will download to your computer. <strong>Drag it into the upload area below</strong>, or click to browse for it.</p>
+                  <p className="text-sm leading-6 text-[var(--text-secondary)]">Drag the CSV into the upload area below, or click to browse for it.</p>
                 </li>
               </ol>
             </div>
@@ -327,7 +433,7 @@ function MoeGoImportFlow({ accessToken, onBack }: { accessToken: string; onBack:
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V6a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
             <p className="mt-3 text-sm font-bold text-[var(--text-primary)]">
-              {fileName ? fileName : "Drop your MoeGo CSV here"}
+              {fileName ? fileName : "Drop your Groomer.io CSV here"}
             </p>
             <p className="mt-1 text-xs text-[var(--text-secondary)]">
               or <span className="font-semibold text-[var(--rose-primary)]">click to browse</span>
@@ -343,14 +449,12 @@ function MoeGoImportFlow({ accessToken, onBack }: { accessToken: string; onBack:
         ) : null}
       </section>
 
-      {/* Error */}
       {error ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-semibold text-red-700">
           {error}
         </div>
       ) : null}
 
-      {/* Preview */}
       {preview && preview.length > 0 && !result ? (
         <section className="soft-card overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--divider-soft)] px-6 py-4">
@@ -399,7 +503,7 @@ function MoeGoImportFlow({ accessToken, onBack }: { accessToken: string; onBack:
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.1em] text-[var(--text-secondary)]">Phone</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.1em] text-[var(--text-secondary)]">Address</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.1em] text-[var(--text-secondary)]">Pets</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.1em] text-[var(--text-secondary)]">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.1em] text-[var(--text-secondary)]">Last Appt</th>
                 </tr>
               </thead>
               <tbody>
@@ -423,7 +527,10 @@ function MoeGoImportFlow({ accessToken, onBack }: { accessToken: string; onBack:
                     </td>
                     <td className="px-4 py-3 text-[var(--text-secondary)]">
                       {row.pets.length > 0 ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-[var(--soft-surface)] px-2 py-0.5 text-xs font-bold text-[var(--text-primary)]">
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full bg-[var(--soft-surface)] px-2 py-0.5 text-xs font-bold text-[var(--text-primary)]"
+                          title={row.pets.map((p) => p.name).join(", ")}
+                        >
                           🐾 {row.pets.length}
                         </span>
                       ) : (
@@ -433,12 +540,12 @@ function MoeGoImportFlow({ accessToken, onBack }: { accessToken: string; onBack:
                     <td className="px-4 py-3">
                       <span
                         className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold ${
-                          row.status?.toLowerCase() === "active"
+                          row.lastAppt && row.lastAppt.toLowerCase() !== "never serviced"
                             ? "bg-green-100 text-green-700"
                             : "bg-[var(--soft-surface)] text-[var(--text-secondary)]"
                         }`}
                       >
-                        {row.status || "inactive"}
+                        {row.lastAppt || "never serviced"}
                       </span>
                     </td>
                   </tr>
@@ -451,11 +558,10 @@ function MoeGoImportFlow({ accessToken, onBack }: { accessToken: string; onBack:
 
       {preview && preview.length === 0 && !result ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-semibold text-amber-700">
-          No clients found in this file. Make sure you exported a MoeGo client CSV.
+          No clients found in this file. Make sure you exported a Groomer.io Client Summary CSV.
         </div>
       ) : null}
 
-      {/* Results */}
       {result ? (
         <section className="soft-card overflow-hidden">
           <div className="border-b border-[var(--divider-soft)] px-6 py-5">
@@ -553,85 +659,4 @@ function MoeGoImportFlow({ accessToken, onBack }: { accessToken: string; onBack:
   );
 }
 
-export default function MoeGoImporter({ accessToken }: { accessToken: string }) {
-  const [selected, setSelected] = useState<Software>(null);
-
-  if (selected === "moego") {
-    return <MoeGoImportFlow accessToken={accessToken} onBack={() => setSelected(null)} />;
-  }
-
-  if (selected === "groomerio") {
-    return <GroomerIOImportFlow accessToken={accessToken} onBack={() => setSelected(null)} />;
-  }
-
-  return (
-    <div className="space-y-6">
-      <section className="soft-card p-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--rose-primary)]">
-          Data Import
-        </p>
-        <h2 className="mt-2 text-2xl font-bold text-[var(--text-primary)]">
-          Import your data
-        </h2>
-        <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-          Select the software you are migrating from. Wagzly will guide you through importing
-          your clients and pets. More import types will be added over time.
-        </p>
-      </section>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        {/* MoeGo — available */}
-        <button
-          type="button"
-          onClick={() => setSelected("moego")}
-          className="soft-card group flex flex-col gap-4 p-6 text-left transition-shadow hover:shadow-md"
-        >
-          <div className="flex items-start justify-between">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--rose-primary)]/10">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-6 w-6 text-[var(--rose-primary)]">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-              </svg>
-            </div>
-            <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-bold text-green-700">
-              Available
-            </span>
-          </div>
-          <div>
-            <p className="text-base font-bold text-[var(--text-primary)] group-hover:text-[var(--rose-primary)] transition-colors">
-              Import from MoeGo
-            </p>
-            <p className="mt-1 text-sm text-[var(--text-secondary)]">
-              Clients &amp; pets from a MoeGo CSV export
-            </p>
-          </div>
-        </button>
-
-        {/* Groomer.io — available */}
-        <button
-          type="button"
-          onClick={() => setSelected("groomerio")}
-          className="soft-card group flex flex-col gap-4 p-6 text-left transition-shadow hover:shadow-md"
-        >
-          <div className="flex items-start justify-between">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--rose-primary)]/10">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-6 w-6 text-[var(--rose-primary)]">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-              </svg>
-            </div>
-            <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-bold text-green-700">
-              Available
-            </span>
-          </div>
-          <div>
-            <p className="text-base font-bold text-[var(--text-primary)] group-hover:text-[var(--rose-primary)] transition-colors">
-              Import from Groomer.io
-            </p>
-            <p className="mt-1 text-sm text-[var(--text-secondary)]">
-              Clients &amp; pets from a Groomer.io Client Summary export
-            </p>
-          </div>
-        </button>
-      </div>
-    </div>
-  );
-}
+export default GroomerIOImportFlow;
