@@ -88,7 +88,7 @@ branch at the top of the route handler.
 
 ## Rollout
 
-The route still hard-gates to one business id
-(`TEST_BUSINESS_ID` in the route file) while this is validated against a
-real queue. Once confirmed correct, delete that check to open it up to
-every business -- the webhooks above don't need to change.
+Validated against a real queue on one business first (a hard-coded
+`TEST_BUSINESS_ID` gate in the route), then opened up to every business
+once confirmed correct -- the trigger/webhook setup above didn't need to
+change for that, since the gate lived entirely in the route.

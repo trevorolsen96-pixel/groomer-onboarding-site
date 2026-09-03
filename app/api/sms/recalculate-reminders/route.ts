@@ -21,11 +21,9 @@ import {
 // write itself so it works no matter which app/app version made it --
 // no client update required.
 //
-// TEST SAFETY GATE -- restricted to Trevor's own business while this is
-// validated against a real queue. Once confirmed correct, delete this
-// block (and the isTestBusiness check below) to open it up to every
-// business.
-const TEST_BUSINESS_ID = "2faf8ba6-67d2-4b67-ac9b-028225f54a60";
+// Validated against a real queue on one business (see the SMS reminder
+// recalculation work in project history) before being opened up here to
+// every business.
 
 export async function POST(request: Request) {
   try {
@@ -77,14 +75,6 @@ export async function POST(request: Request) {
         { error: "Missing businessId." },
         { status: 400 }
       );
-    }
-
-    if (businessId !== TEST_BUSINESS_ID) {
-      return NextResponse.json({
-        ok: true,
-        status: "skipped",
-        reason: "not_in_test_rollout",
-      });
     }
 
     const { data: settings } = await supabaseAdmin
