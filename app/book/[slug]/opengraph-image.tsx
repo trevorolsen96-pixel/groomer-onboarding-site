@@ -1,4 +1,4 @@
-import { getOnboardingBranding } from "@/lib/onboarding-branding";
+import { getBookingBranding } from "@/lib/book-branding";
 import {
   renderGenericOgImage,
   renderBusinessLogoOgImage,
@@ -7,27 +7,28 @@ import {
 } from "@/lib/og-image";
 
 export const runtime = "nodejs";
-export const alt = "Client Onboarding Form";
+export const alt = "Online Booking";
 export const size = OG_IMAGE_SIZE;
 export const contentType = "image/png";
 
 export default async function Image({
   params,
 }: {
-  params: Promise<{ token: string }>;
+  params: Promise<{ slug: string }>;
 }) {
   try {
-    const { token } = await params;
-    const branding = await getOnboardingBranding(token);
+    const { slug } = await params;
+    const branding = await getBookingBranding(slug);
     const logoDataUri = branding?.logoUrl
       ? await fetchImageAsDataUri(branding.logoUrl)
       : null;
 
     if (logoDataUri) {
-      const caption = branding!.isUpdate
-        ? "Update Your Information"
-        : "Client Onboarding Form";
-      return renderBusinessLogoOgImage(branding!.businessName, logoDataUri, caption);
+      return renderBusinessLogoOgImage(
+        branding!.businessName,
+        logoDataUri,
+        "Online Booking"
+      );
     }
   } catch {
     // Fall through to the generic Wagzly image below.

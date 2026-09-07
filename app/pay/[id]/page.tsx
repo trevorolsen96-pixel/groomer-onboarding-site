@@ -1,8 +1,30 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { supabaseAdmin } from "../../../lib/supabase-admin";
+import { getPaymentBranding } from "../../../lib/pay-branding";
 import PayPage from "./PayPage";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const branding = await getPaymentBranding(id).catch(() => null);
+
+  const title = "Appointment Payment";
+  const description = branding?.businessName
+    ? `${branding.businessName} — pay your appointment invoice.`
+    : "Pay your appointment invoice.";
+
+  return {
+    title,
+    openGraph: { title, description },
+    twitter: { title, description },
+  };
+}
 
 export default async function PaymentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

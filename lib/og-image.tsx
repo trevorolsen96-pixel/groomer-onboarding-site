@@ -4,6 +4,23 @@ import path from "node:path";
 
 export const OG_IMAGE_SIZE = { width: 1200, height: 630 };
 
+/**
+ * Fetches a (typically Supabase Storage) logo URL and inlines it as a data
+ * URI, since ImageResponse/satori can't reliably fetch remote images itself.
+ * Returns null on any failure so callers can fall back to the generic image.
+ */
+export async function fetchImageAsDataUri(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const mimeType = res.headers.get("content-type") ?? "image/png";
+    const buffer = Buffer.from(await res.arrayBuffer());
+    return `data:${mimeType};base64,${buffer.toString("base64")}`;
+  } catch {
+    return null;
+  }
+}
+
 export async function renderGenericOgImage() {
   const screenshotPath = path.join(
     process.cwd(),
@@ -156,14 +173,15 @@ export async function renderGenericOgImage() {
 }
 
 /**
- * OG image for a groomer's own onboarding form/link — leads with the
- * groomer's logo (not the Wagzly app) so recipients don't mistake the
- * link for an app-download prompt. Falls back to the generic Wagzly
- * image when the caller has no logo to show.
+ * OG image for a groomer's token-based client link (onboarding, payment,
+ * booking, etc.) — leads with the groomer's logo (not the Wagzly app) so
+ * recipients don't mistake the link for an app-download prompt. Callers
+ * fall back to renderGenericOgImage() when there's no logo to show.
  */
 export async function renderBusinessLogoOgImage(
   businessName: string | null,
-  logoDataUri: string
+  logoDataUri: string,
+  caption: string = "Client Onboarding Form"
 ) {
   return new ImageResponse(
     (
@@ -259,7 +277,7 @@ export async function renderBusinessLogoOgImage(
             zIndex: 1,
           }}
         >
-          Client Onboarding Form
+          {caption}
         </div>
       </div>
     ),
