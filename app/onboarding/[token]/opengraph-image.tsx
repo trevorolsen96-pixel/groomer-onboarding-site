@@ -1,41 +1,10 @@
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { getOnboardingBranding } from "@/lib/onboarding-branding";
 import { renderGenericOgImage, renderBusinessLogoOgImage, OG_IMAGE_SIZE } from "@/lib/og-image";
 
 export const runtime = "nodejs";
 export const alt = "Client Onboarding Form";
 export const size = OG_IMAGE_SIZE;
 export const contentType = "image/png";
-
-async function getBusinessBranding(token: string) {
-  const cleanToken = token.trim();
-
-  let businessId: string | null = null;
-  if (cleanToken.startsWith("preview-")) {
-    businessId = cleanToken.slice("preview-".length);
-  } else {
-    const { data: requestRow } = await supabaseAdmin
-      .from("onboarding_requests")
-      .select("business_id")
-      .eq("token", cleanToken)
-      .single();
-    businessId = requestRow?.business_id ?? null;
-  }
-
-  if (!businessId) return null;
-
-  const { data: settingsRow } = await supabaseAdmin
-    .from("business_settings")
-    .select("business_name, logo_url")
-    .eq("business_id", businessId)
-    .single();
-
-  if (!settingsRow?.logo_url) return null;
-
-  return {
-    businessName: settingsRow.business_name ?? null,
-    logoUrl: settingsRow.logo_url as string,
-  };
-}
 
 async function fetchLogoDataUri(logoUrl: string) {
   const res = await fetch(logoUrl);
@@ -52,8 +21,10 @@ export default async function Image({
 }) {
   try {
     const { token } = await params;
-    const branding = await getBusinessBranding(token);
-    const logoDataUri = branding ? await fetchLogoDataUri(branding.logoUrl) : null;
+    const branding = await getOnboardingBranding(token);
+    const logoDataUri = branding?.logoUrl
+      ? await fetchLogoDataUri(branding.logoUrl)
+      : null;
 
     if (logoDataUri) {
       return renderBusinessLogoOgImage(branding!.businessName, logoDataUri);
