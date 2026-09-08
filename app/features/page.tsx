@@ -206,6 +206,7 @@ export default function FeaturesPage() {
                   {[
                     "Track collected payments per appointment",
                     "Send payment links to clients (0.5% fee on Basic, free on Pro)",
+                    "Save a card on file for a client (0.5% fee on Basic, free on Pro)",
                     "Tip tracking",
                     "Expense logging (Pro)",
                     "Business snapshot & revenue insights (Pro)",

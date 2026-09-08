@@ -17,6 +17,7 @@ const basicFeatures = [
   "2 accounts (1 business owner + 1 groomer)",
   "1 van",
   "Payment links (0.5% fee per payment)",
+  "Card on file (0.5% fee per charge)",
 ];
 
 const proFeatures = [
@@ -24,6 +25,7 @@ const proFeatures = [
   "1500 SMS / month",
   "Unlimited staff accounts & vans",
   "Payment links with no per-payment fee",
+  "Card on file with no per-charge fee",
   "Invoicing",
   "Expense & tip tracking",
   "Business snapshot & insights",
@@ -41,6 +43,7 @@ const comparisonRows = [
   ["Vehicles / vans", "1", "Unlimited"],
   ["SMS credits", "400/mo", "1500/mo"],
   ["Payment links", "🐾 (0.5% fee)", "🐾 (no fee)"],
+  ["Card on file", "🐾 (0.5% fee)", "🐾 (no fee)"],
   ["Invoicing", "—", "🐾"],
   ["Expenses / finance tools", "—", "🐾"],
   ["Message pack add-ons", "—", "🐾"],

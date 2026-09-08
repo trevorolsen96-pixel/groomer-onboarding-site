@@ -769,9 +769,7 @@ function AccountPageContent() {
                     }
                     title="Online payments"
                     description={
-                      business?.plan !== "pro"
-                        ? "Included with Wagzly Pro"
-                        : paymentStatus?.payments_enabled
+                      paymentStatus?.payments_enabled
                         ? "Active"
                         : paymentStatus?.connected
                         ? "Setup incomplete"
@@ -779,9 +777,7 @@ function AccountPageContent() {
                     }
                     buttonLabel="Manage payments"
                     buttonVariant={
-                      business?.plan === "pro" && !paymentStatus?.payments_enabled
-                        ? "primary"
-                        : "secondary"
+                      !paymentStatus?.payments_enabled ? "primary" : "secondary"
                     }
                     onClick={() => setActiveTab("payments")}
                     statusColor={

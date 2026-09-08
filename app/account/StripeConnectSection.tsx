@@ -155,23 +155,24 @@ export default function StripeConnectSection({
         </div>
       ) : null}
 
-      {/* Pro gate */}
       {!isPro ? (
         <section className="soft-card p-6">
           <div className="flex items-start gap-3">
-            <svg viewBox="0 0 24 24" fill="currentColor" className="mt-0.5 h-5 w-5 shrink-0 text-[var(--rose-primary)]">
-              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mt-0.5 h-5 w-5 shrink-0 text-[var(--rose-primary)]">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 16v-4M12 8h.01" />
             </svg>
             <div>
-              <p className="font-bold text-[var(--text-primary)]">Pro feature</p>
+              <p className="font-bold text-[var(--text-primary)]">Basic plan fee</p>
               <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                Online payments are included with Wagzly Pro. Upgrade your plan to connect Stripe and start accepting payments.
+                A 0.5% fee applies to payments accepted through Stripe on the Basic plan. Tips are never included in the fee. Wagzly Pro has no per-payment fee.
               </p>
             </div>
           </div>
         </section>
-      ) : (
-        <>
+      ) : null}
+
+      <>
           {/* Status checklist */}
           <section className="soft-card p-6">
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--rose-primary)]">
@@ -243,11 +244,17 @@ export default function StripeConnectSection({
               <HowItWorksRow icon="1" text="You send a payment link from the Wagzly app after an appointment." />
               <HowItWorksRow icon="2" text="Your client receives an SMS with a link to your secure payment page." />
               <HowItWorksRow icon="3" text="They choose a tip and pay — the money goes directly to your Stripe account." />
-              <HowItWorksRow icon="4" text="Wagzly never holds your money. Standard Stripe fees apply to your account." />
+              <HowItWorksRow
+                icon="4"
+                text={
+                  isPro
+                    ? "Wagzly never holds your money. Standard Stripe fees apply to your account. Wagzly Pro has no per-payment fee."
+                    : "Wagzly never holds your money. Standard Stripe fees apply to your account, plus a 0.5% Wagzly fee on the Basic plan (tips excluded)."
+                }
+              />
             </div>
           </section>
-        </>
-      )}
+      </>
     </div>
   );
 }

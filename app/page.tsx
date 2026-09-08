@@ -401,7 +401,8 @@ export default function HomePage() {
                 ["Team accounts", "2 (1 owner + 1 groomer)", "Unlimited"],
                 ["Vehicles / vans", "1", "Unlimited"],
                 ["SMS credits", "400/mo", "1500/mo"],
-                ["Payment links", "—", "🐾"],
+                ["Payment links", "🐾 (0.5% fee)", "🐾 (no fee)"],
+                ["Card on file", "🐾 (0.5% fee)", "🐾 (no fee)"],
                 ["Expenses / finance tools", "—", "🐾"],
                 ["Message pack add-ons", "—", "🐾"],
                 ["Data import (MoeGo & more)", "🐾", "🐾"],
@@ -590,13 +591,16 @@ const basicFeatures = [
   "400 SMS / month",
   "2 accounts (1 business owner + 1 groomer)",
   "1 van",
+  "Payment links (0.5% fee per payment)",
+  "Card on file (0.5% fee per charge)",
 ];
 
 const proFeatures = [
   "Everything in Basic",
   "1500 SMS / month",
   "Unlimited staff accounts & vans",
-  "Payment links & invoicing",
+  "Payment links & invoicing, no per-payment fee",
+  "Card on file, no per-charge fee",
   "Expense & tip tracking",
   "Business snapshot & insights",
   "SMS credit pack add-ons",
