@@ -343,12 +343,19 @@ async function handleNewSignup(
   }
 
   // --- Notify support of new account ---
-  sendNewAccountNotification({
-    email: pendingSignup.email,
-    businessName: pendingSignup.business_name,
-    fullName: pendingSignup.full_name,
-    plan: (pendingSignup.selected_plan as string | null) ?? "basic",
-  }).catch((err) => console.error("[new-account] notification email failed:", err));
+  // Awaited (not fire-and-forget) -- an un-awaited promise here can get cut
+  // off when this serverless function's response returns and its execution
+  // environment freezes, same reasoning as sendPasswordSetupEmail above.
+  try {
+    await sendNewAccountNotification({
+      email: pendingSignup.email,
+      businessName: pendingSignup.business_name,
+      fullName: pendingSignup.full_name,
+      plan: (pendingSignup.selected_plan as string | null) ?? "basic",
+    });
+  } catch (err) {
+    console.error("[new-account] notification email failed:", err);
+  }
 
   // --- Mark signup as completed ---
   await supabaseAdmin

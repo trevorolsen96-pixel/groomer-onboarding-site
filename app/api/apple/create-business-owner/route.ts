@@ -217,12 +217,19 @@ export async function POST(request: Request) {
       throw new Error(smsSetupError.message);
     }
 
-    sendNewAccountNotification({
-      email,
-      businessName,
-      fullName,
-      plan,
-    }).catch((err) => console.error("[new-account-apple] notification email failed:", err));
+    // Awaited (not fire-and-forget) -- an un-awaited promise here can get
+    // cut off when this serverless function's response returns and its
+    // execution environment freezes.
+    try {
+      await sendNewAccountNotification({
+        email,
+        businessName,
+        fullName,
+        plan,
+      });
+    } catch (err) {
+      console.error("[new-account-apple] notification email failed:", err);
+    }
 
     return NextResponse.json({
       ok: true,

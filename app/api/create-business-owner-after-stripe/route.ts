@@ -233,14 +233,21 @@ const currentPeriodEndsAt = toIsoFromUnix(
       throw new Error(pendingUpdateError.message);
     }
 
-    // Fire notification email — don't block or fail the response
+    // Awaited (not fire-and-forget) -- this was the very next statement
+    // before the function's return, giving an un-awaited promise here zero
+    // chance to complete before Vercel could freeze the execution
+    // environment once the response went out.
     console.log("[new-account] firing notification for", pendingSignup.email);
-    sendNewAccountNotification({
-      email: pendingSignup.email,
-      businessName: pendingSignup.business_name,
-      fullName: pendingSignup.full_name,
-      plan: (pendingSignup.selected_plan as string | null) ?? "basic",
-    }).catch((err) => console.error("[new-account] notification email failed:", err));
+    try {
+      await sendNewAccountNotification({
+        email: pendingSignup.email,
+        businessName: pendingSignup.business_name,
+        fullName: pendingSignup.full_name,
+        plan: (pendingSignup.selected_plan as string | null) ?? "basic",
+      });
+    } catch (err) {
+      console.error("[new-account] notification email failed:", err);
+    }
 
     return NextResponse.json({
       ok: true,
