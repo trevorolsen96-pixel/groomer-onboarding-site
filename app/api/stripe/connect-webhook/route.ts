@@ -69,10 +69,15 @@ export async function POST(request: Request) {
 
   try {
     if (event.type === "checkout.session.completed") {
-      await handleConnectCheckoutCompleted(
-        event.data.object as Stripe.Checkout.Session,
-        (event as Stripe.Event & { account?: string }).account ?? null
-      );
+      const session = event.data.object as Stripe.Checkout.Session;
+      const connectedAccountId =
+        (event as Stripe.Event & { account?: string }).account ?? null;
+
+      if (session.mode === "setup") {
+        await handleConnectSetupCompleted(session, connectedAccountId);
+      } else {
+        await handleConnectCheckoutCompleted(session, connectedAccountId);
+      }
     }
 
     return NextResponse.json({ received: true });
@@ -168,4 +173,63 @@ async function handleConnectCheckoutCompleted(
       appointmentId: link.appointment_id,
     },
   });
+}
+
+// Handles a saved card-on-file (app/api/add-card/create-session runs the
+// Checkout Session in setup mode on the connected account, same as
+// payment links). Unlike handleConnectCheckoutCompleted above, failures
+// here are thrown rather than logged-and-swallowed -- a silent failure in
+// this specific flow was exactly the bug that made card-on-file requests
+// look "sent" forever with no way to tell why, so let it surface as a
+// failed webhook delivery (visible in the Stripe Dashboard, and retried)
+// instead of disappearing into server logs no one is watching.
+async function handleConnectSetupCompleted(
+  session: Stripe.Checkout.Session,
+  connectedAccountId: string | null
+) {
+  const setupIntentId =
+    typeof session.setup_intent === "string" ? session.setup_intent : null;
+
+  if (!setupIntentId || !connectedAccountId) {
+    throw new Error("Setup session is missing setup_intent or connected account.");
+  }
+
+  const setupIntent = await stripe.setupIntents.retrieve(
+    setupIntentId,
+    { expand: ["payment_method"] },
+    { stripeAccount: connectedAccountId }
+  );
+
+  const paymentMethod = setupIntent.payment_method;
+
+  if (!paymentMethod || typeof paymentMethod === "string") {
+    throw new Error("Setup intent did not return an expanded payment method.");
+  }
+
+  const card = paymentMethod.card;
+
+  const { data: updatedRows, error: updateError } = await supabaseAdmin
+    .from("customer_payment_methods")
+    .update({
+      stripe_setup_intent_id: setupIntentId,
+      stripe_payment_method_id: paymentMethod.id,
+      card_brand: card?.brand ?? null,
+      card_last4: card?.last4 ?? null,
+      card_exp_month: card?.exp_month ?? null,
+      card_exp_year: card?.exp_year ?? null,
+      status: "active",
+      saved_at: new Date().toISOString(),
+    })
+    .eq("stripe_checkout_session_id", session.id)
+    .eq("stripe_connected_account_id", connectedAccountId)
+    .select("id");
+
+  if (updateError) throw new Error(updateError.message);
+
+  if (!updatedRows || updatedRows.length === 0) {
+    throw new Error(
+      `No customer_payment_methods row matched checkout session ${session.id} ` +
+        `on connected account ${connectedAccountId}.`
+    );
+  }
 }
