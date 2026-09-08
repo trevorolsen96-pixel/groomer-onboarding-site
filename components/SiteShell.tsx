@@ -82,18 +82,18 @@ export default function SiteShell({ children }: { children: React.ReactNode }) {
         <div className="mx-auto flex h-[64px] w-full max-w-6xl items-center justify-between px-4 md:h-[82px] md:px-6">
           <Link href="/" className="flex items-center">
             <Image
-              src="/images/logo/WagzlyCompact1.png"
+              src="/images/logo/WagzlyHLarge.png"
               alt="Wagzly"
-              width={42}
-              height={42}
+              width={150}
+              height={47}
               priority
-              className="block md:hidden"
+              className="md:hidden"
             />
             <Image
               src="/images/logo/WagzlyHLarge.png"
               alt="Wagzly"
               width={200}
-              height={54}
+              height={63}
               priority
               className="hidden md:block"
             />
