@@ -2,6 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { Dancing_Script } from "next/font/google";
+
+const signatureFont = Dancing_Script({ subsets: ["latin"], weight: ["700"] });
 
 type PetForm = {
   id?: string; // existing pet ID for update requests
@@ -32,6 +35,7 @@ type Agreement = {
 type AgreementAcceptance = {
   agreement_id: string;
   accepted: boolean;
+  initials_text?: string;
 };
 
 type OnboardingQuestion = {
@@ -360,6 +364,12 @@ export default function OnboardingTokenPage() {
 
   const [agreements, setAgreements] = useState<Agreement[]>([]);
   const [agreementAcceptances, setAgreementAcceptances] = useState<AgreementAcceptance[]>([]);
+  // Adopted-signature flow: the client types their name once, then applies
+  // their initials per policy and a final signature at the end, instead of
+  // separate plain checkboxes.
+  const [signatureName, setSignatureName] = useState("");
+  const [signatureAdopted, setSignatureAdopted] = useState(false);
+  const [finalSignatureApplied, setFinalSignatureApplied] = useState(false);
   const [questions, setQuestions] = useState<OnboardingQuestion[]>([]);
   const [clientQuestions, setClientQuestions] = useState<OnboardingQuestion[]>([]);
   const [clientAnswers, setClientAnswers] = useState<QuestionAnswer[]>([]);
@@ -525,10 +535,19 @@ export default function OnboardingTokenPage() {
     });
   }
 
+  const signatureInitials = signatureName
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word[0]?.toUpperCase() ?? "")
+    .join("");
+
   function updateAgreement(agreementId: string, accepted: boolean) {
     setAgreementAcceptances((prev) =>
       prev.map((item) =>
-        item.agreement_id === agreementId ? { ...item, accepted } : item,
+        item.agreement_id === agreementId
+          ? { ...item, accepted, initials_text: accepted ? signatureInitials : undefined }
+          : item,
       ),
     );
   }
@@ -1196,6 +1215,12 @@ export default function OnboardingTokenPage() {
       return;
     }
 
+    if (agreements.length > 0 && !finalSignatureApplied) {
+      setSubmitError("Please sign to complete your client agreements.");
+      setSubmitting(false);
+      return;
+    }
+
     if (!validateRequiredPetWeight()) {
       setSubmitError("Please select a weight for each pet.");
       setSubmitting(false);
@@ -1253,6 +1278,8 @@ export default function OnboardingTokenPage() {
             id: pet.id ?? undefined,
           })),
           agreements: agreementAcceptances,
+          signature_text: agreements.length > 0 ? signatureName.trim() : undefined,
+          signature_font: agreements.length > 0 ? "Dancing Script" : undefined,
           pet_questionnaire: petQuestionnaires,
           client_questionnaire: clientAnswers,
           pet_records: uploadPayload,
@@ -1579,6 +1606,64 @@ export default function OnboardingTokenPage() {
           {agreements.length > 0 ? (
             <section>
               <h2 className="text-xl font-semibold">Client agreements</h2>
+              <p className="mt-2 text-sm text-[var(--text-secondary)]">
+                Adopt a signature below, then apply your initials to each policy you understand.
+              </p>
+
+              {!signatureAdopted ? (
+                <div className="mt-4 rounded-[22px] border-2 border-[var(--rose-primary)] bg-[var(--soft-surface)] p-5">
+                  <label className="text-sm font-semibold text-[var(--text-primary)]">
+                    Type your full name to adopt your signature
+                  </label>
+                  <input
+                    type="text"
+                    value={signatureName}
+                    onChange={(e) => setSignatureName(e.target.value)}
+                    placeholder="Your full name"
+                    className="mt-2 w-full rounded-lg border border-[var(--divider-soft)] bg-white px-4 py-3 text-sm"
+                  />
+                  {signatureName.trim() ? (
+                    <div className="mt-4 rounded-lg border border-[var(--divider-soft)] bg-white p-4">
+                      <p className="text-xs uppercase tracking-wide text-[var(--text-secondary)]">Preview</p>
+                      <p className={`${signatureFont.className} mt-1 text-3xl text-[var(--text-primary)]`}>
+                        {signatureName}
+                      </p>
+                      <p className="mt-2 text-xs text-[var(--text-secondary)]">
+                        Initials:{" "}
+                        <span className={`${signatureFont.className} text-lg`}>{signatureInitials}</span>
+                      </p>
+                    </div>
+                  ) : null}
+                  <button
+                    type="button"
+                    disabled={!signatureName.trim()}
+                    onClick={() => setSignatureAdopted(true)}
+                    className="primary-button mt-4 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Adopt Signature
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-4 flex items-center justify-between rounded-lg border border-[var(--divider-soft)] bg-white px-4 py-3">
+                  <div>
+                    <p className="text-xs text-[var(--text-secondary)]">Signing as</p>
+                    <p className={`${signatureFont.className} text-2xl text-[var(--text-primary)]`}>
+                      {signatureName}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSignatureAdopted(false);
+                      setFinalSignatureApplied(false);
+                    }}
+                    className="text-xs font-medium text-[var(--rose-primary)] underline"
+                  >
+                    Change
+                  </button>
+                </div>
+              )}
+
               <div className="mt-4 space-y-4">
                 {agreements.map((agreement) => {
                   const accepted = agreementAcceptances.find((item) => item.agreement_id === agreement.id)?.accepted ?? false;
@@ -1588,16 +1673,60 @@ export default function OnboardingTokenPage() {
                       <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[var(--text-secondary)]">
                         {agreement.agreement_text}
                       </p>
-                      <label className="mt-4 inline-flex max-w-full cursor-pointer items-center gap-2 rounded-lg border border-[var(--divider-soft)] bg-[var(--cream-background)] px-4 py-3">
-                        <input type="checkbox" className="h-4 w-4 shrink-0" checked={accepted} onChange={(e) => updateAgreement(agreement.id, e.target.checked)} required={agreement.is_required} />
+                      <button
+                        type="button"
+                        disabled={!signatureAdopted}
+                        onClick={() => updateAgreement(agreement.id, !accepted)}
+                        className={`mt-4 flex w-full items-center justify-between gap-3 rounded-lg border px-4 py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                          accepted
+                            ? "border-[var(--rose-primary)] bg-[var(--rose-primary)]/5"
+                            : "border-[var(--divider-soft)] bg-[var(--cream-background)]"
+                        }`}
+                      >
                         <span className="text-sm leading-5 text-[var(--text-secondary)]">
-                          I understand{agreement.is_required ? " (required)" : ""}
+                          {accepted ? "Initialed" : `Tap to initial${agreement.is_required ? " (required)" : ""}`}
                         </span>
-                      </label>
+                        {accepted ? (
+                          <span className={`${signatureFont.className} shrink-0 text-2xl text-[var(--rose-primary)]`}>
+                            {signatureInitials}
+                          </span>
+                        ) : (
+                          <span className="shrink-0 text-xs text-[var(--text-secondary)]">—</span>
+                        )}
+                      </button>
                     </div>
                   );
                 })}
               </div>
+
+              {signatureAdopted ? (
+                <div className="mt-6 rounded-[22px] border-2 border-[var(--rose-primary)] bg-[var(--soft-surface)] p-5">
+                  <h3 className="text-base font-semibold text-[var(--text-primary)]">Final signature</h3>
+                  <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                    By signing below, you confirm you&apos;ve read and agree to the policies above.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setFinalSignatureApplied((prev) => !prev)}
+                    className={`mt-3 flex w-full items-center justify-between gap-3 rounded-lg border px-4 py-4 text-left transition-colors ${
+                      finalSignatureApplied
+                        ? "border-[var(--rose-primary)] bg-[var(--rose-primary)]/5"
+                        : "border-[var(--divider-soft)] bg-white"
+                    }`}
+                  >
+                    <span className="text-sm text-[var(--text-secondary)]">
+                      {finalSignatureApplied ? "Signed" : "Tap to sign"}
+                    </span>
+                    {finalSignatureApplied ? (
+                      <span className={`${signatureFont.className} shrink-0 text-3xl text-[var(--text-primary)]`}>
+                        {signatureName}
+                      </span>
+                    ) : (
+                      <span className="shrink-0 text-xs text-[var(--text-secondary)]">—</span>
+                    )}
+                  </button>
+                </div>
+              ) : null}
             </section>
           ) : null}
 

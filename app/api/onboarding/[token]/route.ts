@@ -22,6 +22,7 @@ type PetPayload = {
 type AgreementAcceptancePayload = {
   agreement_id: string;
   accepted: boolean;
+  initials_text?: string;
 };
 
 type QuestionAnswerPayload = {
@@ -62,6 +63,8 @@ type SubmissionPayload = {
   secondary_contact_phone?: string;
   pets: PetPayload[];
   agreements: AgreementAcceptancePayload[];
+  signature_text?: string;
+  signature_font?: string;
   pet_questionnaire: PetQuestionnairePayload[];
   client_questionnaire?: ClientQuestionnairePayload;
   pet_records?: PetRecordUploadPayload[];
@@ -498,6 +501,10 @@ if (contentType.includes("multipart/form-data")) {
       if (!acceptedAgreementIds.has(agreement.id)) {
         return badRequest("All required client agreements must be accepted.");
       }
+    }
+
+    if ((requiredAgreements ?? []).length > 0 && !body.signature_text?.trim()) {
+      return badRequest("A signature is required to accept client agreements.");
     }
 
     const { data: settingsValidationRow, error: settingsValidationError } =
@@ -956,6 +963,9 @@ if (requirePetPhoto) {
               accepted: true,
               accepted_at: new Date().toISOString(),
               accepted_text: textMap.get(a.agreement_id.trim()) ?? null,
+              initials_text: a.initials_text?.trim() || null,
+              signature_text: body.signature_text?.trim() || null,
+              signature_font: body.signature_font?.trim() || null,
             })),
             { onConflict: "customer_id,agreement_id" },
           );
