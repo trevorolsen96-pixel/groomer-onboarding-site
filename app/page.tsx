@@ -42,16 +42,6 @@ export default function HomePage() {
         <div className="relative z-10 mx-auto max-w-6xl px-6 pb-12 pt-8 lg:pb-24 lg:pt-14">
           <div className="grid items-center gap-12 lg:grid-cols-2">
             <div>
-              <div className="mb-6">
-                <Image
-                  src="/images/logo/WagzlyHLarge.png"
-                  alt="Wagzly"
-                  width={320}
-                  height={90}
-                  priority
-                />
-              </div>
-
               <p className="eyebrow">Mobile Grooming Software</p>
 
               <h1 className="mt-4 text-4xl font-extrabold leading-[1.05] tracking-tight text-[var(--text-primary)] sm:text-5xl lg:text-6xl">
