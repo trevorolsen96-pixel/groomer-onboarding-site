@@ -198,13 +198,14 @@ export default function FeaturesPage() {
                 <h2 className="mt-5 text-2xl font-bold text-[var(--text-primary)] lg:text-3xl">Payment &amp; Finance Tracking</h2>
                 <p className="mt-4 text-[var(--text-secondary)] leading-7">
                   Know exactly what you've earned, what's outstanding, and where your money is going.
-                  Wagzly Pro includes payment links, expense tracking, and tip recording so your
-                  finances stay organized without needing a separate spreadsheet.
+                  Every plan can send secure Stripe payment links, and Wagzly Pro adds expense
+                  tracking and tip recording so your finances stay organized without needing a
+                  separate spreadsheet.
                 </p>
                 <ul className="mt-5 space-y-2.5">
                   {[
                     "Track collected payments per appointment",
-                    "Send payment links to clients (Pro)",
+                    "Send payment links to clients (0.5% fee on Basic, free on Pro)",
                     "Tip tracking",
                     "Expense logging (Pro)",
                     "Business snapshot & revenue insights (Pro)",

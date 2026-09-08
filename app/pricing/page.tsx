@@ -16,13 +16,15 @@ const basicFeatures = [
   "400 SMS / month",
   "2 accounts (1 business owner + 1 groomer)",
   "1 van",
+  "Payment links (0.5% fee per payment)",
 ];
 
 const proFeatures = [
   "Everything in Basic",
   "1500 SMS / month",
   "Unlimited staff accounts & vans",
-  "Payment links & invoicing",
+  "Payment links with no per-payment fee",
+  "Invoicing",
   "Expense & tip tracking",
   "Business snapshot & insights",
   "SMS credit pack add-ons",
@@ -38,7 +40,8 @@ const comparisonRows = [
   ["Team accounts", "2 (1 owner + 1 groomer)", "Unlimited"],
   ["Vehicles / vans", "1", "Unlimited"],
   ["SMS credits", "400/mo", "1500/mo"],
-  ["Payment links", "—", "🐾"],
+  ["Payment links", "🐾 (0.5% fee)", "🐾 (no fee)"],
+  ["Invoicing", "—", "🐾"],
   ["Expenses / finance tools", "—", "🐾"],
   ["Message pack add-ons", "—", "🐾"],
   ["Data import (MoeGo & more)", "🐾", "🐾"],

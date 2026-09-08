@@ -4,6 +4,11 @@ import { supabaseAdmin } from "../../../../lib/supabase-admin";
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY!;
 const BASE_URL = "https://www.wagzly.com";
 
+// Basic-plan businesses don't pay a Wagzly subscription premium for online
+// payments, so Wagzly takes a small cut of each Stripe payment instead.
+// Applied to the service amount only -- customer tips pass through in full.
+const BASIC_PLAN_FEE_RATE = 0.005;
+
 function toMoneyNumber(value: unknown): number {
   if (value == null) return 0;
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
@@ -42,14 +47,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Payment amount is too small." }, { status: 400 });
     }
 
-    // Load business info for display
+    // Load business info for display and fee calculation
     const { data: business } = await supabaseAdmin
       .from("businesses")
-      .select("name")
+      .select("name, plan")
       .eq("id", link.business_id)
       .maybeSingle();
 
     const businessName = String(business?.name ?? "Wagzly Business").trim();
+    const plan = String(business?.plan ?? "basic").trim().toLowerCase();
+
+    const applicationFeeCents = plan === "pro"
+      ? 0
+      : Math.round(balanceDue * 100 * BASIC_PLAN_FEE_RATE);
 
     const successUrl = `${BASE_URL}/pay/${paymentLinkId}/success`;
     const cancelUrl = `${BASE_URL}/pay/${paymentLinkId}`;
@@ -80,6 +90,13 @@ export async function POST(request: Request) {
     stripeBody.set("payment_intent_data[metadata][appointment_id]", link.appointment_id);
     stripeBody.set("payment_intent_data[metadata][payment_link_id]", paymentLinkId);
     stripeBody.set("payment_intent_data[metadata][tip_amount]", String(tipAmount));
+
+    if (applicationFeeCents > 0) {
+      stripeBody.set(
+        "payment_intent_data[application_fee_amount]",
+        String(applicationFeeCents),
+      );
+    }
 
     const stripeHeaders: Record<string, string> = {
       Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
