@@ -77,13 +77,16 @@ export async function POST(request: Request) {
       );
     }
 
-    const { data: existingPendingSignup, error: existingPendingError } =
+    // Ordered + limited rather than maybeSingle() -- defensive against any
+    // pre-existing duplicate rows for the same email from before this
+    // reuse logic existed, which would otherwise throw here.
+    const { data: existingSignups, error: existingPendingError } =
       await supabaseAdmin
         .from("pending_business_signups")
         .select("id, status")
         .eq("email", email)
-        .in("status", ["pending"])
-        .maybeSingle();
+        .order("created_at", { ascending: false })
+        .limit(1);
 
     if (existingPendingError) {
       return NextResponse.json(
@@ -94,11 +97,17 @@ export async function POST(request: Request) {
       );
     }
 
-    if (existingPendingSignup) {
+    const existingPendingSignup = existingSignups?.[0] ?? null;
+
+    // A "completed" row means a business was already created for this
+    // email -- the earlier auth.admin.listUsers() check should already
+    // catch that via the real account, but this is a defensive backstop
+    // in case that user/account creation step ever fails partway through.
+    if (existingPendingSignup?.status === "completed") {
       return NextResponse.json(
         {
           error:
-            "There is already an unfinished signup for this email.",
+            "An account with this email already exists. Please log in instead.",
         },
         { status: 400 }
       );
@@ -131,29 +140,59 @@ export async function POST(request: Request) {
       );
     }
 
-    const { data: pendingSignup, error: pendingError } =
-      await supabaseAdmin
+    // Reuse an existing (non-completed) pending row for this email instead
+    // of blocking -- picks up an abandoned signup where they left off
+    // (with whatever they just re-entered) rather than permanently
+    // stranding that email if they never finished checkout the first time.
+    let pendingSignupId: string;
+
+    if (existingPendingSignup) {
+      const { error: reuseError } = await supabaseAdmin
         .from("pending_business_signups")
-        .insert({
+        .update({
           full_name: fullName,
           business_name: businessName,
           phone: phone || null,
-          email,
           status: "pending",
           selected_plan: selectedPlan,
         })
-        .select("id")
-        .single();
+        .eq("id", existingPendingSignup.id);
 
-    if (pendingError || !pendingSignup) {
-      return NextResponse.json(
-        {
-          error:
-            pendingError?.message ??
-            "Unable to start signup.",
-        },
-        { status: 400 }
-      );
+      if (reuseError) {
+        return NextResponse.json(
+          { error: reuseError.message },
+          { status: 400 }
+        );
+      }
+
+      pendingSignupId = existingPendingSignup.id;
+    } else {
+      const { data: pendingSignup, error: pendingError } =
+        await supabaseAdmin
+          .from("pending_business_signups")
+          .insert({
+            full_name: fullName,
+            business_name: businessName,
+            phone: phone || null,
+            email,
+            status: "pending",
+            selected_plan: selectedPlan,
+          })
+          .select("id")
+          .single();
+
+      if (pendingError || !pendingSignup) {
+        return NextResponse.json(
+          {
+            error:
+              pendingError?.message ??
+              "Unable to start signup.",
+          },
+          { status: 400 }
+        );
+      }
+
+      pendingSignupId = pendingSignup.id;
     }
 
     const session = await stripe.checkout.sessions.create({
@@ -172,14 +211,14 @@ export async function POST(request: Request) {
       subscription_data: {
         trial_period_days: 14,
         metadata: {
-          pending_signup_id: pendingSignup.id,
+          pending_signup_id: pendingSignupId,
           business_name: businessName,
           selected_plan: selectedPlan,
         },
       },
 
       metadata: {
-        pending_signup_id: pendingSignup.id,
+        pending_signup_id: pendingSignupId,
         full_name: fullName,
         business_name: businessName,
         email,
@@ -203,7 +242,7 @@ export async function POST(request: Request) {
               ? session.customer
               : null,
         })
-        .eq("id", pendingSignup.id);
+        .eq("id", pendingSignupId);
 
     if (updateError) {
       return NextResponse.json(
