@@ -27,6 +27,7 @@ export async function POST(request: Request) {
 
     const stripeBody = new URLSearchParams();
     stripeBody.set("mode", "setup");
+    stripeBody.set("currency", "usd");
     stripeBody.set("customer", link.stripe_customer_id);
     stripeBody.set("success_url", successUrl);
     stripeBody.set("cancel_url", cancelUrl);
