@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { trackMetaPixelEvent } from "@/lib/meta-pixel";
 
 export default function FinishCreateAccountPage() {
   return (
@@ -38,6 +39,8 @@ function FinishContent() {
   const [resendMessage, setResendMessage] = useState("");
   const [resendCooldown, setResendCooldown] = useState(0);
 
+  const pixelFired = useRef(false);
+
   // Fetch the email address for this session so we can show it
   useEffect(() => {
     if (!sessionId) return;
@@ -56,6 +59,11 @@ function FinishContent() {
           setEmail(data.email ?? null);
           setFirstName(data.firstName ?? "there");
           setStatusReady(true);
+
+          if (!pixelFired.current) {
+            pixelFired.current = true;
+            trackMetaPixelEvent("StartTrial");
+          }
         } else {
           setStatusReady(true);
         }
