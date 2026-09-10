@@ -1,13 +1,28 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { supabaseAdmin } from "../../../lib/supabase-admin";
+import { getCardBranding } from "@/lib/card-branding";
 import AddCardPage from "./AddCardPage";
 
 export const dynamic = "force-dynamic";
 
-export async function generateMetadata(): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  let branding = null;
+  try {
+    const { id } = await params;
+    branding = await getCardBranding(id);
+  } catch {
+    branding = null;
+  }
+
   const title = "Save a Card";
-  const description = "Securely save a card on file with your groomer.";
+  const description = branding?.businessName
+    ? `${branding.businessName} — securely save a card on file.`
+    : "Securely save a card on file with your groomer.";
 
   return {
     title,
