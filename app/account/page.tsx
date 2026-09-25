@@ -946,7 +946,7 @@ function AccountPageContent() {
                           SMS Credit Packs
                         </p>
                         <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                          Each pack adds 200 SMS/month &middot; $9.99&thinsp;/&thinsp;pack&thinsp;/&thinsp;month
+                          Each pack adds 350 SMS/month &middot; $9.99&thinsp;/&thinsp;pack&thinsp;/&thinsp;month
                         </p>
                       </div>
                       {business?.plan !== "pro" ? (
@@ -997,7 +997,7 @@ function AccountPageContent() {
                           {/* Summary */}
                           <div className="rounded-2xl bg-[var(--soft-surface)] px-4 py-3">
                             <p className="text-sm font-bold text-[var(--text-primary)]">
-                              +{(business.sms_credit_packs ?? 0) * 200} SMS&thinsp;/&thinsp;month
+                              +{(business.sms_credit_packs ?? 0) * 350} SMS&thinsp;/&thinsp;month
                             </p>
                             {(business.sms_credit_packs ?? 0) > 0 ? (
                               <p className="mt-0.5 text-xs text-[var(--text-secondary)]">

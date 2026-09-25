@@ -132,9 +132,9 @@ export async function DELETE(request: Request) {
     }
 
     // Check whether current usage would exceed the limit after removing one pack.
-    // Limit after removal = base plan limit + (currentPacks - 1) × 200
+    // Limit after removal = base plan limit + (currentPacks - 1) × 350
     const baseLimit = BASE_SMS_LIMIT[business.plan ?? ""] ?? 0;
-    const limitAfterRemoval = baseLimit + (currentPacks - 1) * 200;
+    const limitAfterRemoval = baseLimit + (currentPacks - 1) * 350;
     const usedCredits = await getUsedCreditsThisPeriod(business.id);
 
     if (usedCredits > limitAfterRemoval) {
