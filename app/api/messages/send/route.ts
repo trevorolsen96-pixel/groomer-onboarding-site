@@ -2,9 +2,112 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "../../../../lib/supabase-admin";
 import { sendSms } from "../../../../lib/telnyx";
 import { normalizeSmsText, smsSegments, splitLongSmsMessage } from "../../../../lib/sms-text";
+import { classifySmsError } from "../../../../lib/sms-retry";
 
 const ATTACHMENT_BUCKET = "message-attachments";
 const ATTACHMENT_LINK_TTL_SECONDS = 72 * 60 * 60; // 72 hours
+
+// First attempt is always synchronous (most sends succeed in under a
+// second, no reason to make the happy path wait on a background queue).
+// Only a transient failure on that first attempt gets queued -- a
+// permanent one (bad number, opted out) fails immediately and stays the
+// existing tap-to-retry UX, since retrying it automatically would just
+// burn the retry window on something that will never succeed.
+const FIRST_RETRY_DELAY_MINUTES = 5;
+
+type SendAttemptResult =
+  | { ok: true; providerMessageId: string }
+  | { ok: false; queued: boolean; error: string };
+
+// Sends one SMS (a single text part, or a photo's caption+link) and, on
+// a transient failure, leaves a durable trail instead of just letting
+// the error bubble up and vanish: a message_items row so the bubble
+// survives even if the device that sent it never gets a response back,
+// and a sms_outbound_queue row so the process-queue cron picks it back
+// up and keeps trying in the background. A permanent failure still
+// leaves a message_items row (status 'failed') so it's visible to any
+// other staff viewing the same conversation, not just a local-only
+// bubble on the sender's own device.
+async function sendWithRetryFallback({
+  businessId,
+  conversationId,
+  customerId,
+  fromPhone,
+  toPhone,
+  text,
+  sentByWorkerId,
+  extraMessageItemFields = {},
+}: {
+  businessId: string;
+  conversationId: string;
+  customerId: string | null;
+  fromPhone: string;
+  toPhone: string;
+  text: string;
+  sentByWorkerId: string | null;
+  extraMessageItemFields?: Record<string, unknown>;
+}): Promise<SendAttemptResult> {
+  try {
+    const providerMessageId = await sendSms({ from: fromPhone, to: toPhone, text });
+    return { ok: true, providerMessageId };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const nowIso = new Date().toISOString();
+
+    if (classifySmsError(err) === "transient") {
+      const { data: inserted } = await supabaseAdmin
+        .from("message_items")
+        .insert({
+          business_id: businessId,
+          conversation_id: conversationId,
+          customer_id: customerId,
+          direction: "outbound",
+          body: text,
+          status: "retrying",
+          provider: "telnyx",
+          created_at: nowIso,
+          sent_by_worker_id: sentByWorkerId,
+          ...extraMessageItemFields,
+        })
+        .select("id")
+        .single();
+
+      if (inserted?.id) {
+        await supabaseAdmin.from("sms_outbound_queue").insert({
+          business_id: businessId,
+          customer_id: customerId,
+          message_item_id: inserted.id,
+          message_type: "direct_message",
+          to_phone: toPhone,
+          body_rendered: text,
+          scheduled_for_utc: new Date(
+            Date.now() + FIRST_RETRY_DELAY_MINUTES * 60000
+          ).toISOString(),
+          status: "pending",
+          attempt_count: 1,
+          failure_reason: message,
+        });
+      }
+
+      return { ok: false, queued: true, error: message };
+    }
+
+    await supabaseAdmin.from("message_items").insert({
+      business_id: businessId,
+      conversation_id: conversationId,
+      customer_id: customerId,
+      direction: "outbound",
+      body: text,
+      status: "failed",
+      provider: "telnyx",
+      created_at: nowIso,
+      sent_by_worker_id: sentByWorkerId,
+      ...extraMessageItemFields,
+    });
+
+    return { ok: false, queued: false, error: message };
+  }
+}
 
 function cleanText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -380,34 +483,34 @@ export async function POST(request: Request) {
         neededCredits: smsSegments(outgoingText),
       });
 
-      const providerMessageId = await sendSms({
-        from: fromPhone,
-        to: toPhone,
+      const result = await sendWithRetryFallback({
+        businessId,
+        conversationId,
+        customerId,
+        fromPhone,
+        toPhone,
         text: outgoingText,
+        sentByWorkerId,
+        extraMessageItemFields: {
+          attachment_path: uploaded.path,
+          attachment_expires_at: shortLink.expiresAt,
+          // Kept separately from `body` (which stores the literal text
+          // that went out over SMS, link included) so the app's own
+          // message history can show just the caption + a rendered
+          // image, without needing to parse the signed URL back out of
+          // the sent text.
+          attachment_caption: cleanCaption || null,
+        },
       });
+
+      if (!result.ok) {
+        if (result.queued) {
+          return NextResponse.json({ ok: true, status: "retrying" });
+        }
+        return NextResponse.json({ error: result.error }, { status: 400 });
+      }
 
       const nowIso = now();
-
-      await supabaseAdmin.from("message_items").insert({
-        business_id: businessId,
-        conversation_id: conversationId,
-        customer_id: customerId,
-        direction: "outbound",
-        body: outgoingText,
-        status: "sent",
-        provider: "telnyx",
-        created_at: nowIso,
-        attachment_path: uploaded.path,
-        attachment_expires_at: shortLink.expiresAt,
-        // Kept separately from `body` (which stores the literal text that
-        // went out over SMS, link included) so the app's own message
-        // history can show just the caption + a rendered image, without
-        // needing to parse the signed URL back out of the sent text.
-        attachment_caption: cleanCaption || null,
-        // Null when the admin/owner sent it -- only set for staff sends,
-        // so the app's thread view can attribute the bubble.
-        sent_by_worker_id: sentByWorkerId,
-      });
 
       await supabaseAdmin
         .from("message_conversations")
@@ -425,7 +528,7 @@ export async function POST(request: Request) {
         created_at: nowIso,
       });
 
-      return NextResponse.json({ ok: true, providerMessageId });
+      return NextResponse.json({ ok: true, providerMessageId: result.providerMessageId });
     }
 
     // Plain text — clean up autocorrect typography, then send as one text
@@ -445,21 +548,25 @@ export async function POST(request: Request) {
     let lastProviderMessageId: string | null = null;
 
     for (const part of parts) {
-      lastProviderMessageId = await sendSms({ from: fromPhone, to: toPhone, text: part });
-
-      const nowIso = now();
-
-      await supabaseAdmin.from("message_items").insert({
-        business_id: businessId,
-        conversation_id: conversationId,
-        customer_id: customerId,
-        direction: "outbound",
-        body: part,
-        status: "sent",
-        provider: "telnyx",
-        created_at: nowIso,
-        sent_by_worker_id: sentByWorkerId,
+      const result = await sendWithRetryFallback({
+        businessId,
+        conversationId,
+        customerId,
+        fromPhone,
+        toPhone,
+        text: part,
+        sentByWorkerId,
       });
+
+      if (!result.ok) {
+        if (result.queued) {
+          return NextResponse.json({ ok: true, status: "retrying" });
+        }
+        return NextResponse.json({ error: result.error }, { status: 400 });
+      }
+
+      lastProviderMessageId = result.providerMessageId;
+      const nowIso = now();
 
       await supabaseAdmin
         .from("message_conversations")

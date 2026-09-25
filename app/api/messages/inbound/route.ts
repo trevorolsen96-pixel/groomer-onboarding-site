@@ -393,6 +393,11 @@ export async function POST(request: Request) {
     const media: TelnyxMedia[] = Array.isArray(payload?.media)
       ? payload.media
       : [];
+    // Telnyx's own message id -- stable across webhook retries of the
+    // same delivery, used below to make sure a retry (now that we
+    // actually return non-200 on a real failure, see the outer catch)
+    // can't create a duplicate message_items row.
+    const providerMessageId = cleanText(payload?.id ?? "") || null;
 
     diagFromPhone = fromPhone;
     diagToPhone = toPhone;
@@ -416,6 +421,19 @@ export async function POST(request: Request) {
     const businessId = smsSetup.business_id;
     diagBusinessId = businessId;
     const now = new Date().toISOString();
+
+    if (providerMessageId) {
+      const { data: alreadyProcessed } = await supabaseAdmin
+        .from("message_items")
+        .select("id")
+        .eq("business_id", businessId)
+        .eq("provider_message_id", providerMessageId)
+        .maybeSingle();
+
+      if (alreadyProcessed) {
+        return NextResponse.json({ ok: true, duplicate: true });
+      }
+    }
 
     const { data: customers } = await supabaseAdmin
       .from("customers")
@@ -616,6 +634,7 @@ export async function POST(request: Request) {
       created_at: now,
       attachment_path: attachmentPath,
       attachment_caption: attachmentPath ? body || null : null,
+      provider_message_id: providerMessageId,
     });
 
     await supabaseAdmin
@@ -699,6 +718,18 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json({ ok: true });
+    // Previously always returned 200 here, which told Telnyx "delivered
+    // fine" even when we'd actually failed partway through processing --
+    // Telnyx never got a reason to retry, so a message could fail here
+    // and just be gone for good, with only a server log (or, since the
+    // fix above, an sms_events row) as any trace it ever arrived.
+    // Telnyx retries a non-2xx webhook response on its own schedule, and
+    // the idempotency check earlier in this handler (keyed on Telnyx's
+    // own message id) makes that retry safe -- it'll just no-op if we
+    // actually got far enough to have already saved the message.
+    return NextResponse.json(
+      { error: "Failed to process inbound message." },
+      { status: 500 }
+    );
   }
 }

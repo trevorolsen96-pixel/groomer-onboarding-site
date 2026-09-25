@@ -4,6 +4,13 @@ import { sendSms } from "../../../../lib/telnyx";
 import { normalizeSmsText, smsSegments } from "../../../../lib/sms-text";
 import { verifyCronRequest } from "../../../../lib/cron-auth";
 import { sendPushToBusinessAsync } from "../../../../lib/push-notification";
+import {
+  classifySmsError,
+  nextRetryDelayMinutes,
+  MAX_ATTEMPTS_DEFAULT,
+  MAX_ATTEMPTS_DIRECT_MESSAGE,
+  DIRECT_MESSAGE_MAX_AGE_MINUTES,
+} from "../../../../lib/sms-retry";
 
 // How long to wait before sending another "you're out of SMS credits"
 // push for the same business -- this cron runs every 5 minutes, and
@@ -194,6 +201,39 @@ export async function GET(request: Request) {
           created_at: nowIso,
         });
 
+        if (row.message_item_id) {
+          // A direct/interactive send that failed transiently on its
+          // first synchronous attempt (see app/api/messages/send) and
+          // got queued for background retry -- the bubble already
+          // exists (status 'retrying'), so update it in place instead
+          // of inserting a new one, same as a normal reply would.
+          await supabaseAdmin
+            .from("message_items")
+            .update({
+              status: "sent",
+              provider_message_id: providerMessageId,
+            })
+            .eq("id", row.message_item_id);
+
+          const { data: existingConversation } = await supabaseAdmin
+            .from("message_conversations")
+            .select("id")
+            .eq("business_id", row.business_id)
+            .eq("customer_id", row.customer_id)
+            .eq("contact_type", "primary")
+            .maybeSingle();
+
+          if (existingConversation?.id) {
+            await supabaseAdmin
+              .from("message_conversations")
+              .update({ last_message_body: messageBody, last_message_at: nowIso })
+              .eq("id", existingConversation.id);
+          }
+
+          sentCount++;
+          continue;
+        }
+
         const { data: customer } = await supabaseAdmin
           .from("customers")
           .select("id, name, phone, image_url")
@@ -254,16 +294,89 @@ export async function GET(request: Request) {
 
         sentCount++;
       } catch (err) {
+        const attemptCount = (row.attempt_count ?? 0) + 1;
+        const message = err instanceof Error ? err.message : String(err);
+        const isDirectMessage = row.message_type === "direct_message";
+        const nowIsoFail = new Date().toISOString();
+
+        // Decide whether this failure is worth trying again, or whether
+        // we've hit a real stopping point -- a permanent error (bad
+        // number, opted out), too many attempts already, the direct-
+        // message retry window elapsed, or (for reminders specifically)
+        // the appointment it's about has already happened.
+        let giveUp = classifySmsError(err) === "permanent";
+
+        if (!giveUp) {
+          const maxAttempts = isDirectMessage
+            ? MAX_ATTEMPTS_DIRECT_MESSAGE
+            : MAX_ATTEMPTS_DEFAULT;
+          if (attemptCount >= maxAttempts) giveUp = true;
+        }
+
+        if (!giveUp && isDirectMessage) {
+          const ageMinutes =
+            (Date.now() - new Date(row.created_at).getTime()) / 60000;
+          if (ageMinutes >= DIRECT_MESSAGE_MAX_AGE_MINUTES) giveUp = true;
+        }
+
+        if (!giveUp && !isDirectMessage && row.appointment_id) {
+          const { data: appt } = await supabaseAdmin
+            .from("appointments")
+            .select("scheduled_at")
+            .eq("id", row.appointment_id)
+            .maybeSingle();
+
+          if (
+            appt?.scheduled_at &&
+            new Date(appt.scheduled_at).getTime() <= Date.now()
+          ) {
+            giveUp = true;
+          }
+        }
+
+        if (giveUp) {
+          if (row.message_item_id) {
+            await supabaseAdmin
+              .from("message_items")
+              .update({ status: "failed" })
+              .eq("id", row.message_item_id);
+          }
+        } else {
+          const delayMinutes = nextRetryDelayMinutes(
+            row.message_type,
+            attemptCount + 1
+          );
+
+          await supabaseAdmin
+            .from("sms_outbound_queue")
+            .update({
+              status: "pending",
+              attempt_count: attemptCount,
+              failure_reason: message,
+              scheduled_for_utc: new Date(
+                Date.now() + delayMinutes * 60000
+              ).toISOString(),
+              updated_at: nowIsoFail,
+            })
+            .eq("id", row.id);
+
+          if (message.includes("sms_credits_exceeded")) {
+            await notifyCreditsExhaustedIfNeeded(row.business_id);
+          }
+
+          continue;
+        }
+
         await supabaseAdmin
           .from("sms_outbound_queue")
           .update({
             status: "failed",
-            attempt_count: (row.attempt_count ?? 0) + 1,
+            attempt_count: attemptCount,
+            failure_reason: message,
             updated_at: new Date().toISOString(),
           })
           .eq("id", row.id);
 
-        const message = err instanceof Error ? err.message : String(err);
         if (message.includes("sms_credits_exceeded")) {
           await notifyCreditsExhaustedIfNeeded(row.business_id);
         }
