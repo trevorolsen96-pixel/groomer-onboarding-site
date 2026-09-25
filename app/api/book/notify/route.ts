@@ -71,73 +71,15 @@ export async function POST(req: NextRequest) {
   if ("error" in authResult) return authResult.error;
   const callerBusinessId = authResult.businessId;
 
-  // Handle onboarding accepted — uses onboarding_requests table
+  // Onboarding-accepted welcome text was confusing clients (they didn't
+  // understand what "onboarding confirmed" meant), so the business owner
+  // asked to drop it entirely. Left as a recognized status that just
+  // no-ops rather than deleting the branch outright, since the app still
+  // calls this route with status "onboarding_accepted" on every approval
+  // and this keeps that call a harmless, understood no-op instead of a
+  // 400/404 if an older app build still sends it.
   if (status === "onboarding_accepted") {
-    if (!clientPhone || !directBusinessId) {
-      return NextResponse.json({ ok: true, skipped: "no_phone_or_business" });
-    }
-
-    if (callerBusinessId !== directBusinessId) {
-      return NextResponse.json({ error: "Not authorized." }, { status: 403 });
-    }
-
-    const phone = _toE164(clientPhone);
-    if (!phone) return NextResponse.json({ ok: true, skipped: "bad_phone_format" });
-
-    const { data: settings } = await supabaseAdmin
-      .from("business_settings")
-      .select("sms_sender_number, business_name")
-      .eq("business_id", directBusinessId)
-      .maybeSingle();
-
-    const from = settings?.sms_sender_number as string | null;
-    if (!from) return NextResponse.json({ ok: true, skipped: "no_sender_number" });
-
-    const businessName = (settings?.business_name as string | null) ?? "Your groomer";
-    const text = normalizeSmsText(
-      `Welcome to ${businessName}! Your profile is set up and you're ready to book. We look forward to seeing your pup!`
-    );
-
-    try {
-      await _assertSmsCreditsAvailable(directBusinessId, smsSegments(text));
-      await sendSms({ from, to: phone, text });
-
-      // Log it against the client's conversation (and therefore the credit
-      // ledger) if their customer record already exists by now -- it
-      // usually does, since this fires right after onboarding creates one.
-      // Best-effort: a lookup/logging failure should never surface as a
-      // failed welcome text, since the SMS itself already went out.
-      try {
-        const { data: matchedCustomer } = await supabaseAdmin
-          .from("customers")
-          .select("id, name, phone, image_url")
-          .eq("business_id", directBusinessId)
-          .eq("phone", phone)
-          .maybeSingle();
-
-        if (matchedCustomer) {
-          await logOutboundSmsToConversation({
-            businessId: directBusinessId,
-            customerId: matchedCustomer.id,
-            customerName: matchedCustomer.name,
-            customerPhone: matchedCustomer.phone,
-            customerImageUrl: matchedCustomer.image_url,
-            body: text,
-          });
-        } else {
-          await logOutboundSmsUsageOnly({
-            businessId: directBusinessId,
-            body: text,
-            eventType: "onboarding_welcome",
-          });
-        }
-      } catch (usageLogError) {
-        console.error("Failed to log welcome SMS usage:", usageLogError);
-      }
-    } catch (err) {
-      console.error("SMS send failed:", err);
-    }
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, skipped: "onboarding_welcome_sms_removed" });
   }
 
   // Load the booking request
