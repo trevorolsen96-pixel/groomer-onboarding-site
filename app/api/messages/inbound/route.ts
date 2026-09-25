@@ -99,11 +99,10 @@ function formatPhoneForDisplay(e164: string) {
 
 // Builds the list of profiles who should be pushed for a new inbound
 // message: every admin in the business, plus whichever staff member(s)
-// are actually allowed to message this specific client, per their
-// messaging_access ('unassigned' -- no staff at all, admin-only; 'all' --
-// every messaging-enabled worker; 'assigned' -- just the one worker in
-// assigned_worker_id). Returns [] (not the whole business) when nothing
-// resolves, e.g. an unmatched phone number with no customer.
+// actually have a non-cancelled appointment (past or future) with this
+// specific client -- same rule staff_can_message_customer() enforces for
+// sending. Returns [] (not the whole business) when nothing resolves,
+// e.g. an unmatched phone number with no customer.
 async function resolveMessagePushProfileIds({
   businessId,
   customerId,
@@ -115,32 +114,28 @@ async function resolveMessagePushProfileIds({
 
   if (!customerId) return profileIds;
 
-  const { data: customerRow } = await supabaseAdmin
-    .from("customers")
-    .select("assigned_worker_id, messaging_access")
-    .eq("id", customerId)
+  const { data: sharedAppointments } = await supabaseAdmin
+    .from("appointments")
+    .select("worker_id")
     .eq("business_id", businessId)
-    .maybeSingle();
+    .eq("customer_id", customerId)
+    .neq("status", "cancelled")
+    .not("worker_id", "is", null);
 
-  // No staff should be notified at all for an admin-only client.
-  if (!customerRow || customerRow.messaging_access === "unassigned") {
-    return profileIds;
-  }
+  const workerIds = Array.from(
+    new Set((sharedAppointments ?? []).map((a) => a.worker_id as string))
+  );
 
-  let workerQuery = supabaseAdmin
+  if (workerIds.length === 0) return profileIds;
+
+  const { data: workers } = await supabaseAdmin
     .from("workers")
     .select("profile_id")
     .eq("business_id", businessId)
     .eq("active", true)
     .eq("can_message_clients", true)
-    .not("profile_id", "is", null);
-
-  workerQuery =
-    customerRow.messaging_access === "assigned" && customerRow.assigned_worker_id
-      ? workerQuery.eq("id", customerRow.assigned_worker_id)
-      : workerQuery;
-
-  const { data: workers } = await workerQuery;
+    .not("profile_id", "is", null)
+    .in("id", workerIds);
 
   for (const worker of workers ?? []) {
     if (worker.profile_id) profileIds.push(worker.profile_id as string);

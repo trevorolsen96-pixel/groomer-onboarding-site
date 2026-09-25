@@ -206,8 +206,8 @@ export async function POST(request: Request) {
 
     // Admins can message any client in their business, same as always. A
     // non-admin (staff/groomer) sender must have messaging explicitly
-    // enabled on their own worker row, and the conversation's customer
-    // must be assigned to them specifically or left unassigned ("All").
+    // enabled on their own worker row, and must have a non-cancelled
+    // appointment (past or future) with the conversation's customer.
     // Resolved worker id (if any) is recorded as sent_by_worker_id below
     // so the admin's thread view can show who actually sent it.
     let sentByWorkerId: string | null = null;
@@ -248,27 +248,26 @@ export async function POST(request: Request) {
         );
       }
 
-      const { data: targetCustomer, error: targetCustomerError } =
+      // A non-admin can message a client iff they have a non-cancelled
+      // appointment (past or future) with that specific client -- same
+      // rule staff_can_message_customer() enforces at the RLS layer for
+      // starting the conversation in the first place. This route talks to
+      // the database via the service-role client (no real auth.uid()), so
+      // the check is re-expressed directly here rather than calling that
+      // RPC.
+      const { data: sharedAppointment, error: sharedAppointmentError } =
         await supabaseAdmin
-          .from("customers")
-          .select("assigned_worker_id, messaging_access")
-          .eq("id", targetCustomerId)
-          .eq("business_id", businessId)
+          .from("appointments")
+          .select("id")
+          .eq("customer_id", targetCustomerId)
+          .eq("worker_id", worker.id)
+          .neq("status", "cancelled")
+          .limit(1)
           .maybeSingle();
 
-      // messaging_access is a 3-way choice: 'unassigned' (admin-only, no
-      // staff at all), 'all' (any messaging-enabled staff), or 'assigned'
-      // (only the one worker in assigned_worker_id).
-      const canMessageThisClient =
-        !!targetCustomer &&
-        targetCustomer.messaging_access !== "unassigned" &&
-        (targetCustomer.messaging_access === "all" ||
-          (targetCustomer.messaging_access === "assigned" &&
-            targetCustomer.assigned_worker_id === worker.id));
-
-      if (targetCustomerError || !canMessageThisClient) {
+      if (sharedAppointmentError || !sharedAppointment) {
         return NextResponse.json(
-          { error: "This client isn't assigned to you." },
+          { error: "You don't have an appointment with this client yet." },
           { status: 403 }
         );
       }
