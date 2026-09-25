@@ -311,7 +311,28 @@ export async function POST(request: Request) {
       );
     }
 
-    const toPhone = normalizePhone(conversation.customer_phone || "");
+    // The conversation's customer_phone is a snapshot taken when the
+    // thread was first created -- but a staff member starting a new
+    // conversation via the messageable-clients search gets a Customer
+    // object with phone deliberately blanked out (privacy: a phone number
+    // should never reach a staff device that isn't allowed to see it), so
+    // that snapshot can legitimately be empty even though the customer
+    // has a real phone on file. This route already runs with full
+    // service-role access, so fall back to a live lookup by customer_id
+    // rather than failing (or worse, sending a raw empty/invalid "to" to
+    // the SMS provider) whenever the snapshot is missing.
+    let rawPhone = conversation.customer_phone;
+    if (!rawPhone && conversation.customer_id) {
+      const { data: customerRow } = await supabaseAdmin
+        .from("customers")
+        .select("phone")
+        .eq("id", conversation.customer_id)
+        .eq("business_id", businessId)
+        .maybeSingle();
+      rawPhone = customerRow?.phone ?? null;
+    }
+
+    const toPhone = normalizePhone(rawPhone || "");
 
     if (!toPhone) {
       return NextResponse.json(
