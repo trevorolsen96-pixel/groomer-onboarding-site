@@ -6,6 +6,13 @@ import { logOutboundSmsToConversation } from "../../../../lib/sms-conversation-l
 
 const REPORT_TTL_DAYS = 3;
 
+// A second send of the same report inside this window is treated as a
+// retry of the first, not a request to text the client again. The usual
+// cause is the app losing its connection after the SMS already went out
+// (iOS "Bad file descriptor" on a network handoff) and the groomer
+// tapping Send again, which used to double-text the client.
+const DUPLICATE_SEND_WINDOW_MS = 5 * 60 * 1000;
+
 function cleanText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -92,7 +99,9 @@ export async function POST(request: Request) {
 
     const { data: reportCard } = await supabaseAdmin
       .from("pet_report_cards")
-      .select("id, short_id, pet_id, customer_id, before_photo_path, after_photo_path")
+      .select(
+        "id, short_id, pet_id, customer_id, before_photo_path, after_photo_path, status, sent_at, expires_at"
+      )
       .eq("id", reportCardId)
       .eq("business_id", businessId)
       .maybeSingle();
@@ -153,14 +162,18 @@ export async function POST(request: Request) {
     const fromPhone = normalizePhone(smsSetup.phone_number);
     const toPhone = normalizePhone(customer.phone);
 
-    await sendSms({ from: fromPhone, to: toPhone, text: messageBody });
-
     const nowIso = new Date().toISOString();
     const expiresAt = new Date(
       Date.now() + REPORT_TTL_DAYS * 24 * 60 * 60 * 1000
     ).toISOString();
+    const duplicateCutoffIso = new Date(
+      Date.now() - DUPLICATE_SEND_WINDOW_MS
+    ).toISOString();
 
-    await supabaseAdmin
+    // Claim the send before texting: this conditional update only matches
+    // if the report hasn't been sent within the duplicate window, so two
+    // overlapping requests can't both get through.
+    const { data: claimed, error: claimError } = await supabaseAdmin
       .from("pet_report_cards")
       .update({
         status: "sent",
@@ -168,7 +181,36 @@ export async function POST(request: Request) {
         expires_at: expiresAt,
         updated_at: nowIso,
       })
-      .eq("id", reportCardId);
+      .eq("id", reportCardId)
+      .or(`sent_at.is.null,sent_at.lt.${duplicateCutoffIso}`)
+      .select("id");
+
+    if (claimError) throw new Error(claimError.message);
+
+    if (!claimed || claimed.length === 0) {
+      return NextResponse.json({
+        ok: true,
+        url: reportUrl,
+        expiresAt: reportCard.expires_at ?? expiresAt,
+        alreadySent: true,
+      });
+    }
+
+    try {
+      await sendSms({ from: fromPhone, to: toPhone, text: messageBody });
+    } catch (sendError) {
+      // Put the card back the way it was so the groomer can retry.
+      await supabaseAdmin
+        .from("pet_report_cards")
+        .update({
+          status: reportCard.status,
+          sent_at: reportCard.sent_at,
+          expires_at: reportCard.expires_at,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", reportCardId);
+      throw sendError;
+    }
 
     await supabaseAdmin.from("sms_events").insert({
       business_id: businessId,

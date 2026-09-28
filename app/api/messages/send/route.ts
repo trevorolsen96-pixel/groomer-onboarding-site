@@ -19,8 +19,8 @@ type SendAttemptResult =
   | { ok: true; providerMessageId: string }
   | { ok: false; queued: boolean; error: string };
 
-// Sends one SMS (a single text part, or a photo's caption+link) and, on
-// a transient failure, leaves a durable trail instead of just letting
+// Sends one SMS (a single text part, or a photo's caption+link), records
+// it in message_items on success, and, on a transient failure, leaves a durable trail instead of just letting
 // the error bubble up and vanish: a message_items row so the bubble
 // survives even if the device that sent it never gets a response back,
 // and a sms_outbound_queue row so the process-queue cron picks it back
@@ -47,9 +47,10 @@ async function sendWithRetryFallback({
   sentByWorkerId: string | null;
   extraMessageItemFields?: Record<string, unknown>;
 }): Promise<SendAttemptResult> {
+  let providerMessageId: string;
+
   try {
-    const providerMessageId = await sendSms({ from: fromPhone, to: toPhone, text });
-    return { ok: true, providerMessageId };
+    providerMessageId = await sendSms({ from: fromPhone, to: toPhone, text });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const nowIso = new Date().toISOString();
@@ -107,6 +108,32 @@ async function sendWithRetryFallback({
 
     return { ok: false, queued: false, error: message };
   }
+
+  // The success path needs its own message_items row too -- it's the only
+  // thing the app's thread view reads, and the only thing that counts the
+  // send against SMS credits (trg_log_sms_usage_from_message_item). The
+  // SMS has already gone out at this point, so a failed insert is logged
+  // rather than turned into an error the sender would just retry (and
+  // double-text the client).
+  const { error: insertError } = await supabaseAdmin.from("message_items").insert({
+    business_id: businessId,
+    conversation_id: conversationId,
+    customer_id: customerId,
+    direction: "outbound",
+    body: text,
+    status: "sent",
+    provider: "telnyx",
+    provider_message_id: providerMessageId,
+    created_at: new Date().toISOString(),
+    sent_by_worker_id: sentByWorkerId,
+    ...extraMessageItemFields,
+  });
+
+  if (insertError) {
+    console.error("Failed to record sent message_items row:", insertError);
+  }
+
+  return { ok: true, providerMessageId };
 }
 
 function cleanText(value: unknown) {
