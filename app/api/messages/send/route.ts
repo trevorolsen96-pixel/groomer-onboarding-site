@@ -347,15 +347,59 @@ async function claimSend(
     if (reclaimed && reclaimed.length > 0) return { kind: "claimed" };
   }
 
-  // Another request for this exact message is (or was) mid-send. Report it
-  // as in hand; the outcome reaches the thread through message_items.
-  const updatedAt = existing?.updated_at ? Date.parse(existing.updated_at) : 0;
+  const updatedAtRaw = existing?.updated_at ?? null;
+  const updatedAt = updatedAtRaw ? Date.parse(updatedAtRaw) : 0;
+
+  if (existing?.status === "in_progress" && Date.now() - updatedAt > STALE_IN_PROGRESS_MS) {
+    // The request that claimed this id died mid-flight (function timeout,
+    // crash) without recording how it ended. Every outcome of a send --
+    // sent, queued for retry, or failed -- writes a message_items row
+    // tagged with this id, so no row means nothing went out: take the id
+    // over and send, rather than reporting "in hand" forever while the
+    // message silently never sends. A row means it did go out; record
+    // that so later retries replay cleanly.
+    const { data: rows, error: rowsError } = await supabaseAdmin
+      .from("message_items")
+      .select("id")
+      .eq("business_id", businessId)
+      .eq("client_message_id", clientMessageId)
+      .limit(1);
+
+    if (!rowsError && rows && rows.length === 0) {
+      // Conditional on updated_at so two simultaneous retries can't both
+      // take it over.
+      const { data: reclaimed } = await supabaseAdmin
+        .from("message_send_requests")
+        .update({ status: "in_progress", updated_at: new Date().toISOString() })
+        .eq("business_id", businessId)
+        .eq("client_message_id", clientMessageId)
+        .eq("status", "in_progress")
+        .eq("updated_at", updatedAtRaw)
+        .select("client_message_id");
+      if (reclaimed && reclaimed.length > 0) return { kind: "claimed" };
+    }
+
+    if (!rowsError && rows && rows.length > 0) {
+      const body = { ok: true, status: "sent" };
+      await supabaseAdmin
+        .from("message_send_requests")
+        .update({
+          status: "done",
+          response_status: 200,
+          response_body: body,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("business_id", businessId)
+        .eq("client_message_id", clientMessageId);
+      return { kind: "replay", response: NextResponse.json(body) };
+    }
+  }
+
+  // Another request for this exact message is mid-send right now. Report
+  // it as in hand; the outcome reaches the thread through message_items.
   return {
     kind: "replay",
-    response: NextResponse.json({
-      ok: true,
-      status: Date.now() - updatedAt > STALE_IN_PROGRESS_MS ? "unknown" : "processing",
-    }),
+    response: NextResponse.json({ ok: true, status: "processing" }),
   };
 }
 
