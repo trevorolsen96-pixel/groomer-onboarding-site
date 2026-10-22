@@ -284,7 +284,128 @@ async function assertSmsCreditsAvailable({
   }
 }
 
+// Retry protection (see message_send_requests). The app tags each send
+// with a clientMessageId so it can safely retry a send whose response was
+// lost to a dropped connection: the id is claimed before anyone is texted,
+// and a repeat gets the first attempt's response back instead of a second
+// text. Requests without an id (older app versions) skip all of this.
+type SendClaim =
+  | { kind: "claimed" }
+  | { kind: "unprotected" }
+  | { kind: "replay"; response: NextResponse };
+
+// A request that's still marked in_progress after this long almost
+// certainly died mid-flight (function timeout, crash). Whether it texted
+// the client is unknown, so it's still never re-sent -- the retry is told
+// it's being handled rather than risking a double text.
+const STALE_IN_PROGRESS_MS = 2 * 60 * 1000;
+
+async function claimSend(
+  businessId: string,
+  clientMessageId: string
+): Promise<SendClaim> {
+  const { error } = await supabaseAdmin.from("message_send_requests").insert({
+    business_id: businessId,
+    client_message_id: clientMessageId,
+    status: "in_progress",
+  });
+
+  if (!error) return { kind: "claimed" };
+  if (error.code !== "23505") {
+    // Fail open: if the table is missing (migration not applied yet) or
+    // unreachable, send exactly as before rather than blocking the text.
+    // Retry protection is a safety net, never a reason a message fails.
+    console.error("message_send_requests unavailable, sending unprotected:", error);
+    return { kind: "unprotected" };
+  }
+
+  const { data: existing } = await supabaseAdmin
+    .from("message_send_requests")
+    .select("status, response_status, response_body, updated_at")
+    .eq("business_id", businessId)
+    .eq("client_message_id", clientMessageId)
+    .maybeSingle();
+
+  if (existing?.status === "done") {
+    return {
+      kind: "replay",
+      response: NextResponse.json(existing.response_body ?? { ok: true }, {
+        status: existing.response_status ?? 200,
+      }),
+    };
+  }
+
+  if (existing?.status === "failed") {
+    // Nothing went out last time, so a resend is safe -- take it over.
+    const { data: reclaimed } = await supabaseAdmin
+      .from("message_send_requests")
+      .update({ status: "in_progress", updated_at: new Date().toISOString() })
+      .eq("business_id", businessId)
+      .eq("client_message_id", clientMessageId)
+      .eq("status", "failed")
+      .select("client_message_id");
+    if (reclaimed && reclaimed.length > 0) return { kind: "claimed" };
+  }
+
+  // Another request for this exact message is (or was) mid-send. Report it
+  // as in hand; the outcome reaches the thread through message_items.
+  const updatedAt = existing?.updated_at ? Date.parse(existing.updated_at) : 0;
+  return {
+    kind: "replay",
+    response: NextResponse.json({
+      ok: true,
+      status: Date.now() - updatedAt > STALE_IN_PROGRESS_MS ? "unknown" : "processing",
+    }),
+  };
+}
+
+async function finishSend(
+  businessId: string,
+  clientMessageId: string,
+  status: "done" | "failed",
+  response: NextResponse
+): Promise<NextResponse> {
+  let body: unknown = null;
+  try {
+    body = await response.clone().json();
+  } catch {
+    body = null;
+  }
+
+  const { error } = await supabaseAdmin
+    .from("message_send_requests")
+    .update({
+      status,
+      response_status: response.status,
+      response_body: body,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("business_id", businessId)
+    .eq("client_message_id", clientMessageId);
+
+  if (error) console.error("Failed to record message send result:", error);
+  return response;
+}
+
 export async function POST(request: Request) {
+  // Set once this request has claimed a clientMessageId, so every exit
+  // path below records how it ended. `anythingSent` flips as soon as any
+  // part goes out (or is queued for background retry): from then on the
+  // claim must end as 'done', never 'failed', or a resend would repeat it.
+  let claim: { businessId: string; clientMessageId: string } | null = null;
+  let anythingSent = false;
+
+  const respond = async (response: NextResponse) => {
+    if (!claim) return response;
+    const succeeded = response.status >= 200 && response.status < 300;
+    return finishSend(
+      claim.businessId,
+      claim.clientMessageId,
+      succeeded || anythingSent ? "done" : "failed",
+      response
+    );
+  };
+
   try {
     const authHeader = request.headers.get("authorization") ?? "";
     const token = authHeader.replace("Bearer ", "").trim();
@@ -405,6 +526,21 @@ export async function POST(request: Request) {
       sentByWorkerId = worker.id;
     }
 
+    const clientMessageId = cleanText(body.clientMessageId).slice(0, 200);
+    if (clientMessageId) {
+      const result = await claimSend(businessId, clientMessageId);
+      if (result.kind === "replay") return result.response;
+      if (result.kind === "claimed") claim = { businessId, clientMessageId };
+    }
+
+    // Tags the message_items row(s) with the app's id so it can match its
+    // local bubble to them. Only when the claim succeeded -- that proves the
+    // migration adding message_items.client_message_id has been applied, so
+    // an older schema can never make the insert (and the thread row) fail.
+    const clientIdFields: Record<string, unknown> = claim
+      ? { client_message_id: claim.clientMessageId }
+      : {};
+
     const { data: smsSetup, error: smsSetupError } = await supabaseAdmin
       .from("business_sms_setup")
       .select("status, phone_number")
@@ -417,10 +553,10 @@ export async function POST(request: Request) {
       !["active", "approved"].includes(smsSetup.status ?? "") ||
       !smsSetup.phone_number
     ) {
-      return NextResponse.json(
+      return respond(NextResponse.json(
         { error: "sms_not_activated" },
         { status: 400 }
-      );
+      ));
     }
 
     // Keyed off conversationId + businessId only -- customer_id can be
@@ -435,10 +571,10 @@ export async function POST(request: Request) {
         .maybeSingle();
 
     if (conversationError || !conversation) {
-      return NextResponse.json(
+      return respond(NextResponse.json(
         { error: "Conversation was not found." },
         { status: 404 }
-      );
+      ));
     }
 
     // The conversation's customer_phone is a snapshot taken when the
@@ -465,10 +601,10 @@ export async function POST(request: Request) {
     const toPhone = normalizePhone(rawPhone || "");
 
     if (!toPhone) {
-      return NextResponse.json(
+      return respond(NextResponse.json(
         { error: "This customer does not have a phone number." },
         { status: 400 }
-      );
+      ));
     }
 
     const fromPhone = normalizePhone(smsSetup.phone_number);
@@ -496,13 +632,13 @@ export async function POST(request: Request) {
         : `Photo: ${shortLink.url}`;
 
       if (smsSegments(outgoingText) > 10) {
-        return NextResponse.json(
+        return respond(NextResponse.json(
           {
             error:
               "Your photo caption is too long to send. Please shorten it and try again.",
           },
           { status: 400 }
-        );
+        ));
       }
 
       await assertSmsCreditsAvailable({
@@ -519,6 +655,7 @@ export async function POST(request: Request) {
         text: outgoingText,
         sentByWorkerId,
         extraMessageItemFields: {
+          ...clientIdFields,
           attachment_path: uploaded.path,
           attachment_expires_at: shortLink.expiresAt,
           // Kept separately from `body` (which stores the literal text
@@ -532,11 +669,15 @@ export async function POST(request: Request) {
 
       if (!result.ok) {
         if (result.queued) {
-          return NextResponse.json({ ok: true, status: "retrying" });
+          // Queued for the background retry cron -- it will go out, so a
+          // resend from the app must not repeat it.
+          anythingSent = true;
+          return respond(NextResponse.json({ ok: true, status: "retrying" }));
         }
-        return NextResponse.json({ error: result.error }, { status: 400 });
+        return respond(NextResponse.json({ error: result.error }, { status: 400 }));
       }
 
+      anythingSent = true;
       const nowIso = now();
 
       await supabaseAdmin
@@ -555,7 +696,7 @@ export async function POST(request: Request) {
         created_at: nowIso,
       });
 
-      return NextResponse.json({ ok: true, providerMessageId: result.providerMessageId });
+      return respond(NextResponse.json({ ok: true, providerMessageId: result.providerMessageId }));
     }
 
     // Plain text — clean up autocorrect typography, then send as one text
@@ -564,7 +705,7 @@ export async function POST(request: Request) {
     const splitResult = splitLongSmsMessage(messageBody);
 
     if (!splitResult.ok) {
-      return NextResponse.json({ error: splitResult.error }, { status: 400 });
+      return respond(NextResponse.json({ error: splitResult.error }, { status: 400 }));
     }
 
     const parts = splitResult.parts;
@@ -583,15 +724,20 @@ export async function POST(request: Request) {
         toPhone,
         text: part,
         sentByWorkerId,
+        extraMessageItemFields: clientIdFields,
       });
 
       if (!result.ok) {
         if (result.queued) {
-          return NextResponse.json({ ok: true, status: "retrying" });
+          // Queued for the background retry cron -- it will go out, so a
+          // resend from the app must not repeat it.
+          anythingSent = true;
+          return respond(NextResponse.json({ ok: true, status: "retrying" }));
         }
-        return NextResponse.json({ error: result.error }, { status: 400 });
+        return respond(NextResponse.json({ error: result.error }, { status: 400 }));
       }
 
+      anythingSent = true;
       lastProviderMessageId = result.providerMessageId;
       const nowIso = now();
 
@@ -612,9 +758,9 @@ export async function POST(request: Request) {
       });
     }
 
-    return NextResponse.json({ ok: true, providerMessageId: lastProviderMessageId });
+    return respond(NextResponse.json({ ok: true, providerMessageId: lastProviderMessageId }));
   } catch (error) {
-    return NextResponse.json(
+    return respond(NextResponse.json(
       {
         error:
           error instanceof Error
@@ -622,6 +768,6 @@ export async function POST(request: Request) {
             : "Unable to send text message.",
       },
       { status: 400 }
-    );
+    ));
   }
 }
